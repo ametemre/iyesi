@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "771693610212",
+    "project_id": "iyesi-b20e7",
+    "storage_bucket": "iyesi-b20e7.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:771693610212:android:d00b67011b9fbf506698f1",
+        "android_client_info": {
+          "package_name": "com.kurmez.iyesi"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "771693610212-a4r7s2sj2mukpbjt44ddlbi78l1j46v9.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDsUxAShhjbv_Dcb0ST8XxKYq1K0s_Lq7U"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "771693610212-a4r7s2sj2mukpbjt44ddlbi78l1j46v9.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

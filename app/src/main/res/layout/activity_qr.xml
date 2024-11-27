@@ -1,0 +1,76 @@
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:gravity="center"
+    android:background="@android:color/white"
+    android:padding="16dp">
+
+    <!-- QR Icon -->
+    <ImageView
+        android:id="@+id/qr_icon"
+        android:layout_width="100dp"
+        android:layout_height="100dp"
+        android:src="@drawable/pati"
+        android:contentDescription="desc"
+        android:layout_marginBottom="16dp" />
+
+    <!-- Title Text -->
+    <TextView
+        android:id="@+id/qr_title"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Scan QR"
+        android:textSize="32sp"
+        android:textStyle="bold"
+        android:textColor="@android:color/black"
+        android:layout_marginBottom="32dp" />
+
+    <!-- Scan QR Button -->
+    <androidx.appcompat.widget.AppCompatButton
+        android:id="@+id/scan_qr_button"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="16dp"
+        android:layout_marginHorizontal="32dp"
+        android:background="@drawable/button_border_white"
+        android:text="Scan QR"
+        android:textColor="@android:color/black"
+        android:elevation="0dp"
+        android:stateListAnimator="@null" />
+
+    <!-- Generate QR Button -->
+    <androidx.appcompat.widget.AppCompatButton
+        android:id="@+id/generate_qr_button"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginHorizontal="32dp"
+        android:background="@drawable/button_border_white"
+        android:text="Generate QR"
+        android:textColor="@android:color/black"
+        android:elevation="0dp"
+        android:stateListAnimator="@null" />
+    <!-- QR Data Display -->
+    <TextView
+        android:id="@+id/qr_data_text_view"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="QR Data will appear here"
+        android:textSize="18sp"
+        android:textStyle="bold"
+        android:layout_marginBottom="16dp"
+        android:gravity="center" />
+
+    <!-- Process QR Data Button -->
+    <androidx.appcompat.widget.AppCompatButton
+        android:id="@+id/process_button"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginHorizontal="32dp"
+        android:background="@drawable/button_border_white"
+        android:text="Process QR"
+        android:textColor="@android:color/black"
+        android:layout_marginTop="16dp" />
+
+</LinearLayout>

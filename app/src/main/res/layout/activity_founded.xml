@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.cardview.widget.CardView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/founded_card"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:layout_margin="25dp"
+    app:cardCornerRadius="40dp"
+    android:background="@android:color/white">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:padding="16dp">
+
+        <!-- Photo Preview -->
+        <ImageView
+            android:id="@+id/founded_photo"
+            android:layout_width="200dp"
+            android:layout_height="200dp"
+            android:layout_gravity="center"
+            android:src="@drawable/holder"/>
+
+        <!-- Take Photo Button -->
+        <androidx.appcompat.widget.AppCompatButton
+            android:id="@+id/take_photo_button"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="30dp"
+            android:layout_marginBottom="15dp"
+            android:layout_marginHorizontal="30dp"
+            android:background="@drawable/button_border_white"
+            android:text="Take Photo"
+            android:textColor="@android:color/black"
+            android:elevation="0dp"
+            android:stateListAnimator="@null" />
+
+        <!-- Companion Info Inputs -->
+        <EditText
+            android:id="@+id/companion_species"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Cinsi (Species)"
+            android:layout_marginTop="16dp"
+            android:inputType="text" />
+
+        <EditText
+            android:id="@+id/companion_found_date"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Bulunduğu Tarih (Found Date)"
+            android:layout_marginTop="16dp"
+            android:inputType="date" />
+
+        <EditText
+            android:id="@+id/companion_found_place"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Bulunduğu Yer (Found Place)"
+            android:layout_marginTop="16dp"
+            android:inputType="text" />
+
+        <!-- Save Button -->
+        <androidx.appcompat.widget.AppCompatButton
+            android:id="@+id/save_companion_button"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="30dp"
+            android:layout_marginBottom="15dp"
+            android:layout_marginHorizontal="30dp"
+            android:background="@drawable/button_border_white"
+            android:text="Register Companion"
+            android:textColor="@android:color/black"
+            android:elevation="0dp"
+            android:stateListAnimator="@null" />
+
+    </LinearLayout>
+</androidx.cardview.widget.CardView>
