@@ -16,7 +16,15 @@ import com.google.firebase.firestore.FirebaseFirestore;
 
 import java.util.HashMap;
 import java.util.Map;
+import android.app.Dialog;
+import android.content.res.Configuration;
+import android.os.Handler;
+import android.widget.CheckBox;
+import android.widget.TextView;
 
+
+
+import java.util.Locale;
 public class Register extends AppCompatActivity {
 
     // Firebase instances
@@ -30,7 +38,7 @@ public class Register extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_register);
-
+        showMissionVisionPopup();
         // Initialize Firebase
         mAuth = FirebaseAuth.getInstance();
         db = FirebaseFirestore.getInstance();
@@ -149,5 +157,44 @@ public class Register extends AppCompatActivity {
                 .addOnFailureListener(e -> {
                     Toast.makeText(Register.this, "Failed to save user details: " + e.getMessage(), Toast.LENGTH_LONG).show();
                 });
+    }
+    private void showMissionVisionPopup() {
+        // Create the dialog 
+        Dialog dialog = new Dialog(this);
+        dialog.setContentView(R.layout.layout_mission_vision_popup);
+        dialog.setCancelable(false); // Prevent dismissal by tapping outside
+
+        // Get references to the UI elements in the popup
+        TextView missionText = dialog.findViewById(R.id.mission_text);
+        TextView visionText = dialog.findViewById(R.id.vision_text);
+        CheckBox agreeCheckBox = dialog.findViewById(R.id.checkbox_agree);
+
+        // Set localized mission and vision text
+        missionText.setText(getString(R.string.mission_statement));
+        visionText.setText(getString(R.string.vision_statement));
+
+        // Handle checkbox selection
+        agreeCheckBox.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            if (isChecked) {
+                // Close the dialog after 1 second
+                new Handler().postDelayed(dialog::dismiss, 1000);
+            }
+        });
+
+        dialog.show();
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+
+        // Set language dynamically based on the user's region
+        Locale currentLocale = getResources().getConfiguration().locale;
+        Locale.setDefault(currentLocale);
+
+        Configuration config = new Configuration();
+        config.locale = currentLocale;
+
+        getResources().updateConfiguration(config, getResources().getDisplayMetrics());
     }
 }

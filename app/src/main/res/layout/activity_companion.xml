@@ -39,6 +39,7 @@
             android:contentDescription="pres or pres and hold"
             android:src="@drawable/soul"
             tools:ignore="HardcodedText" />
+
         <LinearLayout
             android:layout_marginTop="50dp"
             android:layout_width="match_parent"

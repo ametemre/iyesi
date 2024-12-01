@@ -1,40 +1,53 @@
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.cardview.widget.CardView xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:orientation="vertical"
-    android:padding="8dp">
-
-    <ImageView
-        android:id="@+id/content_image"
-        android:layout_width="match_parent"
-        android:layout_height="200dp"
-        android:scaleType="centerCrop" />
-
-    <TextView
-        android:id="@+id/content_text"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:padding="8dp"
-        android:textSize="16sp"
-        android:text="Content Text" />
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_margin="8dp"
+    app:cardElevation="4dp"
+    app:cardCornerRadius="8dp">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:padding="8dp">
+        android:orientation="vertical"
+        android:padding="16dp">
 
-        <TextView
-            android:id="@+id/content_likes"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:paddingEnd="16dp"
-            android:text="Likes: 0" />
+        <!-- Media -->
+        <ImageView
+            android:id="@+id/content_image"
+            android:layout_width="match_parent"
+            android:layout_height="200dp"
+            android:visibility="gone" />
 
+        <!-- Text -->
         <TextView
-            android:id="@+id/content_comments"
-            android:layout_width="wrap_content"
+            android:id="@+id/content_text"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Comments: 0" />
+            android:paddingTop="8dp"
+            android:text="Content Text"
+            android:textSize="16sp" />
+
+        <!-- Likes and Comments -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:paddingTop="8dp">
+
+            <TextView
+                android:id="@+id/content_likes"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Likes: 0" />
+
+            <TextView
+                android:id="@+id/content_comments"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="16dp"
+                android:text="Comments: 0" />
+        </LinearLayout>
+
     </LinearLayout>
-</LinearLayout>
+</androidx.cardview.widget.CardView>

@@ -1,3 +1,6 @@
 <resources>
-    <string name="app_name">iyesi</string>
+    <string name="app_name">𐰃𐰘𐰀</string>
+    <string name="mission_statement">To create a compassionate digital platform that connects pet enthusiasts, caregivers, and animal lovers, fostering a supportive community where animals are valued as "SoulCompanions."</string>
+    <string name="vision_statement">To build a world where every animal is cherished as a soul companion, ensuring they find love, care, and a safe home.</string>
+    <string name="understood_agreed">Understood Agreed</string>
 </resources>

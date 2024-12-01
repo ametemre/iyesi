@@ -44,14 +44,15 @@ public class MainActivity extends AppCompatActivity {
         });
         // Optional: Long click logic for additional functionality (e.g., QR scanning)
         button.setOnLongClickListener(view -> {
-            FirebaseUser currentUser = mAuth.getCurrentUser();
+             startActivity(new Intent(MainActivity.this, Found.class));
+/*            FirebaseUser currentUser = mAuth.getCurrentUser();
             if (currentUser != null) {
                 // User is authenticated, navigate to Welcome activity
                 startActivity(new Intent(MainActivity.this, QR.class));
             } else {
                 // User is not authenticated, navigate to Register activity
                 startActivity(new Intent(MainActivity.this, Register.class));
-            }
+            }*/
             finish(); // Close MainActivity
             return true; // Indicate the long click is consumed
         });

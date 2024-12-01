@@ -7,12 +7,27 @@
     android:layout_margin="8dp"
     app:cardCornerRadius="16dp"
     app:cardElevation="4dp">
+    <ImageView
+        android:id="@+id/icon_notification"
+        android:layout_width="32dp"
+        android:layout_height="32dp"
+        android:layout_gravity="right"
+        android:src="@drawable/holder"/>
+
+    <ImageView
+        android:id="@+id/icon_message"
+        android:layout_width="32dp"
+        android:layout_height="32dp"
+        android:layout_gravity="right"
+        android:layout_marginRight="32dp"
+        android:src="@drawable/holder"/>
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
         android:padding="16dp">
+
 
         <!-- Profile Image -->
         <ImageView
@@ -24,6 +39,7 @@
             android:contentDescription="User Profile Image"
             android:scaleType="centerCrop"
             android:background="?android:attr/selectableItemBackground" />
+
 
         <!-- Profile Info -->
         <LinearLayout
@@ -54,6 +70,7 @@
                 android:layout_height="wrap_content"
                 android:text="Followers: 200"
                 android:textSize="14sp" />
+
         </LinearLayout>
 
     </LinearLayout>
