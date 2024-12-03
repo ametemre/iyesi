@@ -20,17 +20,23 @@ public class QRScannerActivity extends AppCompatActivity {
         initiateQRScan();
     }
 
+    /**
+     * Starts the QR scan using ZXing IntentIntegrator.
+     */
     private void initiateQRScan() {
         IntentIntegrator integrator = new IntentIntegrator(this);
         integrator.setDesiredBarcodeFormats(IntentIntegrator.QR_CODE);
-        integrator.setPrompt("Scan a QR Code");
+        integrator.setPrompt("Align the QR Code within the frame");
         integrator.setCameraId(0); // Default camera
-        integrator.setBeepEnabled(true);
-        integrator.setBarcodeImageEnabled(false); // Disable saving images
-        integrator.setOrientationLocked(true); // Lock orientation
+        integrator.setBeepEnabled(true); // Enable beep after scanning
+        integrator.setBarcodeImageEnabled(false); // Disable saving QR image
+        integrator.setOrientationLocked(false); // Allow orientation changes
         integrator.initiateScan();
     }
 
+    /**
+     * Handles the result from the QR scanner.
+     */
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
@@ -39,20 +45,26 @@ public class QRScannerActivity extends AppCompatActivity {
 
         if (result != null) {
             if (result.getContents() != null) {
-                // Scanned QR data
+                // QR data successfully scanned
                 String scannedData = result.getContents();
-
-                // Pass data back to calling activity (e.g., QR.java)
+                // Pass the scanned QR data back to the calling activity
                 Intent intent = new Intent();
                 intent.putExtra("scanned_data", scannedData);
                 setResult(RESULT_OK, intent);
+                // Display a toast for feedback
+                Toast.makeText(this, "QR Scanned: " + scannedData, Toast.LENGTH_SHORT).show();
                 finish();
             } else {
-                // If no QR code was scanned
-                Toast.makeText(this, "No QR Code scanned!", Toast.LENGTH_SHORT).show();
+                // No QR data scanned
+                Toast.makeText(this, "No QR Code detected!", Toast.LENGTH_SHORT).show();
                 setResult(RESULT_CANCELED);
                 finish();
             }
+        } else {
+            // Handle case where scanning didn't start or user canceled
+            Toast.makeText(this, "Scan canceled or failed!", Toast.LENGTH_SHORT).show();
+            setResult(RESULT_CANCELED);
+            finish();
         }
     }
 }

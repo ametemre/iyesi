@@ -1,5 +1,6 @@
 package com.kurmez.iyesi;
 
+import android.content.Intent;
 import android.graphics.Bitmap;
 import android.os.Bundle;
 import android.widget.Toast;
@@ -39,10 +40,39 @@ public class Founded extends AppCompatActivity {
     }
 
     /**
-     * Saves the companion information along with photos.
+     * Saves the companion information along with photos and navigates to the Companion activity.
      */
     private void saveCompanion() {
-        // TODO: Implement saving logic (e.g., Firebase storage and Firestore for metadata)
-        Toast.makeText(this, "Companion registered successfully!", Toast.LENGTH_SHORT).show();
+        String species = "Sarman Cat"; // Replace with actual user input
+        String foundDate = "01/01/2025";     // Replace with actual user input
+        String foundPlace = "Bishkek";     // Replace with actual user input
+        String profileId = "Veterinarian : Evren Hoca"; // Replace with actual data
+
+        if (photoList != null && !photoList.isEmpty()) {
+            Bitmap firstPhoto = photoList.get(0);
+            String photoUrl = uploadPhotoAndGetUrl(firstPhoto);
+
+            if (photoUrl != null) {
+                Intent intent = new Intent(Founded.this, Companion.class);
+                intent.putExtra("species", species);
+                intent.putExtra("foundDate", foundDate);
+                intent.putExtra("foundPlace", foundPlace);
+                intent.putExtra("photoUrl", photoUrl);
+                intent.putExtra("profileId", profileId);
+                startActivity(intent);
+            } else {
+                Toast.makeText(this, "Failed to upload photo", Toast.LENGTH_SHORT).show();
+            }
+        } else {
+            Toast.makeText(this, "No photo available to register companion", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    /**
+     * Simulates uploading the photo and returning a URL (replace with actual implementation).
+     */
+    private String uploadPhotoAndGetUrl(Bitmap photo) {
+        // TODO: Replace this with actual upload logic (e.g., Firebase Storage)
+        return "https://example.com/photo.jpg"; // Replace with the real uploaded URL
     }
 }
