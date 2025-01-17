@@ -11,13 +11,18 @@ pluginManagement {
         gradlePluginPortal()
     }
 }
+
 dependencyResolutionManagement {
-    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
     repositories {
         google()
         mavenCentral()
     }
 }
-
 rootProject.name = "iyesi"
 include ':app'
+include ':OpenCV_4.10.0'
+project(':OpenCV_4.10.0').projectDir = file("${rootDir}/Resources/opencv-4.10.0-android-sdk/OpenCV-android-sdk/sdk/")
+
+// OpenCV modülünün yolu doğru şekilde tanımlanmıştır.
+//project(':OpenCV').projectDir = file("${rootDir}/Resources/opencv-3.4.16-android-sdk/OpenCV-android-sdk/sdk")

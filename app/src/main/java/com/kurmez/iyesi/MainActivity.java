@@ -10,6 +10,9 @@ import android.widget.Toast;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.firestore.DocumentChange;
+import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.zxing.BarcodeFormat;
 import com.google.zxing.WriterException;
 import com.journeyapps.barcodescanner.BarcodeEncoder;
@@ -25,10 +28,18 @@ public class MainActivity extends AppCompatActivity {
     private Runnable startCameraRunnable; // Camera-starting task
     private static final int SCAN_QR_REQUEST_CODE = 1001; // Unique request code for QR Scanner
 
+    private FirebaseFirestore db; // Firestore instance
+    private FirebaseAuth mAuth; // FirebaseAuth instance
+    private String generatedQRCode; // QR code generated for the device
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_main);
+        setContentView(R.layout.activity_main_objdetect);
+
+        // Initialize Firebase instances
+        db = FirebaseFirestore.getInstance();
+        mAuth = FirebaseAuth.getInstance();
 
         // Find the ImageButton
         ImageButton patiEnterButton = findViewById(R.id.pati_enter);
@@ -49,13 +60,13 @@ public class MainActivity extends AppCompatActivity {
             } else {
                 // Schedule the camera start after 2 seconds
                 startCameraRunnable = this::openCameraWithDelay;
-                handler.postDelayed(startCameraRunnable, 150); // Delay of 2 seconds
+                handler.postDelayed(startCameraRunnable, 2000); // Delay of 2 seconds
             }
         });
 
         // Long-click listener to generate and display a device-specific QR code
         patiEnterButton.setOnLongClickListener(v -> {
-            showDeviceSpecificQRCode();
+            handleLongClickForQRCode();
             return true; // Consume the long click
         });
     }
@@ -66,17 +77,17 @@ public class MainActivity extends AppCompatActivity {
     private void openQRScannerForRegistration() {
         Toast.makeText(this, "Accessing QR Scanner for Registration...", Toast.LENGTH_SHORT).show();
         Intent intent = new Intent(this, QRScannerActivity.class);
-        startActivity(intent);
+        startActivityForResult(intent, SCAN_QR_REQUEST_CODE);
     }
 
     /**
-     * Opens the Found activity after a delay.
+     * Opens the appropriate activity based on the registration status.
      */
     private void openCameraWithDelay() {
         if (isRegistered) {
             navigateToWelcome(); // Navigate to Welcome activity for registered users
         } else {
-            openCameraForFound(); // Open Found activity for unregistered users
+            navigateToKurmes(); // Open Kurmes activity for unregistered users
         }
     }
 
@@ -89,18 +100,84 @@ public class MainActivity extends AppCompatActivity {
     }
 
     /**
-     * Opens the Found activity for taking a photo of a founded soul.
+     * Opens the Kurmes activity for real-time image recognition if the user is unregistered.
      */
-    private void openCameraForFound() {
-        Intent intent = new Intent(this, Found.class);
+    private void navigateToKurmes() {
+        Intent intent = new Intent(this, com.kurmez.iyesi.kurmes.Kurmes.class); // Navigate to Kurmes activity
         startActivity(intent);
     }
 
     /**
-     * Displays a popup with a generated device-specific QR code.
+     * Handles the long click event to generate and display a device-specific QR code.
+     * Also listens for database changes and navigates accordingly.
      */
-    private void showDeviceSpecificQRCode() {
-        String deviceId = UUID.randomUUID().toString(); // Replace with actual device info
+    private void handleLongClickForQRCode() {
+        String deviceId = getDeviceSpecificId();
+        generatedQRCode = deviceId; // Save the generated QR code
+
+        // Check user authentication status
+        if (mAuth.getCurrentUser() != null) {
+            // User is authenticated, navigate to Welcome
+            navigateToWelcome();
+        } else {
+            // Listen for changes in the database for the generated QR code
+            listenForDatabaseChanges(deviceId);
+
+            // Show the QR code in a popup
+            showQRCodePopup(deviceId);
+        }
+    }
+
+    /**
+     * Generates a unique identifier for the device (you can replace UUID with other device info).
+     */
+    private String getDeviceSpecificId() {
+        // Replace this logic with actual unique device-specific logic if needed
+        return UUID.randomUUID().toString();
+    }
+
+    /**
+     * Listens for changes in the Firestore database for the generated QR code.
+     *
+     * @param deviceId The generated QR code representing the device.
+     */
+    private void listenForDatabaseChanges(String deviceId) {
+        db.collection("devices")
+                .whereEqualTo("deviceId", deviceId)
+                .addSnapshotListener((querySnapshot, e) -> {
+                    if (e != null) {
+                        Toast.makeText(this, "Error listening to database: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+
+                    if (querySnapshot != null) {
+                        for (DocumentChange change : querySnapshot.getDocumentChanges()) {
+                            if (change.getType() == DocumentChange.Type.ADDED) {
+                                // Check if the device is now registered
+                                String registeredDeviceId = change.getDocument().getString("deviceId");
+                                if (deviceId.equals(registeredDeviceId)) {
+                                    Toast.makeText(this, "Device registered successfully!", Toast.LENGTH_SHORT).show();
+
+                                    // Check if user data is present
+                                    if (change.getDocument().contains("userId")) {
+                                        navigateToLogin(); // Navigate to Login activity
+                                    } else {
+                                        navigateToRegister(); // Navigate to Register activity
+                                    }
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                });
+    }
+
+    /**
+     * Displays a popup with the generated QR code.
+     *
+     * @param deviceId The device-specific identifier to be displayed as a QR code.
+     */
+    private void showQRCodePopup(String deviceId) {
         Bitmap qrBitmap;
         try {
             BarcodeEncoder barcodeEncoder = new BarcodeEncoder();
@@ -109,7 +186,8 @@ public class MainActivity extends AppCompatActivity {
             Toast.makeText(this, "Failed to generate QR code", Toast.LENGTH_SHORT).show();
             return;
         }
-        // Create and show the popup
+
+        // Show the QR code in a popup
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
         builder.setTitle("Device QR Code");
 
@@ -122,28 +200,29 @@ public class MainActivity extends AppCompatActivity {
         builder.setNegativeButton("Close", (dialog, which) -> dialog.dismiss());
         builder.show();
     }
+
+    /**
+     * Navigates to the Register activity.
+     */
+    private void navigateToRegister() {
+        Intent intent = new Intent(this, Register.class);
+        startActivity(intent);
+    }
+
+    /**
+     * Navigates to the Login activity.
+     */
+    private void navigateToLogin() {
+        Intent intent = new Intent(this, Login.class);
+        startActivity(intent);
+    }
+
     @Override
     protected void onDestroy() {
         super.onDestroy();
         // Clean up handler to prevent memory leaks
         if (handler != null) {
             handler.removeCallbacksAndMessages(null);
-        }
-    }
-    // Add this constant at the top of MainActivity
-    @Override
-    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
-        super.onActivityResult(requestCode, resultCode, data);
-
-        if (requestCode == SCAN_QR_REQUEST_CODE && resultCode == RESULT_OK && data != null) {
-            String scannedData = data.getStringExtra("scanned_data");
-
-            if (scannedData != null && !scannedData.isEmpty()) {
-                // Display scanned data as a toast
-                Toast.makeText(this, "Scanned QR Data: " + scannedData, Toast.LENGTH_LONG).show();
-            } else {
-                Toast.makeText(this, "No QR Data Found!", Toast.LENGTH_SHORT).show();
-            }
         }
     }
 }

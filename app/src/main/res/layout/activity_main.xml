@@ -1,25 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.cardview.widget.CardView
-    android:id="@+id/main"
-    xmlns:android="http://schemas.android.com/apk/res/android"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:layout_marginBottom="25dp"
-    android:layout_marginLeft="25dp"
-    android:layout_marginRight="25dp"
-    android:layout_marginTop="25dp"
-    app:cardCornerRadius="40dp"
-    tools:context=".MainActivity">
-    <ImageButton
-        android:id="@+id/pati_enter"
-        android:background="@color/white"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_gravity="center"
-        android:contentDescription="pres or pres and hold"
-        android:src="@drawable/pati"
-        tools:ignore="HardcodedText"
-        android:clickable="true"/>
-</androidx.cardview.widget.CardView>
+    tools:context=".kurmes.samples.MainActivityMobi">
+
+    <org.opencv.android.JavaCameraView
+        android:id="@+id/CameraView"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:visibility="visible" />
+</FrameLayout>
