@@ -93,7 +93,7 @@ public class Tutorial3Activity extends CameraActivity implements CvCameraViewLis
     }
 
     @Override
-    public List<? extends CameraBridgeViewBase> getCameraViewList() {
+    protected List<? extends CameraBridgeViewBase> getCameraViewList() {
         return Collections.singletonList(mOpenCvCameraView);
     }
 
