@@ -15,12 +15,11 @@ import android.view.MotionEvent;
 import android.view.SurfaceView;
 import android.view.View;
 import android.view.View.OnTouchListener;
+import android.view.Window;
 import android.view.WindowManager;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import androidx.annotation.NonNull;
-import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 
@@ -30,26 +29,18 @@ import org.opencv.android.CameraActivity;
 import org.opencv.android.CameraBridgeViewBase;
 import org.opencv.android.CameraBridgeViewBase.CvCameraViewFrame;
 import org.opencv.android.CameraBridgeViewBase.CvCameraViewListener2;
-import org.opencv.android.JavaCamera2View;
 import org.opencv.android.OpenCVLoader;
 import org.opencv.core.CvType;
 import org.opencv.core.Mat;
-import org.opencv.core.MatOfRect;
-import org.opencv.core.Rect;
-import org.opencv.core.Scalar;
-import org.opencv.core.Size;
 import org.opencv.imgproc.Imgproc;
 import org.opencv.objdetect.CascadeClassifier;
 import org.tensorflow.lite.DataType;
 import org.tensorflow.lite.Interpreter;
 
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.nio.MappedByteBuffer;
-import java.nio.channels.FileChannel;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -68,14 +59,23 @@ public class Kurmes_dummy extends CameraActivity implements CvCameraViewListener
     private Menu mMenu;
     private int mWidth;
     private int mHeight;
+    private objectDetectorClass objectDetectorClass;
+
+    public void CameraActivity(){
+        Log.i(TAG,"Instantiated new "+this.getClass());
+    }
     //imported---------------------------------
     private CascadeClassifier catFaceDetector;
     // TensorFlow Lite Interpreter
     private Interpreter tflite;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         Log.i(TAG, "called kurmes onCreate");
         super.onCreate(savedInstanceState);
+        requestWindowFeature(Window.FEATURE_NO_TITLE);
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        int MY_PERMISSIONS_REQUEST_CAMERA=0;
 
         if (OpenCVLoader.initLocal()) {
             Log.i(TAG, "OpenCV loaded successfully");
@@ -146,6 +146,18 @@ public class Kurmes_dummy extends CameraActivity implements CvCameraViewListener
         } catch (Exception e) {
             Log.e(TAG, "TFLite model yüklenemedi", e);
         }
+        try{
+            // Copy and paste model.tflite and label in assets folder
+            // Now replace model name, label name and input size
+            // input size is 300 for this model
+            // We trained model on input size =320
+            objectDetectorClass=new objectDetectorClass(getAssets(),"custom_model.tflite","custom_label.txt",320);
+            Log.d("MainActivity","Model is successfully loaded");
+        }
+        catch (IOException e){
+            Log.d("MainActivity","Getting some error");
+            e.printStackTrace();
+        }
     }
     @Override
     public boolean onTouch(View v, MotionEvent event) {
@@ -178,12 +190,15 @@ public class Kurmes_dummy extends CameraActivity implements CvCameraViewListener
             mRgba.release();
         }
         updateCameraStatus("Camera Stopped.");
+        mRgba.release();
     }
     @Override
     public Mat onCameraFrame(CvCameraViewFrame inputFrame) {
         mRgba = inputFrame.rgba();
+
         Mat grayscale = new Mat();
         Log.d(TAG, "Processing camera frame...");
+        grayscale=objectDetectorClass.recognizeImage(mRgba);
         Imgproc.cvtColor(mRgba, grayscale, Imgproc.COLOR_RGBA2GRAY);
 
 /*
@@ -222,7 +237,7 @@ public class Kurmes_dummy extends CameraActivity implements CvCameraViewListener
         }
 */ //AI generated Code for image recognition (gives overload to gpu & crashes)
         //return mOnCameraFrameRender.render(inputFrame);
-        return mRgba; // Return the raw RGBA frame
+        return grayscale; // Return the raw RGBA frame
     } //Essential For Camera
     @Override
     protected void onResume() {
@@ -340,6 +355,7 @@ public class Kurmes_dummy extends CameraActivity implements CvCameraViewListener
     protected List<? extends CameraBridgeViewBase> getCameraViewList() {
         return Collections.singletonList(mOpenCvCameraView);
     }//Essential For Camera
+
     private void checkAndRequestPermissions() {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
             ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.CAMERA}, CAMERA_PERMISSION_REQUEST_CODE);
