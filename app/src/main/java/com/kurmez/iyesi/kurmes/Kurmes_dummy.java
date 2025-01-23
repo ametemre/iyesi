@@ -98,7 +98,7 @@ public class Kurmes_dummy extends CameraActivity implements CvCameraViewListener
         //cameraView = findViewById(R.id.kurmes_camera_view);
         labelText = findViewById(R.id.label_text);
         cameraStatusText = findViewById(R.id.camera_status_text);
-
+/*
         if (mOpenCvCameraView != null) {
             mOpenCvCameraView.setVisibility(CameraBridgeViewBase.VISIBLE);
             mOpenCvCameraView.setCvCameraViewListener(this);
@@ -145,7 +145,7 @@ public class Kurmes_dummy extends CameraActivity implements CvCameraViewListener
             Log.d(TAG, "Model Input Type: " + inputType);
         } catch (Exception e) {
             Log.e(TAG, "TFLite model yüklenemedi", e);
-        }
+        }*/
     }
     @Override
     public boolean onTouch(View v, MotionEvent event) {
@@ -263,7 +263,7 @@ public class Kurmes_dummy extends CameraActivity implements CvCameraViewListener
         return true;
     }
     @Override
-    public boolean onPrepareOptionsMenu (Menu menu) {
+    public boolean onPrepareOptionsMenu(Menu menu) {
         super.onPrepareOptionsMenu(menu);
         menu.findItem(R.id.preview_mode).setEnabled(true);
         if (mCalibrator != null && !mCalibrator.isCalibrated()) {
