@@ -1,5 +1,5 @@
 package com.kurmez.iyesi.kurmes;
-import com.kurmez.iyesi.R;
+
 
 import android.Manifest;
 import android.app.ProgressDialog;
@@ -23,6 +23,8 @@ import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
+
+import com.kurmez.iyesi.R;
 
 import org.opencv.android.CameraActivity;
 import org.opencv.android.CameraBridgeViewBase;
@@ -52,17 +54,13 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
-public class Kurmes extends CameraActivity implements CvCameraViewListener2, OnTouchListener {
-
+public class Kurmes_dummy extends CameraActivity implements CvCameraViewListener2, OnTouchListener {
     private static final String TAG = "KurmesActivity";
     private static final int CAMERA_PERMISSION_REQUEST_CODE = 100;
-
     //private JavaCamera2View cameraView; // Using JavaCamera2View
     private TextView labelText;
     private TextView cameraStatusText;
-
     private Mat mRgba; // RGBA frame
-
     //imported---------------------------------
     private CameraBridgeViewBase mOpenCvCameraView;
     public CameraCalibrator mCalibrator;
@@ -136,7 +134,7 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2, OnT
         }
         // TensorFlow Lite modelini yükleme
         try {
-            tflite = new Interpreter(loadModelFile(this, "mobilenet_v2.tflite"));
+            //tflite = new Interpreter(loadModelFile(this, "mobilenet_v2.tflite"));
             int[] inputShape = tflite.getInputTensor(0).shape(); // Örn: [1, 224, 224, 3]
             DataType inputType = tflite.getInputTensor(0).dataType(); // Örn: UINT8
             Log.d(TAG, "Input Shape: " + Arrays.toString(inputShape));
@@ -149,15 +147,12 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2, OnT
             Log.e(TAG, "TFLite model yüklenemedi", e);
         }
     }
-
     @Override
     public boolean onTouch(View v, MotionEvent event) {
         Log.d(TAG, "onTouch invoked");
-
         mCalibrator.addCorners();
         return false;
     }
-
     @Override
     public void onCameraViewStarted(int width, int height) {
         mRgba = new Mat(height, width, CvType.CV_8UC4);
@@ -174,7 +169,6 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2, OnT
                     mMenu.findItem(R.id.preview_mode).setEnabled(false);
                 }
             }
-
             mOnCameraFrameRender = new OnCameraFrameRender(new CalibrationFrameRender(mCalibrator));
         }
     }
@@ -192,6 +186,7 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2, OnT
         Log.d(TAG, "Processing camera frame...");
         Imgproc.cvtColor(mRgba, grayscale, Imgproc.COLOR_RGBA2GRAY);
 
+/*
         if (catFaceDetector != null) {
             MatOfRect catFaces = new MatOfRect();
             catFaceDetector.detectMultiScale(grayscale, catFaces, 1.1, 2, 0,
@@ -225,79 +220,10 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2, OnT
                 Imgproc.putText(mRgba, label, rect.tl(), Imgproc.FONT_HERSHEY_SIMPLEX, 1.0, new Scalar(255, 255, 255), 2);
             }
         }
+*/ //AI generated Code for image recognition (gives overload to gpu & crashes)
         //return mOnCameraFrameRender.render(inputFrame);
         return mRgba; // Return the raw RGBA frame
-    }
-
-    /**
-     * Updates the camera status TextView with a message.
-     */
-    private void updateCameraStatus(String status) {
-        if (cameraStatusText != null) {
-            cameraStatusText.setText("Camera Status: " + status);
-        }
-        Log.d(TAG, status);
-    }
-    /**
-     * Check and request camera permissions.
-     */
-    private void checkAndRequestPermissions() {
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.CAMERA}, CAMERA_PERMISSION_REQUEST_CODE);
-        } else {
-            initializeCamera();
-        }
-    }
-
-    /**
-     * Initialize the OpenCV camera view.
-     */
-    private void initializeCamera() {
-        boolean success = OpenCVLoader.initDebug();
-        if (success) {
-            Log.d(TAG, "OpenCV initialized successfully.");
-            if (mOpenCvCameraView != null) {
-                mOpenCvCameraView.enableView();
-                updateCameraStatus("Camera Enabled.");
-            }
-        } else {
-            Log.e(TAG, "OpenCV initialization failed.");
-            Toast.makeText(this, "OpenCV initialization failed.", Toast.LENGTH_SHORT).show();
-        }
-    }
-
-    private MappedByteBuffer loadModelFile(Context context, String modelPath) throws IOException {
-        try (InputStream is = context.getAssets().open(modelPath)) {
-            File tempFile = File.createTempFile("temp", null, context.getCacheDir());
-            try (FileOutputStream fos = new FileOutputStream(tempFile)) {
-                byte[] buffer = new byte[4096];
-                int bytesRead;
-                while ((bytesRead = is.read(buffer)) != -1) {
-                    fos.write(buffer, 0, bytesRead);
-                }
-                fos.flush();
-            }
-            try (FileInputStream fis = new FileInputStream(tempFile)) {
-                FileChannel fileChannel = fis.getChannel();
-                return fileChannel.map(FileChannel.MapMode.READ_ONLY, 0, fileChannel.size());
-            }
-        }
-    }
-
-    @Override
-    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        if (requestCode == CAMERA_PERMISSION_REQUEST_CODE) {
-            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                initializeCamera();
-            } else {
-                Toast.makeText(this, "Camera permission is required!", Toast.LENGTH_SHORT).show();
-                updateCameraStatus("Permission Denied!");
-                finish(); // Close the activity if permission is denied
-            }
-        }
-    }
-
+    } //Essential For Camera
     @Override
     protected void onResume() {
         super.onResume();
@@ -306,7 +232,7 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2, OnT
             if (mOpenCvCameraView != null) {
                 mOpenCvCameraView.enableView();
                 updateCameraStatus("Camera View Resumed.");
-                mOpenCvCameraView.setOnTouchListener(Kurmes.this);
+                mOpenCvCameraView.setOnTouchListener(Kurmes_dummy.this);
             }
         } else {
             Log.e(TAG, "OpenCV loading failed on resume.");
@@ -321,7 +247,6 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2, OnT
             updateCameraStatus("Camera View Paused.");
         }
     }
-
     @Override
     protected void onDestroy() {
         super.onDestroy();
@@ -330,7 +255,6 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2, OnT
             updateCameraStatus("Camera View Destroyed.");
         }
     }
-
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
         super.onCreateOptionsMenu(menu);
@@ -347,7 +271,6 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2, OnT
         }
         return true;
     }
-
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
         if (item.getItemId() == R.id.calibration) {
@@ -378,7 +301,7 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2, OnT
 
                 @Override
                 protected void onPreExecute() {
-                    calibrationProgress = new ProgressDialog(Kurmes.this);
+                    calibrationProgress = new ProgressDialog(Kurmes_dummy.this);
                     calibrationProgress.setTitle(res.getString(R.string.calibrating));
                     calibrationProgress.setMessage(res.getString(R.string.please_wait));
                     calibrationProgress.setCancelable(false);
@@ -400,10 +323,10 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2, OnT
                     String resultMessage = (mCalibrator.isCalibrated()) ?
                             res.getString(R.string.calibration_successful)  + " " + mCalibrator.getAvgReprojectionError() :
                             res.getString(R.string.calibration_unsuccessful);
-                    (Toast.makeText(Kurmes.this, resultMessage, Toast.LENGTH_SHORT)).show();
+                    (Toast.makeText(Kurmes_dummy.this, resultMessage, Toast.LENGTH_SHORT)).show();
 
                     if (mCalibrator.isCalibrated()) {
-                        CalibrationResult.save(Kurmes.this,
+                        CalibrationResult.save(Kurmes_dummy.this,
                                 mCalibrator.getCameraMatrix(), mCalibrator.getDistortionCoefficients());
                     }
                 }
@@ -413,57 +336,63 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2, OnT
             return super.onOptionsItemSelected(item);
         }
     }
-
     @Override
     protected List<? extends CameraBridgeViewBase> getCameraViewList() {
         return Collections.singletonList(mOpenCvCameraView);
-    }
-/*    private float[] preprocessFace(Mat face) {
-        // Yüzü boyutlandır ve normalize et
-        Mat resizedFace = new Mat();
-        Imgproc.resize(face, resizedFace, new Size(224, 224));
-        resizedFace.convertTo(resizedFace, CvType.CV_32F);
-        float[] input = new float[224 * 224];
-        resizedFace.get(0, 0, input);
-        return input;
-    }*/
-
-    private byte[][][][] preprocessFace(Mat face) {
-    // Yüzü boyutlandır
-    Mat resizedFace = new Mat();
-    Imgproc.resize(face, resizedFace, new Size(224, 224));
-
-    // 0-255 arasında değerler oluştur ve UINT8 formatına çevir
-    resizedFace.convertTo(resizedFace, CvType.CV_8U);
-
-    // 4D tensor yapısı oluştur
-    byte[][][][] input = new byte[1][224][224][1]; // Tek renk kanalı için
-
-    for (int i = 0; i < 224; i++) {
-        for (int j = 0; j < 224; j++) {
-            input[0][i][j][0] = (byte) resizedFace.get(i, j)[0];
+    }//Essential For Camera
+    private void checkAndRequestPermissions() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.CAMERA}, CAMERA_PERMISSION_REQUEST_CODE);
+        } else {
+            initializeCamera();
         }
-    }
-    return input;
-}
-
-    private float[] convertOutput(byte[] output) {
-        float[] floatOutput = new float[output.length];
-        for (int i = 0; i < output.length; i++) {
-            floatOutput[i] = (output[i] & 0xFF) / 255.0f; // UINT8'den normalize edilmiş FLOAT32'ye dönüştürme
-        }
-        return floatOutput;
-    }
-    private String interpretPrediction(float[] output) {
-        // Tahmini sınıfa çevir
-        String[] labels = {"Mutlu", "Üzgün", "Şaşkın"};
-        int maxIndex = 0;
-        for (int i = 1; i < output.length; i++) {
-            if (output[i] > output[maxIndex]) {
-                maxIndex = i;
+    }//Essential For Camera
+    private void initializeCamera() {
+        boolean success = OpenCVLoader.initDebug();
+        if (success) {
+            Log.d(TAG, "OpenCV initialized successfully.");
+            if (mOpenCvCameraView != null) {
+                mOpenCvCameraView.enableView();
+                updateCameraStatus("Camera Enabled.");
             }
+        } else {
+            Log.e(TAG, "OpenCV initialization failed.");
+            Toast.makeText(this, "OpenCV initialization failed.", Toast.LENGTH_SHORT).show();
         }
-        return labels[maxIndex];
-    }
-}
+    }//Essential For Camera
+    private void updateCameraStatus(String status) {
+        if (cameraStatusText != null) {
+            cameraStatusText.setText("Camera Status: " + status);
+        }
+        Log.d(TAG, status);
+    }//Essential For Camera
+    /*    private byte[][][][] preprocessFace(Mat face) {
+            // Yüzü boyutlandır
+            Mat resizedFace = new Mat();
+            Imgproc.resize(face, resizedFace, new Size(224, 224));
 
+            // 0-255 arasında değerler oluştur ve UINT8 formatına çevir
+            resizedFace.convertTo(resizedFace, CvType.CV_8U);
+
+            // 4D tensor yapısı oluştur
+            byte[][][][] input = new byte[1][224][224][1]; // Tek renk kanalı için
+
+            for (int i = 0; i < 224; i++) {
+                for (int j = 0; j < 224; j++) {
+                    input[0][i][j][0] = (byte) resizedFace.get(i, j)[0];
+                }
+            }
+            return input;
+        } //AI generated Code for image recognition (gives overload to gpu & crashes)
+        private String interpretPrediction(float[] output) {
+            // Tahmini sınıfa çevir
+            String[] labels = {"Mutlu", "Üzgün", "Şaşkın"};
+            int maxIndex = 0;
+            for (int i = 1; i < output.length; i++) {
+                if (output[i] > output[maxIndex]) {
+                    maxIndex = i;
+                }
+            }
+            return labels[maxIndex];
+        }//AI generated Code for image recognition (gives overload to gpu & crashes)*/ //AI generated Code for image recognition (gives overload to gpu & crashes)
+}

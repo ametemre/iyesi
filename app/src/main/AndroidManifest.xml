@@ -41,6 +41,9 @@
             android:name=".kurmes.Kurmes"
             android:exported="false" />
         <activity
+            android:name=".kurmes.Kurmes_dummy"
+            android:exported="false" />
+        <activity
             android:name=".Found"
             android:exported="false" />
         <activity

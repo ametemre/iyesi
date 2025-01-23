@@ -103,7 +103,7 @@ public class MainActivity extends AppCompatActivity {
      * Opens the Kurmes activity for real-time image recognition if the user is unregistered.
      */
     private void navigateToKurmes() {
-        Intent intent = new Intent(this, com.kurmez.iyesi.kurmes.Kurmes.class); // Navigate to Kurmes activity
+        Intent intent = new Intent(this, com.kurmez.iyesi.kurmes.Kurmes_dummy.class); // Navigate to Kurmes activity
         startActivity(intent);
     }
 
