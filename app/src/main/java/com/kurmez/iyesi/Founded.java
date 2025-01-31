@@ -12,9 +12,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class Founded extends AppCompatActivity {
-
     private List<Bitmap> photoList;
-
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -38,7 +36,6 @@ public class Founded extends AppCompatActivity {
 
         findViewById(R.id.save_companion_button).setOnClickListener(v -> saveCompanion());
     }
-
     /**
      * Saves the companion information along with photos and navigates to the Companion activity.
      */
@@ -67,7 +64,6 @@ public class Founded extends AppCompatActivity {
             Toast.makeText(this, "No photo available to register companion", Toast.LENGTH_SHORT).show();
         }
     }
-
     /**
      * Simulates uploading the photo and returning a URL (replace with actual implementation).
      */

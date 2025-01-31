@@ -20,22 +20,19 @@ import com.journeyapps.barcodescanner.BarcodeEncoder;
 import java.util.UUID;
 
 public class MainActivity extends AppCompatActivity {
-
     private static final int MAX_CLICKS = 20; // Number of clicks for QR scanner access
     private int clickCounter = 0; // Counter for detecting 20 clicks
     private boolean isRegistered = false; // Replace with actual logic to check user registration
     private Handler handler = new Handler(); // To manage the delayed camera start
     private Runnable startCameraRunnable; // Camera-starting task
     private static final int SCAN_QR_REQUEST_CODE = 1001; // Unique request code for QR Scanner
-
     private FirebaseFirestore db; // Firestore instance
     private FirebaseAuth mAuth; // FirebaseAuth instance
     private String generatedQRCode; // QR code generated for the device
-
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_main_objdetect);
+        setContentView(R.layout.activity_main);
 
         // Initialize Firebase instances
         db = FirebaseFirestore.getInstance();
@@ -60,7 +57,7 @@ public class MainActivity extends AppCompatActivity {
             } else {
                 // Schedule the camera start after 2 seconds
                 startCameraRunnable = this::openCameraWithDelay;
-                handler.postDelayed(startCameraRunnable, 2000); // Delay of 2 seconds
+                handler.postDelayed(startCameraRunnable, 500); // Delay of 2 seconds
             }
         });
 
@@ -70,16 +67,22 @@ public class MainActivity extends AppCompatActivity {
             return true; // Consume the long click
         });
     }
-
     /**
      * Opens the QR Scanner for device registration when clicked 20 times.
      */
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        // Clean up handler to prevent memory leaks
+        if (handler != null) {
+            handler.removeCallbacksAndMessages(null);
+        }
+    }
     private void openQRScannerForRegistration() {
         Toast.makeText(this, "Accessing QR Scanner for Registration...", Toast.LENGTH_SHORT).show();
         Intent intent = new Intent(this, QRScannerActivity.class);
         startActivityForResult(intent, SCAN_QR_REQUEST_CODE);
     }
-
     /**
      * Opens the appropriate activity based on the registration status.
      */
@@ -90,7 +93,6 @@ public class MainActivity extends AppCompatActivity {
             navigateToKurmes(); // Open Kurmes activity for unregistered users
         }
     }
-
     /**
      * Navigates to the Welcome activity for registered users.
      */
@@ -98,15 +100,13 @@ public class MainActivity extends AppCompatActivity {
         Intent intent = new Intent(this, Welcome.class);
         startActivity(intent);
     }
-
     /**
      * Opens the Kurmes activity for real-time image recognition if the user is unregistered.
      */
     private void navigateToKurmes() {
-        Intent intent = new Intent(this, com.kurmez.iyesi.kurmes.Kurmes_dummy.class); // Navigate to Kurmes activity
+        Intent intent = new Intent(this, com.kurmez.iyesi.kurmes.Kurmes.class); // Navigate to Kurmes activity
         startActivity(intent);
     }
-
     /**
      * Handles the long click event to generate and display a device-specific QR code.
      * Also listens for database changes and navigates accordingly.
@@ -127,7 +127,6 @@ public class MainActivity extends AppCompatActivity {
             showQRCodePopup(deviceId);
         }
     }
-
     /**
      * Generates a unique identifier for the device (you can replace UUID with other device info).
      */
@@ -135,7 +134,6 @@ public class MainActivity extends AppCompatActivity {
         // Replace this logic with actual unique device-specific logic if needed
         return UUID.randomUUID().toString();
     }
-
     /**
      * Listens for changes in the Firestore database for the generated QR code.
      *
@@ -146,7 +144,7 @@ public class MainActivity extends AppCompatActivity {
                 .whereEqualTo("deviceId", deviceId)
                 .addSnapshotListener((querySnapshot, e) -> {
                     if (e != null) {
-                        Toast.makeText(this, "Error listening to database: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                        Toast.makeText(this, "Database Error: " + e.getMessage(), Toast.LENGTH_SHORT).show();
                         return;
                     }
 
@@ -156,7 +154,7 @@ public class MainActivity extends AppCompatActivity {
                                 // Check if the device is now registered
                                 String registeredDeviceId = change.getDocument().getString("deviceId");
                                 if (deviceId.equals(registeredDeviceId)) {
-                                    Toast.makeText(this, "Device registered successfully!", Toast.LENGTH_SHORT).show();
+                                    Toast.makeText(this, "Device registered!", Toast.LENGTH_SHORT).show();
 
                                     // Check if user data is present
                                     if (change.getDocument().contains("userId")) {
@@ -171,7 +169,6 @@ public class MainActivity extends AppCompatActivity {
                     }
                 });
     }
-
     /**
      * Displays a popup with the generated QR code.
      *
@@ -200,7 +197,6 @@ public class MainActivity extends AppCompatActivity {
         builder.setNegativeButton("Close", (dialog, which) -> dialog.dismiss());
         builder.show();
     }
-
     /**
      * Navigates to the Register activity.
      */
@@ -208,21 +204,11 @@ public class MainActivity extends AppCompatActivity {
         Intent intent = new Intent(this, Register.class);
         startActivity(intent);
     }
-
     /**
      * Navigates to the Login activity.
      */
     private void navigateToLogin() {
         Intent intent = new Intent(this, Login.class);
         startActivity(intent);
-    }
-
-    @Override
-    protected void onDestroy() {
-        super.onDestroy();
-        // Clean up handler to prevent memory leaks
-        if (handler != null) {
-            handler.removeCallbacksAndMessages(null);
-        }
     }
 }

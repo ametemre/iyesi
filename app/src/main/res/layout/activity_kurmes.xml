@@ -1,12 +1,34 @@
 <?xml version="1.0" encoding="utf-8"?>
-<RelativeLayout
-    xmlns:android="http://schemas.android.com/apk/res/android"
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:background="#000">
+    <!-- Floating Action Button -->
+    <!-- Floating Action Button -->
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/fab_draggable"
+        android:layout_width="72dp"
+        android:layout_height="72dp"
+        android:src="@drawable/pati"
+        android:backgroundTint="@android:color/white"
+        app:elevation="10dp"
+        app:maxImageSize="56dp"
+        android:layout_alignParentBottom="true"
+        android:layout_marginBottom="32dp"
+        android:layout_margin="16dp"
+        android:scaleType="centerInside"
+        android:outlineSpotShadowColor="@android:color/white"
+        app:rippleColor="@android:color/darker_gray"
+        android:stateListAnimator="@null"
+        android:background="@drawable/fab_glow"/>
+
+
+
 
     <!-- Camera View -->
-    <org.opencv.android.JavaCameraView
+    <!-- Camera View -->
+    <org.opencv.android.JavaCamera2View
         android:id="@+id/kurmes_camera_view"
         android:layout_width="match_parent"
         android:layout_height="match_parent" />

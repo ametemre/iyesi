@@ -1,21 +1,38 @@
 package com.kurmez.iyesi.kurmes;
+import com.google.android.material.floatingactionbutton.FloatingActionButton;
+import com.google.firebase.auth.FirebaseAuth;
+import com.kurmez.iyesi.Founded;
+import com.kurmez.iyesi.Login;
 import com.kurmez.iyesi.R;
+import com.kurmez.iyesi.Welcome;
 
 import android.Manifest;
+import android.animation.ValueAnimator;
+import android.annotation.SuppressLint;
 import android.app.ProgressDialog;
 import android.content.Context;
+import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.res.Resources;
+import android.graphics.Color;
 import android.os.AsyncTask;
 import android.os.Bundle;
+import android.os.Handler;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.MotionEvent;
 import android.view.SurfaceView;
+import android.view.VelocityTracker;
 import android.view.View;
 import android.view.View.OnTouchListener;
 import android.view.WindowManager;
+import android.view.animation.AccelerateInterpolator;
+import android.view.animation.AlphaAnimation;
+import android.view.animation.Animation;
+import android.view.animation.DecelerateInterpolator;
+import android.view.animation.ScaleAnimation;
+import android.widget.FrameLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -52,7 +69,13 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
-public class Kurmes extends CameraActivity implements CvCameraViewListener2, OnTouchListener {
+public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
+    private FloatingActionButton fabDraggable;
+    private float dX, dY;
+    private boolean isDragging = false;
+    private boolean isPressed = false;
+    private FirebaseAuth mAuth;
+    private Handler handler = new Handler();
     private static final String TAG = "KurmesActivity";
     private static final int CAMERA_PERMISSION_REQUEST_CODE = 100;
     //private JavaCamera2View cameraView; // Using JavaCamera2View
@@ -60,6 +83,7 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2, OnT
     private TextView cameraStatusText;
     private Mat mRgba; // RGBA frame
     //imported---------------------------------
+    private int lastAction;
     private CameraBridgeViewBase mOpenCvCameraView;
     public CameraCalibrator mCalibrator;
     private OnCameraFrameRender mOnCameraFrameRender;
@@ -70,6 +94,9 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2, OnT
     private CascadeClassifier catFaceDetector;
     // TensorFlow Lite Interpreter
     private Interpreter tflite;
+    private FrameLayout rootLayout;
+    private VelocityTracker velocityTracker = null;
+    @SuppressLint("ClickableViewAccessibility")
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         Log.i(TAG, "called kurmes onCreate");
@@ -96,6 +123,13 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2, OnT
         //cameraView = findViewById(R.id.kurmes_camera_view);
         labelText = findViewById(R.id.label_text);
         cameraStatusText = findViewById(R.id.camera_status_text);
+        //FloatingActionButton fabDraggable = findViewById(R.id.fab_draggable);
+        mAuth = FirebaseAuth.getInstance();
+        fabDraggable = findViewById(R.id.fab_draggable);
+
+        setupDraggableFAB();
+        setupButtonActions();
+        rootLayout = findViewById(android.R.id.content);
 /*
         if (mOpenCvCameraView != null) {
             mOpenCvCameraView.setVisibility(CameraBridgeViewBase.VISIBLE);
@@ -144,13 +178,63 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2, OnT
         } catch (Exception e) {
             Log.e(TAG, "TFLite model yüklenemedi", e);
         }*/
+        // Drag functionality for the floating button
+        fabDraggable.setOnTouchListener((v, event) -> {
+            switch (event.getActionMasked()) {
+                case MotionEvent.ACTION_DOWN:
+                    dX = v.getX() - event.getRawX();
+                    dY = v.getY() - event.getRawY();
+                    isDragging = false;
+
+                    if (velocityTracker == null) {
+                        velocityTracker = VelocityTracker.obtain();
+                    } else {
+                        velocityTracker.clear();
+                    }
+                    velocityTracker.addMovement(event);
+
+                    return true;
+
+                case MotionEvent.ACTION_MOVE:
+                    isDragging = true;
+                    velocityTracker.addMovement(event);
+                    velocityTracker.computeCurrentVelocity(1000); // Calculate speed in pixels per second
+
+                    float newX = event.getRawX() + dX;
+                    float newY = event.getRawY() + dY;
+                    v.setX(newX);
+                    v.setY(newY);
+
+                    return true;
+
+                case MotionEvent.ACTION_UP:
+                    velocityTracker.addMovement(event);
+                    velocityTracker.computeCurrentVelocity(1000);
+
+                    if (!isDragging) {
+                        // Click action (if no dragging happened)
+                        Intent intent = new Intent(Kurmes.this, Founded.class);
+                        startActivity(intent);
+                    } else {
+                        // Apply momentum-based gravity effect
+                        float velocityY = velocityTracker.getYVelocity();
+                        float velocityX = velocityTracker.getXVelocity();
+                        animateMomentumGravity(v, velocityX, velocityY);
+                    }
+
+                    return true;
+
+                default:
+                    return false;
+            }
+        });
     }
-    @Override
+/*-    @Override
     public boolean onTouch(View v, MotionEvent event) {
         Log.d(TAG, "onTouch invoked");
         mCalibrator.addCorners();
         return false;
-    }
+    }*/
     @Override
     public void onCameraViewStarted(int width, int height) {
         mRgba = new Mat(height, width, CvType.CV_8UC4);
@@ -230,7 +314,7 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2, OnT
             if (mOpenCvCameraView != null) {
                 mOpenCvCameraView.enableView();
                 updateCameraStatus("Camera View Resumed.");
-                mOpenCvCameraView.setOnTouchListener(Kurmes.this);
+                //mOpenCvCameraView.setOnTouchListener(Kurmes.this);
             }
         } else {
             Log.e(TAG, "OpenCV loading failed on resume.");
@@ -338,13 +422,6 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2, OnT
     protected List<? extends CameraBridgeViewBase> getCameraViewList() {
         return Collections.singletonList(mOpenCvCameraView);
     }//Essential For Camera
-    private void checkAndRequestPermissions() {
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.CAMERA}, CAMERA_PERMISSION_REQUEST_CODE);
-        } else {
-            initializeCamera();
-        }
-    }//Essential For Camera
     private void initializeCamera() {
         boolean success = OpenCVLoader.initDebug();
         if (success) {
@@ -393,5 +470,250 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2, OnT
             }
             return labels[maxIndex];
         }//AI generated Code for image recognition (gives overload to gpu & crashes)*/ //AI generated Code for image recognition (gives overload to gpu & crashes)
+    private void setupDraggableFAB() {
+        fabDraggable.setOnTouchListener((v, event) -> {
+            switch (event.getAction()) {
+                case MotionEvent.ACTION_DOWN:
+                    dX = v.getX() - event.getRawX();
+                    dY = v.getY() - event.getRawY();
+                    isDragging = false;
+                    return true;
+
+                case MotionEvent.ACTION_MOVE:
+                    v.animate()
+                            .x(event.getRawX() + dX)
+                            .y(event.getRawY() + dY)
+                            .setDuration(0)
+                            .start();
+                    isDragging = true;
+                    return true;
+
+                case MotionEvent.ACTION_UP:
+                    if (!isDragging) {
+                        v.performClick();
+                    }
+                    return true;
+
+                default:
+                    return false;
+            }
+        });
+    }
+    private void setupButtonActions() {
+        fabDraggable.setOnClickListener(v -> {
+            if (!isPressed) {
+                isPressed = true;
+                animateButtonPress();
+                handler.postDelayed(() -> {
+                    startActivity(new Intent(Kurmes.this, Founded.class));
+                    isPressed = false;
+                }, 2000);
+            }
+        });
+
+        fabDraggable.setOnLongClickListener(v -> {
+            if (mAuth.getCurrentUser() != null) {
+                startActivity(new Intent(Kurmes.this, Welcome.class));
+            } else {
+                startActivity(new Intent(Kurmes.this, Login.class));
+            }
+            return true;
+        });
+    }
+    private void animateButtonPress() {
+        fabDraggable.setEnabled(false);
+
+        // Create shadow effect
+        Animation scaleDown = new ScaleAnimation(
+                1f, 0.9f, 1f, 0.9f,
+                Animation.RELATIVE_TO_SELF, 0.5f,
+                Animation.RELATIVE_TO_SELF, 0.5f);
+        scaleDown.setDuration(500);
+        scaleDown.setFillAfter(true);
+
+        Animation fadeOut = new AlphaAnimation(1f, 0.6f);
+        fadeOut.setDuration(2000);
+
+        fabDraggable.startAnimation(scaleDown);
+        fabDraggable.startAnimation(fadeOut);
+
+        handler.postDelayed(() -> {
+            fabDraggable.clearAnimation();
+            fabDraggable.setEnabled(true);
+            isPressed = false;
+        }, 2000);
+    }
+    private void animateMomentumGravity(View v, float velocityX, float velocityY) {
+        float screenHeight = rootLayout.getHeight();
+        float screenWidth = rootLayout.getWidth();
+
+        // Calculate projected landing position based on velocity
+        float projectedX = v.getX() + (velocityX * 0.2f); // Multiply for "throw" effect
+        float projectedY = v.getY() + (velocityY * 0.2f);
+
+        // Ensure it doesn't go off-screen
+        projectedX = Math.max(0, Math.min(projectedX, screenWidth - v.getWidth()));
+        projectedY = Math.min(screenHeight - v.getHeight(), projectedY);
+
+        // Animate movement with bounce effect
+        ValueAnimator animatorX = ValueAnimator.ofFloat(v.getX(), projectedX);
+        ValueAnimator animatorY = ValueAnimator.ofFloat(v.getY(), projectedY);
+
+        animatorX.setInterpolator(new DecelerateInterpolator());
+        animatorY.setInterpolator(new DecelerateInterpolator());
+
+        animatorX.setDuration(500);
+        animatorY.setDuration(500);
+
+        animatorX.addUpdateListener(animation -> v.setX((float) animation.getAnimatedValue()));
+        animatorY.addUpdateListener(animation -> v.setY((float) animation.getAnimatedValue()));
+
+        animatorX.start();
+        animatorY.start();
+    }
+    private void checkAndRequestPermissions() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.CAMERA}, CAMERA_PERMISSION_REQUEST_CODE);
+        } else {
+            initializeCamera();
+        }
+    }//Essential For Camera
+    /*
+    private void setupButtonActions() {
+        fabDraggable.setOnClickListener(v -> {
+            if (!isPressed) {
+                isPressed = true;
+                animateButtonPress();
+                handler.postDelayed(() -> {
+                    startActivity(new Intent(Kurmes.this, Founded.class));
+                }, 2000);
+            }
+        });
+
+        fabDraggable.setOnLongClickListener(v -> {
+            if (mAuth.getCurrentUser() != null) {
+                startActivity(new Intent(Kurmes.this, Welcome.class));
+            } else {
+                startActivity(new Intent(Kurmes.this, Login.class));
+            }
+            return true;
+        });
+    }
+        private void animateButtonPress() {
+                fabDraggable.setEnabled(false);
+                fabDraggable.setColorFilter(Color.DKGRAY);
+
+                Animation fadeOut = new AlphaAnimation(1f, 0.6f);
+                fadeOut.setDuration(2000);
+                fabDraggable.startAnimation(fadeOut);
+
+                handler.postDelayed(() -> {
+                    fabDraggable.clearColorFilter();
+                    fabDraggable.setEnabled(true);
+                    isPressed = false;
+                }, 2000);
+            }
+            private void setupDraggableFAB() {
+                fabDraggable.setOnTouchListener((v, event) -> {
+                    switch (event.getAction()) {
+                        case MotionEvent.ACTION_DOWN:
+                            dX = v.getX() - event.getRawX();
+                            dY = v.getY() - event.getRawY();
+                            isDragging = false;
+                            return true;
+
+                        case MotionEvent.ACTION_MOVE:
+                            v.animate()
+                                    .x(event.getRawX() + dX)
+                                    .y(event.getRawY() + dY)
+                                    .setDuration(0)
+                                    .start();
+                            isDragging = true;
+                            return true;
+
+                        case MotionEvent.ACTION_UP:
+                            if (!isDragging) {
+                                v.performClick();
+                            }
+                            return true;
+
+                        default:
+                            return false;
+                    }
+                });
+            }
+    private void setupButtonActions() {
+        fabDraggable.setOnClickListener(v -> {
+            if (!isPressed) {
+                isPressed = true;
+                animateButtonPress();
+                handler.postDelayed(() -> {
+                    startActivity(new Intent(Kurmes.this, Founded.class));
+                }, 2000);
+            }
+        });
+
+        fabDraggable.setOnLongClickListener(v -> {
+            if (mAuth.getCurrentUser() != null) {
+                startActivity(new Intent(Kurmes.this, Welcome.class));
+            } else {
+                startActivity(new Intent(Kurmes.this, Login.class));
+            }
+            return true;
+        });
+    }
+
+    private void animateButtonPress() {
+        fabDraggable.setEnabled(false);
+
+        // Create shadow effect
+        Animation scaleDown = new ScaleAnimation(
+                1f, 0.9f, 1f, 0.9f,
+                Animation.RELATIVE_TO_SELF, 0.5f,
+                Animation.RELATIVE_TO_SELF, 0.5f);
+        scaleDown.setDuration(500);
+        scaleDown.setFillAfter(true);
+
+        Animation fadeOut = new AlphaAnimation(1f, 0.6f);
+        fadeOut.setDuration(2000);
+
+        fabDraggable.startAnimation(scaleDown);
+        fabDraggable.startAnimation(fadeOut);
+
+        handler.postDelayed(() -> {
+            fabDraggable.clearAnimation();
+            fabDraggable.setEnabled(true);
+            isPressed = false;
+        }, 2000);
+    }
+    private void setupDraggableFAB() {
+        fabDraggable.setOnTouchListener((v, event) -> {
+            switch (event.getAction()) {
+                case MotionEvent.ACTION_DOWN:
+                    dX = v.getX() - event.getRawX();
+                    dY = v.getY() - event.getRawY();
+                    isDragging = false;
+                    return true;
+
+                case MotionEvent.ACTION_MOVE:
+                    v.animate()
+                            .x(event.getRawX() + dX)
+                            .y(event.getRawY() + dY)
+                            .setDuration(0)
+                            .start();
+                    isDragging = true;
+                    return true;
+
+                case MotionEvent.ACTION_UP:
+                    if (!isDragging) {
+                        v.performClick();
+                    }
+                    return true;
+
+                default:
+                    return false;
+            }
+        });
+    }*/
 }
 

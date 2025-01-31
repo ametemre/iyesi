@@ -64,7 +64,7 @@ public class MainActivityMobi extends CameraActivity implements CvCameraViewList
         Log.i(TAG, "Network loaded successfully");
         //! [init_model_from_memory]
 
-        setContentView(R.layout.activity_main);
+        setContentView(R.layout.activity_main_2);
 
         // Set up camera listener.
         mOpenCvCameraView = (CameraBridgeViewBase)findViewById(R.id.CameraView);
