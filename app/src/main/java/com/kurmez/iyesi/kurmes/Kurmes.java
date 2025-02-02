@@ -10,14 +10,14 @@ import android.Manifest;
 import android.animation.ValueAnimator;
 import android.annotation.SuppressLint;
 import android.app.ProgressDialog;
-import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.res.Resources;
-import android.graphics.Color;
+import android.graphics.Bitmap;
 import android.os.AsyncTask;
 import android.os.Bundle;
 import android.os.Handler;
+import android.provider.MediaStore;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
@@ -25,9 +25,7 @@ import android.view.MotionEvent;
 import android.view.SurfaceView;
 import android.view.VelocityTracker;
 import android.view.View;
-import android.view.View.OnTouchListener;
 import android.view.WindowManager;
-import android.view.animation.AccelerateInterpolator;
 import android.view.animation.AlphaAnimation;
 import android.view.animation.Animation;
 import android.view.animation.DecelerateInterpolator;
@@ -37,6 +35,7 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
@@ -49,27 +48,17 @@ import org.opencv.android.JavaCamera2View;
 import org.opencv.android.OpenCVLoader;
 import org.opencv.core.CvType;
 import org.opencv.core.Mat;
-import org.opencv.core.MatOfRect;
-import org.opencv.core.Rect;
-import org.opencv.core.Scalar;
-import org.opencv.core.Size;
 import org.opencv.imgproc.Imgproc;
 import org.opencv.objdetect.CascadeClassifier;
-import org.tensorflow.lite.DataType;
 import org.tensorflow.lite.Interpreter;
 
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.nio.MappedByteBuffer;
-import java.nio.channels.FileChannel;
-import java.util.Arrays;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
+public class Kurmes extends CameraActivity implements CvCameraViewListener2, View.OnTouchListener {
+    private static final int REQUEST_IMAGE_CAPTURE = 1; // Request code for capturing a photo
+    private List<Bitmap> photoList = new ArrayList<>(); // List to store captured images
     private FloatingActionButton fabDraggable;
     private float dX, dY;
     private boolean isDragging = false;
@@ -96,11 +85,28 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
     private Interpreter tflite;
     private FrameLayout rootLayout;
     private VelocityTracker velocityTracker = null;
+    private JavaCamera2View cameraView;
+    private long pressStartTime;
+    private boolean isLongPressTriggered = false;
+    private final int LONG_PRESS_THRESHOLD = 2000; // 2 seconds
+    private final int DRAG_THRESHOLD = 20; // Minimum movement to consider a drag
     @SuppressLint("ClickableViewAccessibility")
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         Log.i(TAG, "called kurmes onCreate");
         super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_kurmes);
+
+        checkAndRequestPermissions();
+
+        mOpenCvCameraView = (CameraBridgeViewBase) findViewById(R.id.kurmes_camera_view);
+        mOpenCvCameraView.setVisibility(SurfaceView.VISIBLE);
+        mOpenCvCameraView.setCvCameraViewListener(this);
+
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+
+        labelText = findViewById(R.id.label_text);
+        cameraStatusText = findViewById(R.id.camera_status_text);
 
         if (OpenCVLoader.initLocal()) {
             Log.i(TAG, "OpenCV loaded successfully");
@@ -109,27 +115,15 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
             (Toast.makeText(this, "OpenCV initialization failed!", Toast.LENGTH_LONG)).show();
             return;
         }
-
-        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-
-        setContentView(R.layout.activity_kurmes);
-
-
-        mOpenCvCameraView = (CameraBridgeViewBase) findViewById(R.id.kurmes_camera_view);
-        mOpenCvCameraView.setVisibility(SurfaceView.VISIBLE);
-        mOpenCvCameraView.setCvCameraViewListener(this);
-
         // Initialize UI components
         //cameraView = findViewById(R.id.kurmes_camera_view);
-        labelText = findViewById(R.id.label_text);
-        cameraStatusText = findViewById(R.id.camera_status_text);
         //FloatingActionButton fabDraggable = findViewById(R.id.fab_draggable);
         mAuth = FirebaseAuth.getInstance();
         fabDraggable = findViewById(R.id.fab_draggable);
+        rootLayout = findViewById(android.R.id.content);
 
         setupDraggableFAB();
         setupButtonActions();
-        rootLayout = findViewById(android.R.id.content);
 /*
         if (mOpenCvCameraView != null) {
             mOpenCvCameraView.setVisibility(CameraBridgeViewBase.VISIBLE);
@@ -179,62 +173,13 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
             Log.e(TAG, "TFLite model yüklenemedi", e);
         }*/
         // Drag functionality for the floating button
-        fabDraggable.setOnTouchListener((v, event) -> {
-            switch (event.getActionMasked()) {
-                case MotionEvent.ACTION_DOWN:
-                    dX = v.getX() - event.getRawX();
-                    dY = v.getY() - event.getRawY();
-                    isDragging = false;
-
-                    if (velocityTracker == null) {
-                        velocityTracker = VelocityTracker.obtain();
-                    } else {
-                        velocityTracker.clear();
-                    }
-                    velocityTracker.addMovement(event);
-
-                    return true;
-
-                case MotionEvent.ACTION_MOVE:
-                    isDragging = true;
-                    velocityTracker.addMovement(event);
-                    velocityTracker.computeCurrentVelocity(1000); // Calculate speed in pixels per second
-
-                    float newX = event.getRawX() + dX;
-                    float newY = event.getRawY() + dY;
-                    v.setX(newX);
-                    v.setY(newY);
-
-                    return true;
-
-                case MotionEvent.ACTION_UP:
-                    velocityTracker.addMovement(event);
-                    velocityTracker.computeCurrentVelocity(1000);
-
-                    if (!isDragging) {
-                        // Click action (if no dragging happened)
-                        Intent intent = new Intent(Kurmes.this, Founded.class);
-                        startActivity(intent);
-                    } else {
-                        // Apply momentum-based gravity effect
-                        float velocityY = velocityTracker.getYVelocity();
-                        float velocityX = velocityTracker.getXVelocity();
-                        animateMomentumGravity(v, velocityX, velocityY);
-                    }
-
-                    return true;
-
-                default:
-                    return false;
-            }
-        });
     }
-/*-    @Override
+    @Override
     public boolean onTouch(View v, MotionEvent event) {
         Log.d(TAG, "onTouch invoked");
         mCalibrator.addCorners();
         return false;
-    }*/
+    }
     @Override
     public void onCameraViewStarted(int width, int height) {
         mRgba = new Mat(height, width, CvType.CV_8UC4);
@@ -381,6 +326,7 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
             new AsyncTask<Void, Void, Void>() {
                 private ProgressDialog calibrationProgress;
 
+                @SuppressLint("StaticFieldLeak")
                 @Override
                 protected void onPreExecute() {
                     calibrationProgress = new ProgressDialog(Kurmes.this);
@@ -419,9 +365,33 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
         }
     }
     @Override
+    protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+
+        if (requestCode == REQUEST_IMAGE_CAPTURE && resultCode == RESULT_OK && data != null) {
+            // Retrieve the captured image
+            Bitmap imageBitmap = (Bitmap) data.getExtras().get("data");
+
+            if (imageBitmap != null) {
+                photoList.add(imageBitmap); // Add photo to the list
+                navigateToFoundedActivity(); // Navigate to the next screen
+            }
+        } else if (requestCode == REQUEST_IMAGE_CAPTURE) {
+            Toast.makeText(this, "Photo capture cancelled", Toast.LENGTH_SHORT).show();
+        }
+    }
+    @Override
     protected List<? extends CameraBridgeViewBase> getCameraViewList() {
         return Collections.singletonList(mOpenCvCameraView);
     }//Essential For Camera
+    private void openCamera() {
+        Intent takePictureIntent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
+        if (takePictureIntent.resolveActivity(getPackageManager()) != null) {
+            startActivityForResult(takePictureIntent, REQUEST_IMAGE_CAPTURE);
+        } else {
+            Toast.makeText(this, "Camera not available", Toast.LENGTH_SHORT).show();
+        }
+    }
     private void initializeCamera() {
         boolean success = OpenCVLoader.initDebug();
         if (success) {
@@ -470,30 +440,54 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
             }
             return labels[maxIndex];
         }//AI generated Code for image recognition (gives overload to gpu & crashes)*/ //AI generated Code for image recognition (gives overload to gpu & crashes)
+    @SuppressLint("ClickableViewAccessibility")
     private void setupDraggableFAB() {
         fabDraggable.setOnTouchListener((v, event) -> {
-            switch (event.getAction()) {
+            switch (event.getActionMasked()) {
                 case MotionEvent.ACTION_DOWN:
                     dX = v.getX() - event.getRawX();
                     dY = v.getY() - event.getRawY();
                     isDragging = false;
+                    isLongPressTriggered = false;
+                    pressStartTime = System.currentTimeMillis();
+                    if (velocityTracker == null) {
+                        velocityTracker = VelocityTracker.obtain();
+                    } else {
+                        velocityTracker.clear();
+                    }
+                    velocityTracker.addMovement(event);
                     return true;
 
                 case MotionEvent.ACTION_MOVE:
-                    v.animate()
-                            .x(event.getRawX() + dX)
-                            .y(event.getRawY() + dY)
-                            .setDuration(0)
-                            .start();
-                    isDragging = true;
+                    float moveX = event.getRawX() + dX;
+                    float moveY = event.getRawY() + dY;
+                    if (Math.abs(moveX - v.getX()) > DRAG_THRESHOLD || Math.abs(moveY - v.getY()) > DRAG_THRESHOLD) {
+                        isDragging = true;
+                    }
+                    velocityTracker.addMovement(event);
+                    velocityTracker.computeCurrentVelocity(1000); // Calculate speed in pixels per second
+                    float newX = event.getRawX() + dX;
+                    float newY = event.getRawY() + dY;
+                    v.setX(newX);
+                    v.setY(newY);
+                    v.animate().x(moveX).y(moveY).setDuration(0).start();
                     return true;
-
                 case MotionEvent.ACTION_UP:
+                    velocityTracker.addMovement(event);
+                    velocityTracker.computeCurrentVelocity(1000);
                     if (!isDragging) {
-                        v.performClick();
+                        if ((System.currentTimeMillis() - pressStartTime) < LONG_PRESS_THRESHOLD) {
+                            openCamera();
+                        } else {
+                            handleLongClick();
+                        }
+                    } else {
+                        // Apply momentum-based gravity effect
+                        float velocityY = velocityTracker.getYVelocity();
+                        float velocityX = velocityTracker.getXVelocity();
+                        animateMomentumGravity(v, velocityX, velocityY);
                     }
                     return true;
-
                 default:
                     return false;
             }
@@ -501,24 +495,19 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
     }
     private void setupButtonActions() {
         fabDraggable.setOnClickListener(v -> {
-            if (!isPressed) {
-                isPressed = true;
-                animateButtonPress();
-                handler.postDelayed(() -> {
-                    startActivity(new Intent(Kurmes.this, Founded.class));
-                    isPressed = false;
-                }, 2000);
-            }
+            openCamera();
+            //startActivity(new Intent(Kurmes.this, Founded.class));
         });
-
-        fabDraggable.setOnLongClickListener(v -> {
-            if (mAuth.getCurrentUser() != null) {
-                startActivity(new Intent(Kurmes.this, Welcome.class));
-            } else {
-                startActivity(new Intent(Kurmes.this, Login.class));
-            }
-            return true;
-        });
+    }
+    private void handleLongClick() {
+        animateButtonPress();
+        if (mAuth.getCurrentUser() != null) {
+            startActivity(new Intent(Kurmes.this, Welcome.class));
+            finish();
+        } else {
+            startActivity(new Intent(Kurmes.this, Login.class));
+            finish();
+        }
     }
     private void animateButtonPress() {
         fabDraggable.setEnabled(false);
@@ -578,6 +567,11 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
             initializeCamera();
         }
     }//Essential For Camera
+    private void navigateToFoundedActivity() {
+        Intent intent = new Intent(this, Founded.class);
+        intent.putParcelableArrayListExtra("photos", new ArrayList<>(photoList)); // Pass the photos
+        startActivity(intent);
+    }
     /*
     private void setupButtonActions() {
         fabDraggable.setOnClickListener(v -> {

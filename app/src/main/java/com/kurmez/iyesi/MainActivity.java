@@ -99,6 +99,7 @@ public class MainActivity extends AppCompatActivity {
     private void navigateToWelcome() {
         Intent intent = new Intent(this, Welcome.class);
         startActivity(intent);
+        finish();
     }
     /**
      * Opens the Kurmes activity for real-time image recognition if the user is unregistered.
@@ -106,6 +107,7 @@ public class MainActivity extends AppCompatActivity {
     private void navigateToKurmes() {
         Intent intent = new Intent(this, com.kurmez.iyesi.kurmes.Kurmes.class); // Navigate to Kurmes activity
         startActivity(intent);
+        finish();
     }
     /**
      * Handles the long click event to generate and display a device-specific QR code.
@@ -203,6 +205,7 @@ public class MainActivity extends AppCompatActivity {
     private void navigateToRegister() {
         Intent intent = new Intent(this, Register.class);
         startActivity(intent);
+        finish();
     }
     /**
      * Navigates to the Login activity.
@@ -210,5 +213,6 @@ public class MainActivity extends AppCompatActivity {
     private void navigateToLogin() {
         Intent intent = new Intent(this, Login.class);
         startActivity(intent);
+        finish();
     }
 }

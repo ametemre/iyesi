@@ -17,6 +17,8 @@
 
         <!-- Image Slider -->
         <androidx.viewpager2.widget.ViewPager2
+            android:clickable="true"
+            android:onClick="onPickImage"
             android:id="@+id/founded_photos_slider"
             android:layout_width="match_parent"
             android:layout_height="200dp"
@@ -26,6 +28,7 @@
         <!-- Take Another Photo Button -->
         <androidx.appcompat.widget.AppCompatButton
             android:id="@+id/take_anotherphoto_button"
+            android:onClick="onStartCamera"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="30dp"

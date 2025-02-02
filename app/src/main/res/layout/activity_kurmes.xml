@@ -13,7 +13,7 @@
         android:src="@drawable/pati"
         android:backgroundTint="@android:color/white"
         app:elevation="10dp"
-        app:maxImageSize="56dp"
+        app:maxImageSize="46dp"
         android:layout_alignParentBottom="true"
         android:layout_marginBottom="32dp"
         android:layout_margin="16dp"
@@ -22,17 +22,12 @@
         app:rippleColor="@android:color/darker_gray"
         android:stateListAnimator="@null"
         android:background="@drawable/fab_glow"/>
-
-
-
-
     <!-- Camera View -->
     <!-- Camera View -->
     <org.opencv.android.JavaCamera2View
         android:id="@+id/kurmes_camera_view"
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
-
     <!-- Camera Status Text -->
     <TextView
         android:id="@+id/camera_status_text"
@@ -49,7 +44,6 @@
         android:textStyle="bold"
         android:clickable="true"
         android:focusable="true" />
-
     <!-- Switch Camera Button -->
     <androidx.appcompat.widget.AppCompatButton
         android:id="@+id/switch_camera_button"
@@ -64,7 +58,6 @@
         android:textColor="#FFFFFF"
         android:textSize="16sp"
         android:textStyle="bold" />
-
     <!-- Label for Image Recognition -->
     <TextView
         android:id="@+id/label_text"
