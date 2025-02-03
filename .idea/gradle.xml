@@ -10,6 +10,7 @@
         <option name="modules">
           <set>
             <option value="$PROJECT_DIR$" />
+            <option value="$PROJECT_DIR$/MLSeries" />
             <option value="$PROJECT_DIR$/Resources/opencv-4.10.0-android-sdk/OpenCV-android-sdk/sdk" />
             <option value="$PROJECT_DIR$/app" />
           </set>

@@ -1,6 +1,13 @@
 package com.kurmez.iyesi.kurmes;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.database.DataSnapshot;
+import com.google.firebase.database.DatabaseError;
+import com.google.firebase.database.DatabaseReference;
+import com.google.firebase.database.FirebaseDatabase;
+import com.google.firebase.database.ValueEventListener;
+import com.google.firebase.storage.FirebaseStorage;
+import com.google.firebase.storage.StorageReference;
 import com.kurmez.iyesi.Founded;
 import com.kurmez.iyesi.Login;
 import com.kurmez.iyesi.R;
@@ -134,9 +141,6 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2, Vie
             (Toast.makeText(this, "OpenCV initialization failed!", Toast.LENGTH_LONG)).show();
             return;
         }
-        // Initialize UI components
-        //cameraView = findViewById(R.id.kurmes_camera_view);
-        //FloatingActionButton fabDraggable = findViewById(R.id.fab_draggable);
         mAuth = FirebaseAuth.getInstance();
         fabDraggable = findViewById(R.id.fab_main);
         fabMain = fabDraggable;
@@ -150,59 +154,23 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2, Vie
         miniFabs[7] = findViewById(R.id.fab_8);
         miniFabs[8] = findViewById(R.id.fab_9);
         rootLayout = findViewById(android.R.id.content);
-        //fabMain.setOnClickListener(v -> toggleFabMenu());
-        //fabMain.setOnTouchListener(this::onFabTouch);
+
         setupDraggableFAB();
-        setupButtonActions();
-/*
-        if (mOpenCvCameraView != null) {
-            mOpenCvCameraView.setVisibility(CameraBridgeViewBase.VISIBLE);
-            mOpenCvCameraView.setCvCameraViewListener(this);
-        } else {
-            Log.e(TAG, "Camera View is null! Check XML layout.");
-            updateCameraStatus("Camera View Initialization Failed!");
-        }
-
-        // Request camera permissions
-        checkAndRequestPermissions();
-        // Haar Cascade yükleme
-        try {
-            InputStream is = getResources().openRawResource(R.raw.haarcascade_frontalcatface);
-            File cascadeDir = getDir("cascade", Context.MODE_PRIVATE);
-            File mCascadeFile = new File(cascadeDir, "haarcascade_frontalcatface.xml");
-            FileOutputStream os = new FileOutputStream(mCascadeFile);
-
-            byte[] buffer = new byte[4096];
-            int bytesRead;
-            while ((bytesRead = is.read(buffer)) != -1) {
-                os.write(buffer, 0, bytesRead);
+        DatabaseReference modelsRef = FirebaseDatabase.getInstance().getReference("models");
+        modelsRef.addListenerForSingleValueEvent(new ValueEventListener() {
+            @Override
+            public void onDataChange(DataSnapshot dataSnapshot) {
+                for (DataSnapshot modelSnapshot : dataSnapshot.getChildren()) {
+                    String modelName = modelSnapshot.child("name").getValue(String.class);
+                    String modelUrl = modelSnapshot.child("url").getValue(String.class);
+                    createFabButton(modelName, modelUrl);
+                }
             }
-            is.close();
-            os.close();
-
-            catFaceDetector = new CascadeClassifier(mCascadeFile.getAbsolutePath());
-            if (catFaceDetector.empty()) {
-                catFaceDetector = null;
+            @Override
+            public void onCancelled(DatabaseError databaseError) {
+                Log.e("Firebase", "Failed to load models", databaseError.toException());
             }
-            cascadeDir.delete();
-        } catch (IOException e) {
-            Log.e(TAG, "Haar Cascade yüklenemedi.", e);
-        }
-        // TensorFlow Lite modelini yükleme
-        try {
-            //tflite = new Interpreter(loadModelFile(this, "mobilenet_v2.tflite"));
-            int[] inputShape = tflite.getInputTensor(0).shape(); // Örn: [1, 224, 224, 3]
-            DataType inputType = tflite.getInputTensor(0).dataType(); // Örn: UINT8
-            Log.d(TAG, "Input Shape: " + Arrays.toString(inputShape));
-            Log.d(TAG, "Input Type: " + inputType);
-
-            //DataType inputType = tflite.getInputTensor(0).dataType();
-            Log.d(TAG, "Model Input Shape: " + Arrays.toString(inputShape));
-            Log.d(TAG, "Model Input Type: " + inputType);
-        } catch (Exception e) {
-            Log.e(TAG, "TFLite model yüklenemedi", e);
-        }*/
-        // Drag functionality for the floating button
+        });
     }
     @Override
     public boolean onTouch(View v, MotionEvent event) {
@@ -426,35 +394,6 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2, Vie
         }
         Log.d(TAG, status);
     }//Essential For Camera
-    /*    private byte[][][][] preprocessFace(Mat face) {
-            // Yüzü boyutlandır
-            Mat resizedFace = new Mat();
-            Imgproc.resize(face, resizedFace, new Size(224, 224));
-
-            // 0-255 arasında değerler oluştur ve UINT8 formatına çevir
-            resizedFace.convertTo(resizedFace, CvType.CV_8U);
-
-            // 4D tensor yapısı oluştur
-            byte[][][][] input = new byte[1][224][224][1]; // Tek renk kanalı için
-
-            for (int i = 0; i < 224; i++) {
-                for (int j = 0; j < 224; j++) {
-                    input[0][i][j][0] = (byte) resizedFace.get(i, j)[0];
-                }
-            }
-            return input;
-        } //AI generated Code for image recognition (gives overload to gpu & crashes)
-        private String interpretPrediction(float[] output) {
-            // Tahmini sınıfa çevir
-            String[] labels = {"Mutlu", "Üzgün", "Şaşkın"};
-            int maxIndex = 0;
-            for (int i = 1; i < output.length; i++) {
-                if (output[i] > output[maxIndex]) {
-                    maxIndex = i;
-                }
-            }
-            return labels[maxIndex];
-        }//AI generated Code for image recognition (gives overload to gpu & crashes)*/ //AI generated Code for image recognition (gives overload to gpu & crashes)
     @SuppressLint("ClickableViewAccessibility")
     private void setupDraggableFAB() {
         fabDraggable.setOnTouchListener((v, event) -> {
@@ -519,16 +458,6 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2, Vie
             }
         });
     }
-    private void setupButtonActions() {
-/*        fabDraggable.setOnClickListener(v -> {
-            if (mAuth.getCurrentUser() != null) {
-                toggleFabMenu();
-            } else {
-                toggleFabMenu();
-            }
-            //startActivity(new Intent(Kurmes.this, Founded.class));
-        });*/
-    }
     private void handleLongClick() {
         animateButtonPress();
         if (mAuth.getCurrentUser() != null) {
@@ -575,8 +504,6 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2, Vie
         projectedY = Math.min(screenHeight - v.getHeight(), projectedY);
 
         // Animate movement with bounce effect
-/*        ValueAnimator animatorX = ValueAnimator.ofFloat(v.getX(), projectedX);
-        ValueAnimator animatorY = ValueAnimator.ofFloat(v.getY(), projectedY);  */
         ValueAnimator animatorX = ValueAnimator.ofFloat(v.getX(), projectedX);
         ValueAnimator animatorY = ValueAnimator.ofFloat(v.getY(), projectedY);
 
@@ -706,18 +633,6 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2, Vie
             e.printStackTrace();
         }
     }
-    private void resetMiniFabs() {
-        for (int i = 0; i < miniFabs.length; i++) {
-            AnimatorSet animSet = new AnimatorSet();
-            animSet.playTogether(
-                    ObjectAnimator.ofFloat(miniFabs[i], "x", miniFabs[i].getX(), fabPositions[i][0]),
-                    ObjectAnimator.ofFloat(miniFabs[i], "y", miniFabs[i].getY(), fabPositions[i][1])
-            );
-            animSet.setInterpolator(new DecelerateInterpolator());
-            animSet.setDuration(1300);
-            animSet.start();
-        }
-    }
     @Override
     public boolean dispatchTouchEvent(MotionEvent event) {
         switch (event.getAction()) {
@@ -736,5 +651,69 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2, Vie
         }
         return super.dispatchTouchEvent(event); // Allow other views to handle the touch
     }
+    private void downloadAndLoadModel(String modelUrl) {
+        StorageReference modelRef = FirebaseStorage.getInstance().getReferenceFromUrl(modelUrl);
+        File localFile = new File(getFilesDir(), "model.tflite");
+
+        modelRef.getFile(localFile).addOnSuccessListener(taskSnapshot -> {
+            Log.d("Model", "Download complete");
+            loadTFLiteModel(localFile.getAbsolutePath());
+        }).addOnProgressListener(taskSnapshot -> {
+            long bytesTransferred = taskSnapshot.getBytesTransferred();
+            long totalBytes = taskSnapshot.getTotalByteCount();
+            updateDownloadProgress((int) ((bytesTransferred * 100) / totalBytes));
+        }).addOnFailureListener(e -> Log.e("Model", "Download failed", e));
+    }
+    private void createFabButton(String modelName, String modelUrl) {
+        FloatingActionButton fab = new FloatingActionButton(this);
+        fab.setImageResource(R.drawable.holder); // Set a default icon
+        fab.setOnClickListener(v -> downloadAndLoadModel(modelUrl));
+        rootLayout.addView(fab);
+    }
+    private void loadTFLiteModel(String modelPath) {
+        try {
+            Interpreter.Options options = new Interpreter.Options();
+            tflite = new Interpreter(new File(modelPath), options);
+            Log.d("TFLite", "Model loaded successfully!");
+        } catch (Exception e) {
+            Log.e("TFLite", "Error loading model", e);
+        }
+    }
+    private void updateDownloadProgress(int progress) {
+        //fabButton.setProgress(progress);  // Assume a custom FAB with progress tracking
+    }
+    /*private String predictMood(Mat inputFrame) {
+        ByteBuffer inputBuffer = convertMatToByteBuffer(inputFrame);
+        float[][] output = new float[1][5]; // Assuming 5 classes
+        tflite.run(inputBuffer, output);
+        return getMoodLabel(output);
+    }
+    private void startAudioRecording() {
+        AudioRecord recorder = new AudioRecord(MediaRecorder.AudioSource.MIC,
+                44100, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, BUFFER_SIZE);
+        recorder.startRecording();
+    }
+    private String analyzeAudio(byte[] audioData) {
+        ByteBuffer inputBuffer = ByteBuffer.wrap(audioData);
+        float[][] output = new float[1][3]; // Assuming 3 sound categories
+        tflite.run(inputBuffer, output);
+        return getSoundLabel(output);
+    }
+    class AnimalContext {
+        String species;
+        String mood;
+        String need;
+        String soundAnalysis;
+    }
+    AnimalContext currentAnimal = new AnimalContext();
+    private String getFinalDecision() {
+        if (currentAnimal.species.equals("Dog") && currentAnimal.mood.equals("Sad") &&
+                currentAnimal.need.equals("Food") && currentAnimal.soundAnalysis.equals("Whining")) {
+            return "The dog is hungry and sad. Offer food!";
+        }
+        return "No clear interpretation.";
+    }*/
+
 }
+
 

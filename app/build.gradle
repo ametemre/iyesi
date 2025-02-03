@@ -50,6 +50,7 @@ dependencies {
     implementation 'com.google.mlkit:face-detection:16.1.5'
     implementation 'com.google.mlkit:pose-detection:18.0.0-beta3'
     implementation 'com.google.mlkit:pose-detection-accurate:18.0.0-beta3'
+    implementation libs.firebase.database
 
     annotationProcessor 'com.github.bumptech.glide:compiler:4.16.0'
     implementation 'com.google.firebase:firebase-firestore:25.1.1'

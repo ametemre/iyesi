@@ -14,6 +14,7 @@ firebaseStorage = "21.0.1"
 imageLabelingCommon = "18.1.0"
 imageLabelingDefaultCommon = "17.0.0"
 tensorflowLite = "2.12.0"
+firebaseDatabase = "21.0.0"
 
 [libraries]
 firebase-analytics = { module = "com.google.firebase:firebase-analytics" }
@@ -31,6 +32,7 @@ firebase-storage = { group = "com.google.firebase", name = "firebase-storage", v
 image-labeling-common = { group = "com.google.mlkit", name = "image-labeling-common", version.ref = "imageLabelingCommon" }
 image-labeling-default-common = { group = "com.google.mlkit", name = "image-labeling-default-common", version.ref = "imageLabelingDefaultCommon" }
 tensorflow-lite = { module = "org.tensorflow:tensorflow-lite", version.ref = "tensorflowLite" }
+firebase-database = { group = "com.google.firebase", name = "firebase-database", version.ref = "firebaseDatabase" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
