@@ -15,6 +15,7 @@ import android.os.Environment;
 import android.provider.MediaStore;
 import android.util.Log;
 import android.view.View;
+import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.TextView;
@@ -80,12 +81,24 @@ public class Founded extends AppCompatActivity {
         ImageSliderAdapter sliderAdapter = new ImageSliderAdapter(photoList, this);
         photoSlider.setAdapter(sliderAdapter);
 
-        findViewById(R.id.take_anotherphoto_button).setOnClickListener(v -> finish()); // Return to capture screen
+        findViewById(R.id.take_anotherphoto_button).setOnClickListener(v -> onStartCamera(v)); // Return to capture screen
         findViewById(R.id.save_companion_button).setOnClickListener(v -> saveCompanion());
 
         imageLabeler = ImageLabeling.getClient(new ImageLabelerOptions.Builder()
                                                                 .setConfidenceThreshold(0.7f)
                                                                 .build());
+        photoSlider.isClickable();
+        photoSlider.isLongClickable();
+        photoSlider.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                onPickImage(v);
+            }
+        });
+        photoSlider.setOnLongClickListener(v -> {
+                inputImageView.setImageBitmap(photoList.get(0));
+            return true;
+        });
     }
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {

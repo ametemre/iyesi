@@ -26,3 +26,4 @@ project(':OpenCV_4.10.0').projectDir = file("${rootDir}/Resources/opencv-4.10.0-
 
 // OpenCV modülünün yolu doğru şekilde tanımlanmıştır.
 //project(':OpenCV').projectDir = file("${rootDir}/Resources/opencv-3.4.16-android-sdk/OpenCV-android-sdk/sdk")
+include ':MLSeries'

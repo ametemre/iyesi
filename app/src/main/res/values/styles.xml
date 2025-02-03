@@ -3,7 +3,15 @@
     <style name="Widget.Theme.Iyesi.ActionBar.Fullscreen" parent="Widget.AppCompat.ActionBar">
         <item name="android:background">@color/black_overlay</item>
     </style>
-
+    <style name="MiniFabStyle">
+        <item name="android:layout_width">72dp</item>
+        <item name="android:layout_height">72dp</item>
+        <item name="android:layout_alignParentBottom">true</item>
+        <item name="android:visibility">gone</item>
+        <item name="android:src">@drawable/pati</item>
+        <item name="android:backgroundTint">#FF5722</item>
+        <item name="android:elevation">0dp</item>
+    </style>
     <style name="Widget.Theme.Iyesi.ButtonBar.Fullscreen" parent="">
         <item name="android:background">@color/black_overlay</item>
         <item name="android:buttonBarStyle">?android:attr/buttonBarStyle</item>

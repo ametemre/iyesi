@@ -122,7 +122,7 @@ public class Kurmes_dummy extends AppCompatActivity implements CameraBridgeViewB
         cameraView.setCvCameraViewListener(this);
 
         cameraStatusText = findViewById(R.id.camera_status_text);
-        fabDraggable = findViewById(R.id.fab_draggable);
+        fabDraggable = findViewById(R.id.fab_main);
         mAuth = FirebaseAuth.getInstance();
         rootLayout = findViewById(android.R.id.content);
 

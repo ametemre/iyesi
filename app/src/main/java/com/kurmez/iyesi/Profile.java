@@ -23,12 +23,12 @@ public class Profile extends AppCompatActivity {
         setContentView(R.layout.activity_profile);
 
         // Profile components
-        ImageView profileImage = findViewById(R.id.profile_image);
-        TextView username = findViewById(R.id.profile_username);
-        TextView bio = findViewById(R.id.profile_bio);
+        ImageView profileImage = findViewById(R.id.iye_image);
+        TextView username = findViewById(R.id.iye_companion);
+        TextView bio = findViewById(R.id.who);
 
         // Click to open edit profile popup
-        findViewById(R.id.icon_notification).setOnClickListener(v -> openEditProfilePopup());
+        findViewById(R.id.iye_image).setOnClickListener(v -> openEditProfilePopup());
 
         // Profile image actions
         profileImage.setOnClickListener(v -> openLocalStorage());
