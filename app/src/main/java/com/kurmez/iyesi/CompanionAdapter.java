@@ -42,7 +42,7 @@ public class CompanionAdapter extends ArrayAdapter<PetCompanion> {
         Glide.with(getContext())
                 .load(companion.getImageResId()) // This is a URL
                 .placeholder(R.drawable.holder) // Placeholder image
-                .error(R.drawable.star) // Error image
+                .error(R.drawable.star) // Error imagez
                 .into(petImage);
 
         return convertView;
