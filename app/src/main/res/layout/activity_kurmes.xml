@@ -7,9 +7,10 @@
     <!-- Floating Action Button -->
     <!-- Floating Action Button -->
     <com.google.android.material.floatingactionbutton.FloatingActionButton
-        android:id="@+id/fab_draggable"
+        android:id="@+id/fab_main"
         android:layout_width="72dp"
         android:layout_height="72dp"
+        android:contentDescription="Menu"
         android:src="@drawable/pati"
         android:backgroundTint="@android:color/white"
         app:elevation="10dp"
@@ -22,7 +23,43 @@
         app:rippleColor="@android:color/darker_gray"
         android:stateListAnimator="@null"
         android:background="@drawable/fab_glow"/>
-    <!-- Camera View -->
+    <!-- Mini FABs (Hidden Initially) -->
+    <!-- Mini FABs (Initially Hidden) -->
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/fab_1"
+        style="@style/MiniFabStyle"/>
+
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/fab_2"
+        style="@style/MiniFabStyle"/>
+
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/fab_3"
+        style="@style/MiniFabStyle"/>
+
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/fab_4"
+        style="@style/MiniFabStyle"/>
+
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/fab_5"
+        style="@style/MiniFabStyle"/>
+
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/fab_6"
+        style="@style/MiniFabStyle"/>
+
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/fab_7"
+        style="@style/MiniFabStyle"/>
+
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/fab_8"
+        style="@style/MiniFabStyle"/>
+
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/fab_9"
+        style="@style/MiniFabStyle"/>
     <!-- Camera View -->
     <org.opencv.android.JavaCamera2View
         android:id="@+id/kurmes_camera_view"
