@@ -215,4 +215,8 @@ public class MainActivity extends AppCompatActivity {
         startActivity(intent);
         finish();
     }
+    public void Quit(){
+        FirebaseAuth.getInstance().signOut();
+        System.out.println("User logged out successfully.");
+    }
 }

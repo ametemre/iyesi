@@ -2,16 +2,21 @@ package com.kurmez.iyesi;
 
 import android.content.Intent;
 import android.os.Bundle;
+import android.view.View;
+import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.ListView;
 import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 
+import com.kurmez.iyesi.kurmes.Kurmes;
+
 import java.util.ArrayList;
 import java.util.List;
 
 public class Welcome extends AppCompatActivity {
+    MainActivity mainActivity = new MainActivity();
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -19,6 +24,7 @@ public class Welcome extends AppCompatActivity {
 
         ImageView imgWelcome = findViewById(R.id.img_welcome);
         ListView listView = findViewById(R.id.list_view);
+        Button quit = findViewById(R.id.quit);
 
         // Set click listener
         imgWelcome.setOnClickListener(v -> {
@@ -68,6 +74,14 @@ public class Welcome extends AppCompatActivity {
             intent.putExtra("photoUrl", selectedCompanion.getImageResId());
             intent.putExtra("profileId", selectedCompanion.getFinderName());
             startActivity(intent);
+        });
+        quit.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                mainActivity.Quit();
+                finish();
+
+            }
         });
     }
 }

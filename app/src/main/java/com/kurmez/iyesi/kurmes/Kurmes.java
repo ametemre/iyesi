@@ -119,22 +119,31 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
         Log.i(TAG, "called kurmes onCreate");
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_kurmes);
+        mAuth = FirebaseAuth.getInstance();
 
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 
         labelText = findViewById(R.id.label_text);
         cameraStatusText = findViewById(R.id.camera_status_text);
         cameraView = findViewById(R.id.kurmes_camera_view);
+        cameraState(true);
+        if (mAuth.getCurrentUser() != null){
+            (Toast.makeText(this, "OpenCV  failed!", Toast.LENGTH_LONG)).show();
+        } else {
+            (Toast.makeText(this, " initialization failed!", Toast.LENGTH_LONG)).show();
+            cameraState(true);
+        }
 
         if (OpenCVLoader.initLocal()) {
             Log.i(TAG, "OpenCV loaded successfully");
+
         } else {
             Log.e(TAG, "OpenCV initialization failed!");
             (Toast.makeText(this, "OpenCV initialization failed!", Toast.LENGTH_LONG)).show();
             return;
         }
 
-        mAuth = FirebaseAuth.getInstance();
+
         fabDraggable = findViewById(R.id.fab_main);
         fabMain = fabDraggable;
         miniFabs[0] = findViewById(R.id.fab_1);
@@ -431,7 +440,7 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
             Toast.makeText(this, "OpenCV initialization failed.", Toast.LENGTH_SHORT).show();
         }
     }//Essential For Camera
-    private void cameraState(Boolean state){
+    private boolean cameraState(Boolean state){
         if (state){
             if (mOpenCvCameraView != null) {
                 mOpenCvCameraView.enableView();
@@ -453,6 +462,7 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
                 }
             }
         }
+        return state;
     }
     private void updateCameraStatus(String status) {
         runOnUiThread(() -> {
@@ -591,7 +601,38 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
             initializeCamera();
         }
     }//Essential For Camera
+    private void requestStoragePermission() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE}, 200);
+        }
+    }
+    private void capturePhoto() {
+        if (rgb != null && !rgb.empty()) {
+            // Convert Mat to Bitmap
+            Bitmap bitmap = Bitmap.createBitmap(rgb.cols(), rgb.rows(), Bitmap.Config.ARGB_8888);
+            org.opencv.android.Utils.matToBitmap(rgb, bitmap);
+
+            // Save the image to storage
+            String filename = "Kurmes_Capture_" + System.currentTimeMillis() + ".jpg";
+            File file = new File(getExternalFilesDir(null), filename);
+
+            try (FileOutputStream out = new FileOutputStream(file)) {
+                bitmap.compress(Bitmap.CompressFormat.JPEG, 100, out);
+                out.flush();
+                Toast.makeText(this, "Photo saved: " + file.getAbsolutePath(), Toast.LENGTH_SHORT).show();
+            } catch (IOException e) {
+                Log.e(TAG, "Failed to save photo", e);
+                Toast.makeText(this, "Failed to save photo", Toast.LENGTH_SHORT).show();
+            }
+        } else {
+            Toast.makeText(this, "No image to capture", Toast.LENGTH_SHORT).show();
+        }
+    }
+
     private void navigateToFoundedActivity() {
+
+        requestStoragePermission();
+        capturePhoto();
         Intent intent = new Intent(this, Founded.class);
         intent.putParcelableArrayListExtra("photos", new ArrayList<>(photoList)); // Pass the photos
         startActivity(intent);
@@ -603,7 +644,10 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
         rootLayout.addView(fab);
     }*/                           //----------------------------------------------------------------createFab Button
     private void toggleFabMenu() {
-        cameraState(false);
+        if (mOpenCvCameraView.isEnabled()){
+            cameraState(false);
+        }
+
         if (isFabExpanded) {
             collapseFabMenu();
         } else {
