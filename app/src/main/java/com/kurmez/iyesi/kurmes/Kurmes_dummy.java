@@ -1,15 +1,25 @@
 package com.kurmez.iyesi.kurmes;
 
+import android.animation.AnimatorSet;
+import android.animation.ObjectAnimator;
+import android.app.ProgressDialog;
 import android.content.Intent;
+import android.content.res.Resources;
 import android.graphics.Bitmap;
+import android.os.AsyncTask;
 import android.os.Bundle;
+import android.view.Menu;
+import android.view.MenuItem;
 import android.view.View;
+import android.view.WindowManager;
+import android.view.animation.DecelerateInterpolator;
 import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.viewpager2.widget.ViewPager2;
 
@@ -22,7 +32,11 @@ import com.google.mlkit.vision.label.ImageLabeling;
 import com.google.mlkit.vision.label.defaults.ImageLabelerOptions;
 import com.kurmez.iyesi.kurmes.Kurmes.*;
 
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import com.google.android.gms.tasks.OnFailureListener;
 import com.google.android.gms.tasks.OnSuccessListener;
@@ -83,7 +97,13 @@ import org.opencv.android.JavaCamera2View;
 import org.opencv.android.OpenCVLoader;
 import org.opencv.core.CvType;
 import org.opencv.core.Mat;
+import org.opencv.core.MatOfRect;
+import org.opencv.core.Rect;
+import org.opencv.core.Scalar;
+import org.opencv.core.Size;
 import org.opencv.imgproc.Imgproc;
+import org.opencv.objdetect.CascadeClassifier;
+import org.tensorflow.lite.Interpreter;
 
 import java.io.File;
 import java.io.IOException;
@@ -94,165 +114,461 @@ import java.util.List;
 
 public class Kurmes_dummy extends AppCompatActivity implements CameraBridgeViewBase.CvCameraViewListener2 {
 
-    private static final int CAMERA_PERMISSION_REQUEST_CODE = 100;
+    private static final int REQUEST_IMAGE_CAPTURE = 1; // Request code for capturing a photo
+    private List<Bitmap> photoList = new ArrayList<>(); // List to store captured images
     private FloatingActionButton fabDraggable;
     private float dX, dY;
     private boolean isDragging = false;
     private boolean isPressed = false;
     private FirebaseAuth mAuth;
     private Handler handler = new Handler();
-    private JavaCamera2View cameraView;
+    private static final String TAG = "KurmesActivity";
+    private static final int CAMERA_PERMISSION_REQUEST_CODE = 100;
+    //private JavaCamera2View cameraView; // Using JavaCamera2View
+    private TextView labelText;
     private TextView cameraStatusText;
-    private Mat mRgba;
+    private Mat rgb, gray; // RGBA frame
+    MatOfRect rects;
+    //imported---------------------------------
+    //private DetectorFunction activeDetectorFunction = () -> videoYapayZeka(getResources().openRawResource(R.raw.lbpcascade_frontalface), null);
+    private int lastAction;
+    private CameraBridgeViewBase mOpenCvCameraView;
+    public CameraCalibrator mCalibrator;
+    private OnCameraFrameRender mOnCameraFrameRender;
+    private Menu mMenu;
+    private int mWidth,mHeight;
+    //imported---------------------------------
+    private CascadeClassifier catFaceDetector,cascadeClassifier;
     private FrameLayout rootLayout;
     private VelocityTracker velocityTracker = null;
+    private JavaCamera2View cameraView;
     private long pressStartTime;
-    private boolean isLongPressTriggered = false;
     private final int LONG_PRESS_THRESHOLD = 2000; // 2 seconds
     private final int DRAG_THRESHOLD = 20; // Minimum movement to consider a drag
-
+    // TensorFlow Lite Interpreter
+    private Interpreter tflite;
+    private boolean isLongPressTriggered = false;
+    //-------------------------------------------------------------------------------------------Fab
+    private FloatingActionButton fabMain;
+    private FloatingActionButton[] miniFabs = new FloatingActionButton[9];
+    private boolean isFabExpanded = false;
+    private float[][] fabPositions = new float[9][2]; // Stores positions of sub FABs
+    private float mainFabX, mainFabY; // Stores main FAB's position
+    @FunctionalInterface
+    interface DetectorFunction {
+        void execute();
+    }
     @SuppressLint("ClickableViewAccessibility")
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        Log.i(TAG, "called kurmes onCreate");
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_kurmes);
 
-        cameraView = findViewById(R.id.kurmes_camera_view);
-        cameraView.setVisibility(SurfaceView.VISIBLE);
-        cameraView.setCvCameraViewListener(this);
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 
+        labelText = findViewById(R.id.label_text);
         cameraStatusText = findViewById(R.id.camera_status_text);
-        fabDraggable = findViewById(R.id.fab_main);
+        cameraView = findViewById(R.id.kurmes_camera_view);
+
+        if (OpenCVLoader.initLocal()) {
+            Log.i(TAG, "OpenCV loaded successfully");
+        } else {
+            Log.e(TAG, "OpenCV initialization failed!");
+            (Toast.makeText(this, "OpenCV initialization failed!", Toast.LENGTH_LONG)).show();
+            return;
+        }
+
         mAuth = FirebaseAuth.getInstance();
+        fabDraggable = findViewById(R.id.fab_main);
+        fabMain = fabDraggable;
+        miniFabs[0] = findViewById(R.id.fab_1);
+        miniFabs[1] = findViewById(R.id.fab_2);
+        miniFabs[2] = findViewById(R.id.fab_3);
+        miniFabs[3] = findViewById(R.id.fab_4);
+        miniFabs[4] = findViewById(R.id.fab_5);
+        miniFabs[5] = findViewById(R.id.fab_6);
+        miniFabs[6] = findViewById(R.id.fab_7);
+        miniFabs[7] = findViewById(R.id.fab_8);
+        miniFabs[8] = findViewById(R.id.fab_9);
         rootLayout = findViewById(android.R.id.content);
-
-        checkAndRequestPermissions();
         setupDraggableFAB();
-        setupButtonActions();
-    }
-
-    private void checkAndRequestPermissions() {
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.CAMERA}, CAMERA_PERMISSION_REQUEST_CODE);
-        } else {
-            initializeCamera();
+        checkAndRequestPermissions();
+        for (FloatingActionButton subFab : miniFabs) {
+            subFab.setOnTouchListener(new View.OnTouchListener() {
+                @Override
+                public boolean onTouch(View v, MotionEvent event) {
+                    if (event.getAction() == MotionEvent.ACTION_DOWN) {
+                        onFabClick(subFab);
+                        return true;
+                    }else if (event.getAction() == MotionEvent.ACTION_UP) {
+                        // Handle the touch up event
+                        collapseFabMenu();
+                        Log.d("Touch", "User lifted their finger off the screen");
+                    }
+                    return false;
+                }
+            });
         }
     }
-
-    private void initializeCamera() {
-        boolean success = OpenCVLoader.initDebug();
-        if (success) {
-            if (cameraView != null) {
-                cameraView.enableView();
-                updateCameraStatus("Camera Enabled.");
+    @Override
+    public void onCameraViewStarted(int width, int height) {
+        rgb = new Mat();
+        gray = new Mat();
+        rects = new MatOfRect();
+        //mRgba = new Mat(height, width, CvType.CV_8UC4);
+        Log.d(TAG, "Camera view started: " + width + "x" + height);
+        updateCameraStatus("Camera Started.");
+        if (mWidth != width || mHeight != height) {
+            mWidth = width;
+            mHeight = height;
+            mCalibrator = new CameraCalibrator(mWidth, mHeight);
+            if (CalibrationResult.tryLoad(this, mCalibrator.getCameraMatrix(), mCalibrator.getDistortionCoefficients())) {
+                mCalibrator.setCalibrated();
+            } else {
+                if (mMenu != null && !mCalibrator.isCalibrated()) {
+                    mMenu.findItem(R.id.preview_mode).setEnabled(false);
+                }
             }
-        } else {
-            Toast.makeText(this, "OpenCV initialization failed.", Toast.LENGTH_SHORT).show();
+            mOnCameraFrameRender = new OnCameraFrameRender(new CalibrationFrameRender(mCalibrator));
         }
     }
+    @Override
+    public void onCameraViewStopped() {
+        rgb.release();
+        gray.release();
+        rects.release();
+        updateCameraStatus("Camera Stopped.");
+    }                                                         //done
+    @Override
+    public Mat onCameraFrame(CameraBridgeViewBase.CvCameraViewFrame inputFrame) {
+        rgb = inputFrame.rgba();
+        gray =inputFrame.gray();
+        switch (currentState) {
+            case FACE_DETECTION:
+                // Perform face detection
+                videoYapayZeka(getResources().openRawResource(R.raw.lbpcascade_frontalface), null);
+                break;
+            case OBJECT_DETECTION:
+                // Perform object detection
+                // ...
+                break;
+            case TRACKING:
+                // Perform tracking
+                // ...
+                break;
+            case IDLE:
+                // Do nothing
+                break;
+            default:
+                break;
+        }
+/*        if (activeDetectorFunction != null) {
+            activeDetectorFunction.execute();
+        }*/
+        Log.d(TAG, "Processing camera frame...");
+/*        Imgproc.cvtColor(rgb, gray, Imgproc.COLOR_RGBA2GRAY);
 
+        if (catFaceDetector != null) {
+            MatOfRect catFaces = new MatOfRect();
+            catFaceDetector.detectMultiScale(grayscale, catFaces, 1.1, 2, 0,
+                    new Size(100, 100), new Size());
+
+            for (Rect rect : catFaces.toArray()) {
+                Imgproc.rectangle(mRgba, rect.tl(), rect.br(), new Scalar(0, 255, 0, 255), 2);
+                // Tahmin için kırpılmış yüz verisi hazırlanır
+                Mat faceROI = grayscale.submat(rect);
+                byte[][][][] input = preprocessFace(faceROI);
+                float[][] output = new float[1][3]; // Çıkış boyutunu modelinize göre ayarlayın
+                tflite.run(input, output);
+
+                String label = interpretPrediction(output[0]);
+                Imgproc.putText(mRgba, label, rect.tl(), Imgproc.FONT_HERSHEY_SIMPLEX, 1.0, new Scalar(255, 255, 255), 2);
+
+                //float[][] output = new float[1][3]; // Çıkış boyutunu modelinize göre ayarlayın
+                tflite.run(input, output);
+
+                //String label = interpretPrediction(output[0]);
+                Imgproc.putText(mRgba, label, rect.tl(), Imgproc.FONT_HERSHEY_SIMPLEX, 1.0, new Scalar(255, 255, 255), 2);
+                //byte[] output = new byte[1];
+                tflite.run(input, output);
+
+                //float[] normalizedOutput = convertOutput(output); // Eğer dönüşüm gerekiyorsa
+
+                tflite.run(input, output);
+
+                // Tahmini etikete çevir ve ekrana yazdır
+                //String label = interpretPrediction(normalizedOutput);
+                Imgproc.putText(mRgba, label, rect.tl(), Imgproc.FONT_HERSHEY_SIMPLEX, 1.0, new Scalar(255, 255, 255), 2);
+            }
+        }
+*/ //AI generated Code for image recognition (gives overload to gpu & crashes)
+        //return mOnCameraFrameRender.render(inputFrame);
+        return rgb; // Return the raw RGBA frame
+    } //Essential For Camera
+    private State currentState = State.IDLE;
+    private HashMap<State, String> state = new HashMap<>();
+    public enum State {
+        IDLE,
+        FACE_DETECTION,
+        OBJECT_DETECTION,
+        TRACKING,
+        // Add more states as needed
+    }
     @Override
     protected void onResume() {
         super.onResume();
         if (OpenCVLoader.initDebug()) {
-            if (cameraView != null) {
-                cameraView.enableView();
+            Log.d(TAG, "OpenCV loaded successfully.");
+            if (mOpenCvCameraView != null) {
                 updateCameraStatus("Camera View Resumed.");
             }
         } else {
+            Log.e(TAG, "OpenCV loading failed on resume.");
             updateCameraStatus("OpenCV Initialization Failed.");
         }
     }
-
     @Override
     protected void onPause() {
         super.onPause();
-        if (cameraView != null) {
-            cameraView.disableView();
+        if (mOpenCvCameraView != null) {
+            cameraState(false);
         }
-    }
 
+    }
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        if (cameraView != null) {
-            cameraView.disableView();
+        if (mOpenCvCameraView != null) {
+            cameraState(false);
+            updateCameraStatus("Camera View Destroyed.");
         }
     }
+    @Override
+    public boolean onCreateOptionsMenu(Menu menu) {
+        super.onCreateOptionsMenu(menu);
+        getMenuInflater().inflate(R.menu.calibration, menu);
+        mMenu = menu;
+        return true;
+    }
+    @Override
+    public boolean onPrepareOptionsMenu(Menu menu) {
+        super.onPrepareOptionsMenu(menu);
+        menu.findItem(R.id.preview_mode).setEnabled(true);
+        if (mCalibrator != null && !mCalibrator.isCalibrated()) {
+            menu.findItem(R.id.preview_mode).setEnabled(false);
+        }
+        return true;
+    }
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item) {
+        if (item.getItemId() == R.id.calibration) {
+            mOnCameraFrameRender =
+                    new OnCameraFrameRender(new CalibrationFrameRender(mCalibrator));
+            item.setChecked(true);
+            return true;
+        } else if (item.getItemId() == R.id.undistortion) {
+            mOnCameraFrameRender =
+                    new OnCameraFrameRender(new UndistortionFrameRender(mCalibrator));
+            item.setChecked(true);
+            return true;
+        } else if (item.getItemId() == R.id.comparison) {
+            mOnCameraFrameRender =
+                    new OnCameraFrameRender(new ComparisonFrameRender(mCalibrator, mWidth, mHeight, getResources()));
+            item.setChecked(true);
+            return true;
+        } else if (item.getItemId() == R.id.calibrate) {
+            final Resources res = getResources();
+            if (mCalibrator.getCornersBufferSize() < 2) {
+                (Toast.makeText(this, res.getString(R.string.more_samples), Toast.LENGTH_SHORT)).show();
+                return true;
+            }
 
+            mOnCameraFrameRender = new OnCameraFrameRender(new PreviewFrameRender());
+            new AsyncTask<Void, Void, Void>() {
+                private ProgressDialog calibrationProgress;
+
+                @SuppressLint("StaticFieldLeak")
+                @Override
+                protected void onPreExecute() {
+                    calibrationProgress = new ProgressDialog(Kurmes_dummy.this);
+                    calibrationProgress.setTitle(res.getString(R.string.calibrating));
+                    calibrationProgress.setMessage(res.getString(R.string.please_wait));
+                    calibrationProgress.setCancelable(false);
+                    calibrationProgress.setIndeterminate(true);
+                    calibrationProgress.show();
+                }
+
+                @Override
+                protected Void doInBackground(Void... arg0) {
+                    mCalibrator.calibrate();
+                    return null;
+                }
+
+                @Override
+                protected void onPostExecute(Void result) {
+                    calibrationProgress.dismiss();
+                    mCalibrator.clearCorners();
+                    mOnCameraFrameRender = new OnCameraFrameRender(new CalibrationFrameRender(mCalibrator));
+                    String resultMessage = (mCalibrator.isCalibrated()) ?
+                            res.getString(R.string.calibration_successful)  + " " + mCalibrator.getAvgReprojectionError() :
+                            res.getString(R.string.calibration_unsuccessful);
+                    (Toast.makeText(Kurmes_dummy.this, resultMessage, Toast.LENGTH_SHORT)).show();
+
+                    if (mCalibrator.isCalibrated()) {
+                        CalibrationResult.save(Kurmes_dummy.this,
+                                mCalibrator.getCameraMatrix(), mCalibrator.getDistortionCoefficients());
+                    }
+                }
+            }.execute();
+            return true;
+        } else {
+            return super.onOptionsItemSelected(item);
+        }
+    }
+    /*    @Override
+        public boolean dispatchTouchEvent(MotionEvent event) {
+            switch (event.getAction()) {
+                case MotionEvent.ACTION_DOWN:
+                    if (isFabExpanded){
+                        collapseFabMenu();
+                    }
+                    Log.d("TouchEvent", "Screen touched at: X=" + event.getRawX() + " Y=" + event.getRawY());
+                    break;
+                case MotionEvent.ACTION_MOVE:
+                    Log.d("TouchEvent", "Finger moved: X=" + event.getRawX() + " Y=" + event.getRawY());
+                    break;
+                case MotionEvent.ACTION_UP:
+                    Log.d("TouchEvent","Finger lifted");
+                    break;
+            }
+            return super.dispatchTouchEvent(event); // Allow other views to handle the touch
+        }*/                                      //done collapses the fab menu anywhere on screen touch but overrides the other click events.
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+
+        if (requestCode == REQUEST_IMAGE_CAPTURE && resultCode == RESULT_OK && data != null) {
+            // Retrieve the captured image
+            Bitmap imageBitmap = (Bitmap) data.getExtras().get("data");
+
+            if (imageBitmap != null) {
+                photoList.add(imageBitmap); // Add photo to the list
+                navigateToFoundedActivity(); // Navigate to the next screen
+            }
+        } else if (requestCode == REQUEST_IMAGE_CAPTURE) {
+            Toast.makeText(this, "Photo capture cancelled", Toast.LENGTH_SHORT).show();
+        }
+    }
+    protected List<? extends CameraBridgeViewBase> getCameraViewList() {
+        return Collections.singletonList(mOpenCvCameraView);
+    }//Essential For Camera
+    private void initializeCamera() {
+        mOpenCvCameraView = (CameraBridgeViewBase) findViewById(R.id.kurmes_camera_view);
+        mOpenCvCameraView.setVisibility(SurfaceView.VISIBLE);
+        mOpenCvCameraView.setCvCameraViewListener(this);
+        boolean success = OpenCVLoader.initDebug();
+        if (success) {
+            Log.d(TAG, "OpenCV initialized successfully.");
+        } else {
+            Log.e(TAG, "OpenCV initialization failed.");
+            Toast.makeText(this, "OpenCV initialization failed.", Toast.LENGTH_SHORT).show();
+        }
+    }//Essential For Camera
+    private void cameraState(Boolean state){
+        if (state){
+            if (mOpenCvCameraView != null) {
+                mOpenCvCameraView.enableView();
+                mOpenCvCameraView.setVisibility(View.VISIBLE);
+                cameraView.enableView();
+                cameraView.setVisibility(View.VISIBLE);
+                updateCameraStatus("Camera Enabled.");
+            }
+        }
+        else {
+            if (mOpenCvCameraView != null) {
+                if (mOpenCvCameraView.isEnabled()) {
+                    mOpenCvCameraView.disableView();
+                    mOpenCvCameraView.setVisibility(View.GONE);
+                    cameraView.disableView();
+                    cameraView.setVisibility(View.GONE);
+                    currentState = State.IDLE;
+                    updateCameraStatus("Camera Paused.");
+                }
+            }
+        }
+    }
     private void updateCameraStatus(String status) {
-        if (cameraStatusText != null) {
-            cameraStatusText.setText("Camera Status: " + status);
-        }
-    }
-
-    @Override
-    public void onCameraViewStarted(int width, int height) {
-        mRgba = new Mat(height, width, CvType.CV_8UC4);
-    }
-
-    @Override
-    public void onCameraViewStopped() {
-        if (mRgba != null) {
-            mRgba.release();
-        }
-    }
-
-    @Override
-    public Mat onCameraFrame(CameraBridgeViewBase.CvCameraViewFrame inputFrame) {
-        mRgba = inputFrame.rgba();
-        Imgproc.cvtColor(mRgba, mRgba, Imgproc.COLOR_RGBA2GRAY); // Example processing
-        return mRgba;
-    }
-
+        runOnUiThread(() -> {
+            if (cameraStatusText != null) {
+                cameraStatusText.setText("Camera Status: " + status);
+            }
+            Log.d(TAG, status);
+        });
+    }//Essential For Camera
     @SuppressLint("ClickableViewAccessibility")
     private void setupDraggableFAB() {
         fabDraggable.setOnTouchListener((v, event) -> {
-            switch (event.getAction()) {
+            switch (event.getActionMasked()) {
                 case MotionEvent.ACTION_DOWN:
                     dX = v.getX() - event.getRawX();
                     dY = v.getY() - event.getRawY();
                     isDragging = false;
                     isLongPressTriggered = false;
                     pressStartTime = System.currentTimeMillis();
-                    handler.postDelayed(() -> {
-                        if (!isDragging) {
-                            isLongPressTriggered = true;
-                            handleLongClick();
-                        }
-                    }, LONG_PRESS_THRESHOLD);
+                    if (velocityTracker == null) {
+                        velocityTracker = VelocityTracker.obtain();
+                    } else {
+                        velocityTracker.clear();
+                    }
+                    velocityTracker.addMovement(event);
                     return true;
 
                 case MotionEvent.ACTION_MOVE:
                     float moveX = event.getRawX() + dX;
                     float moveY = event.getRawY() + dY;
-
                     if (Math.abs(moveX - v.getX()) > DRAG_THRESHOLD || Math.abs(moveY - v.getY()) > DRAG_THRESHOLD) {
                         isDragging = true;
                     }
+                    velocityTracker.addMovement(event);
+                    velocityTracker.computeCurrentVelocity(1000); // Calculate speed in pixels per second
+                    float newX = event.getRawX() + dX;
+                    float newY = event.getRawY() + dY;
+                    v.setX(newX);
+                    v.setY(newY);
+
+                    moveMiniFabs(newX - mainFabX, newY - mainFabY);
+
+                    mainFabX = newX;
+                    mainFabY = newY;
 
                     v.animate().x(moveX).y(moveY).setDuration(0).start();
                     return true;
-
                 case MotionEvent.ACTION_UP:
-                    handler.removeCallbacksAndMessages(null);
-                    if (!isDragging || (System.currentTimeMillis() - pressStartTime) < LONG_PRESS_THRESHOLD) {
-                        v.performClick();
+                    velocityTracker.addMovement(event);
+                    velocityTracker.computeCurrentVelocity(1000);
+                    if (!isDragging) {
+                        if ((System.currentTimeMillis() - pressStartTime) < LONG_PRESS_THRESHOLD) {
+                            if (mAuth.getCurrentUser() != null) {
+                                toggleFabMenu();
+                            } else {
+                                navigateToFoundedActivity();
+                            }
+                        } else {
+                            handleLongClick();
+                        }
+                    } else {
+                        // Apply momentum-based gravity effect
+                        float velocityY = velocityTracker.getYVelocity();
+                        float velocityX = velocityTracker.getXVelocity();
+                        animateMomentumGravity(v, velocityX, velocityY);
                     }
                     return true;
-
                 default:
                     return false;
             }
         });
     }
-
-    private void setupButtonActions() {
-        fabDraggable.setOnClickListener(v -> {
-            openCamera();
-        });
-    }
-
     private void handleLongClick() {
         animateButtonPress();
         if (mAuth.getCurrentUser() != null) {
@@ -264,6 +580,7 @@ public class Kurmes_dummy extends AppCompatActivity implements CameraBridgeViewB
     private void animateButtonPress() {
         fabDraggable.setEnabled(false);
 
+        // Create shadow effect
         Animation scaleDown = new ScaleAnimation(
                 1f, 0.9f, 1f, 0.9f,
                 Animation.RELATIVE_TO_SELF, 0.5f,
@@ -283,370 +600,250 @@ public class Kurmes_dummy extends AppCompatActivity implements CameraBridgeViewB
             isPressed = false;
         }, 2000);
     }
+    private void animateMomentumGravity(View v, float velocityX, float velocityY) {
+        float screenHeight = rootLayout.getHeight();
+        float screenWidth = rootLayout.getWidth();
 
-    private void openCamera() {
-        Toast.makeText(this, "Opening Camera...", Toast.LENGTH_SHORT).show();
+        // Calculate projected landing position based on velocity
+        float projectedX = v.getX() + (velocityX * 0.2f); // Multiply for "throw" effect
+        float projectedY = v.getY() + (velocityY * 0.2f);
+
+        // Ensure it doesn't go off-screen
+        projectedX = Math.max(0, Math.min(projectedX, screenWidth - v.getWidth()));
+        projectedY = Math.min(screenHeight - v.getHeight(), projectedY);
+
+        // Animate movement with bounce effect
+        ValueAnimator animatorX = ValueAnimator.ofFloat(v.getX(), projectedX);
+        ValueAnimator animatorY = ValueAnimator.ofFloat(v.getY(), projectedY);
+
+        animatorX.setInterpolator(new DecelerateInterpolator());
+        animatorY.setInterpolator(new DecelerateInterpolator());
+
+        animatorX.setDuration(500);
+        animatorY.setDuration(500);
+
+        animatorX.addUpdateListener(animation -> v.setX((float) animation.getAnimatedValue()));
+        animatorY.addUpdateListener(animation -> v.setY((float) animation.getAnimatedValue()));
+
+        animatorX.start();
+        animatorY.start();
     }
+    private void checkAndRequestPermissions() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.CAMERA}, CAMERA_PERMISSION_REQUEST_CODE);
+        } else {
+            initializeCamera();
+        }
+    }//Essential For Camera
+    private void navigateToFoundedActivity() {
+        Intent intent = new Intent(this, Founded.class);
+        intent.putParcelableArrayListExtra("photos", new ArrayList<>(photoList)); // Pass the photos
+        startActivity(intent);
+    }
+    /*private void createFabButton(String modelName, String modelUrl) {
+            FloatingActionButton fab = new FloatingActionButton(this);
+            fab.setImageResource(R.drawable.holder); // Set a default icon
+            fab.setOnClickListener(v -> downloadAndLoadModel(modelUrl));
+            rootLayout.addView(fab);
+        }*/                           //----------------------------------------------------------------createFab Button
+    private void toggleFabMenu() {
+        cameraState(false);
+        if (isFabExpanded) {
+            collapseFabMenu();
+        } else {
+            expandFabMenu();
+        }
+        isFabExpanded = !isFabExpanded;
+    }                                                              //done          0
+    private void expandFabMenu() {
+        float radius = 800; // Distance from center FAB
+        for (int i = 0; i < miniFabs.length; i++) {
+            float angle = (float) (i * (2 * Math.PI / miniFabs.length)/3);
+            float x = (float) (radius * Math.cos(angle));
+            float y = (float) (radius * Math.sin(angle));
+            if (x<0){
 
-
-    public abstract class Founded extends AppCompatActivity {
-        public final String LOG_TAG = "MLImageHelper";
-        public final static int CAPTURE_IMAGE_ACTIVITY_REQUEST_CODE = 1034;
-        private static final int REQUEST_IMAGE_CAPTURE = 1; // Request code for capturing a photo
-        public final static int PICK_IMAGE_ACTIVITY_REQUEST_CODE = 1064;
-        public final static int REQUEST_READ_EXTERNAL_STORAGE = 2031;
-        File photoFile;
-        private List<Bitmap> photoList;
-        private ImageLabeler imageLabeler;
-        private ImageView inputImageView;
-        private EditText outputTextView;
-
-        @SuppressLint("ObsoleteSdkInt")
-        @Override
-        protected void onCreate(Bundle savedInstanceState) {
-            super.onCreate(savedInstanceState);
-            setContentView(R.layout.activity_founded);
-
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                if (checkSelfPermission(android.Manifest.permission.READ_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
-                    requestPermissions(new String[]{Manifest.permission.READ_EXTERNAL_STORAGE}, REQUEST_READ_EXTERNAL_STORAGE);
-                }
             }
-            //inputImageView = findViewById(R.id.slider_image);
-            outputTextView = findViewById(R.id.companion_species);
-            // Retrieve the photos passed from Found activity
-            photoList = getIntent().getParcelableArrayListExtra("photos");
-            if (photoList == null || photoList.isEmpty()) {
-                Toast.makeText(this, "No photos found", Toast.LENGTH_SHORT).show();
-                finish();
-                return;
+            if (y<0){
+
             }
-            // Set up the image slider
-            ViewPager2 photoSlider = findViewById(R.id.founded_photos_slider);
-            ImageSliderAdapter sliderAdapter = new ImageSliderAdapter(photoList, this);
-            photoSlider.setAdapter(sliderAdapter);
 
-            findViewById(R.id.take_anotherphoto_button).setOnClickListener(v -> finish()); // Return to capture screen
-            findViewById(R.id.save_companion_button).setOnClickListener(v -> saveCompanion());
+            fabPositions[i][0] = x;
+            fabPositions[i][1] = y;
 
-            imageLabeler = ImageLabeling.getClient(new ImageLabelerOptions.Builder()
-                    .setConfidenceThreshold(0.7f)
-                    .build());
-        }
-        @Override
-        public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
-            super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-            Log.d(com.kurmez.iyesi.Founded.class.getSimpleName(), "grant result for" + permissions[0] + "is" + grantResults[0]);
-        }
-        /**
-         * Saves the companion information along with photos and navigates to the Companion activity.
-         */
-        private void saveCompanion() {
-            String species = "Sarman Cat"; // Replace with actual user input
-            String foundDate = "01/01/2025";     // Replace with actual user input
-            String foundPlace = "Bishkek";     // Replace with actual user input
-            String profileId = "Veterinarian : Evren Hoca"; // Replace with actual data
-
-            if (photoList != null && !photoList.isEmpty()) {
-                Bitmap firstPhoto = photoList.get(0);
-                String photoUrl = uploadPhotoAndGetUrl(firstPhoto);
-
-                if (photoUrl != null) {
-                    Intent intent = new Intent(Kurmes_dummy.this, com.kurmez.iyesi.Companion.class);
-                    intent.putExtra("species", species);
-                    intent.putExtra("foundDate", foundDate);
-                    intent.putExtra("foundPlace", foundPlace);
-                    intent.putExtra("photoUrl", photoUrl);
-                    intent.putExtra("profileId", profileId);
-                    startActivity(intent);
-                } else {
-                    Toast.makeText(this, "Failed to upload photo", Toast.LENGTH_SHORT).show();
-                }
-            } else {
-                Toast.makeText(this, "No photo available to register companion", Toast.LENGTH_SHORT).show();
-            }
-        }
-        /**
-         * Simulates uploading the photo and returning a URL (replace with actual implementation).
-         */
-        private String uploadPhotoAndGetUrl(Bitmap photo) {
-            // TODO: Replace this with actual upload logic (e.g., Firebase Storage)
-            return "https://example.com/photo.jpg"; // Replace with the real uploaded URL
-        }
-
-
-        private void runClassification(Bitmap bitmap){
-            InputImage inputImage = InputImage.fromBitmap(bitmap,0);
-            imageLabeler.process(inputImage).addOnSuccessListener(new OnSuccessListener<List<ImageLabel>>() {
-                @Override
-                public void onSuccess(List<ImageLabel> imageLabels) {
-                    if (imageLabels.size() > 0) {
-                        StringBuilder builder = new StringBuilder();
-                        for (ImageLabel label : imageLabels) {
-                            builder.append(label.getText())
-                                    .append(" : ")
-                                    .append("\n");
-                        }
-                        outputTextView.setText(builder.toString());
-                    }else {
-                        outputTextView.setText("Could Not Classify");
-                    }
-                }
-            }).addOnFailureListener(new OnFailureListener() {
-                @Override
-                public void onFailure(@NonNull Exception e) {
-                    e.printStackTrace();
-                }
-            });
-        }
-        public void onGotoImageActivity(View view){
-            Intent intent = new Intent();
-        }
-        public void onPickImage(View view) {
-            // create Intent to take a picture and return control to the calling application
-            Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
-            intent.setType("image/*");
-
-            // If you call startActivityForResult() using an intent that no app can handle, your app will crash.
-            // So as long as the result is not null, it's safe to use the intent.
-            if (intent.resolveActivity(getPackageManager()) != null) {
-                // Start the image capture intent to take photo
-                startActivityForResult(intent, PICK_IMAGE_ACTIVITY_REQUEST_CODE);
-            }
-        }
-        public void onStartCamera(View view){
-            Intent takePictureIntent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
-            if (takePictureIntent.resolveActivity(getPackageManager()) != null) {
-                startActivityForResult(takePictureIntent, REQUEST_IMAGE_CAPTURE);
-            } else {
-                Toast.makeText(this, "Camera not available", Toast.LENGTH_SHORT).show();
-            }
-        }
-        protected abstract void runDetection(Bitmap bitmap);
-        private Bitmap getCapturedImage() {
-            // Get the dimensions of the View
-            int targetW = inputImageView.getWidth();
-            int targetH = inputImageView.getHeight();
-
-            BitmapFactory.Options bmOptions = new BitmapFactory.Options();
-            bmOptions.inJustDecodeBounds = true;
-            BitmapFactory.decodeFile(photoFile.getAbsolutePath());
-            int photoW = bmOptions.outWidth;
-            int photoH = bmOptions.outHeight;
-            int scaleFactor = Math.max(1, Math.min(photoW / targetW, photoH /targetH));
-
-            bmOptions = new BitmapFactory.Options();
-            bmOptions.inJustDecodeBounds = false;
-            bmOptions.inSampleSize = scaleFactor;
-            bmOptions.inMutable = true;
-            return BitmapFactory.decodeFile(photoFile.getAbsolutePath(), bmOptions);
-        }
-        private Bitmap rotateImage(Bitmap source, float angle) {
-            Matrix matrix = new Matrix();
-            matrix.postRotate(angle);
-            return Bitmap.createBitmap(
-                    source, 0, 0, source.getWidth(), source.getHeight(),
-                    matrix, true
+            miniFabs[i].setVisibility(View.VISIBLE);
+            fabDraggable.setVisibility(View.GONE);
+            AnimatorSet animSet = new AnimatorSet();
+            animSet.playTogether(
+                    ObjectAnimator.ofFloat(miniFabs[i], "x", mainFabX, x),
+                    ObjectAnimator.ofFloat(miniFabs[i], "y", mainFabY, y),
+                    ObjectAnimator.ofFloat(miniFabs[i], "alpha", 0f, 1f)
             );
+            animSet.setInterpolator(new DecelerateInterpolator());
+            animSet.setDuration(800);
+            animSet.start();
         }
-        private void rotateIfRequired(Bitmap bitmap) {
-            try {
-                ExifInterface exifInterface = new ExifInterface(photoFile.getAbsolutePath());
-                int orientation = exifInterface.getAttributeInt(
-                        ExifInterface.TAG_ORIENTATION,
-                        ExifInterface.ORIENTATION_UNDEFINED
-                );
+    }                                                              //done           0
+    private void collapseFabMenu() {
+        for (FloatingActionButton fab : miniFabs) {
+            int i = 0;
+            AnimatorSet animSet = new AnimatorSet();
+            animSet.playTogether(
+                    ObjectAnimator.ofFloat(miniFabs[i], "x", miniFabs[i].getX(), mainFabX),
+                    ObjectAnimator.ofFloat(miniFabs[i], "y", miniFabs[i].getY(), mainFabY),
+                    ObjectAnimator.ofFloat(miniFabs[i], "alpha", 1f, 0f)
+            );
+            animSet.setInterpolator(new DecelerateInterpolator());
+            animSet.setDuration(1200);
+            animSet.start();
 
-                if (orientation == ExifInterface.ORIENTATION_ROTATE_90) {
-                    rotateImage(bitmap, 90f);
-                } else if (orientation == ExifInterface.ORIENTATION_ROTATE_180) {
-                    rotateImage(bitmap, 180f);
-                } else if (orientation == ExifInterface.ORIENTATION_ROTATE_270) {
-                    rotateImage(bitmap, 270f);
-                }
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        }
-        protected Bitmap loadFromUri(Uri photoUri) {
-            Bitmap image = null;
-
-            try {
-                if (Build.VERSION.SDK_INT > 27) {
-                    ImageDecoder.Source source = ImageDecoder.createSource(this.getContentResolver(), photoUri);
-                    image = ImageDecoder.decodeBitmap(source);
-                } else {
-                    image = MediaStore.Images.Media.getBitmap(this.getContentResolver(), photoUri);
-                }
-            } catch(IOException e) {
-                e.printStackTrace();
-            }
-
-            return image;
-        }
-        public void onTakeImage(View view) {
-            // create Intent to take a picture and return control to the calling application
-            Intent intent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
-            // Create a File reference for future access
-            photoFile = getPhotoFileUri(new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date()) + ".jpg");
-
-            // wrap File object into a content provider
-            // required for API >= 24
-            // See https://guides.codepath.com/android/Sharing-Content-with-Intents#sharing-files-with-api-24-or-higher
-            Uri fileProvider = FileProvider.getUriForFile(this, "com.iago.fileprovider1", photoFile);
-            intent.putExtra(MediaStore.EXTRA_OUTPUT, fileProvider);
-
-            // If you call startActivityForResult() using an intent that no app can handle, your app will crash.
-            // So as long as the result is not null, it's safe to use the intent.
-            if (intent.resolveActivity(getPackageManager()) != null) {
-                // Start the image capture intent to take photo
-                startActivityForResult(intent, CAPTURE_IMAGE_ACTIVITY_REQUEST_CODE);
-            }
-        }
-        // Returns the File for a photo stored on disk given the fileName
-        public File getPhotoFileUri(String fileName) {
-            // Get safe storage directory for photos
-            // Use `getExternalFilesDir` on Context to access package-specific directories.
-            // This way, we don't need to request external read/write runtime permissions.
-            File mediaStorageDir = new File(getExternalFilesDir(Environment.DIRECTORY_PICTURES), LOG_TAG);
-
-            // Create the storage directory if it does not exist
-            if (!mediaStorageDir.exists() && !mediaStorageDir.mkdirs()){
-                Log.d(LOG_TAG, "failed to create directory");
-            }
-
-            // Return the file target for the photo based on filename
-            File file = new File(mediaStorageDir.getPath() + File.separator + fileName);
-
-            return file;
-        }
-        /**
-         * getCapturedImage():
-         *     Decodes and crops the captured image from camera.
-         */
-        @Override
-        public void onActivityResult(int requestCode, int resultCode, Intent data) {
-            super.onActivityResult(requestCode, resultCode, data);
-            if (requestCode == CAPTURE_IMAGE_ACTIVITY_REQUEST_CODE) {
-                if (resultCode == RESULT_OK) {
-                    Bitmap bitmap = getCapturedImage();
-                    rotateIfRequired(bitmap);
-                    inputImageView.setImageBitmap(bitmap);
-                    runDetection(bitmap);
-                } else { // Result was a failure
-                    Toast.makeText(this, "Picture wasn't taken!", Toast.LENGTH_SHORT).show();
-                }
-            } else if (requestCode == PICK_IMAGE_ACTIVITY_REQUEST_CODE) {
-                if (resultCode == RESULT_OK) {
-                    Bitmap takenImage = loadFromUri(data.getData());
-                    inputImageView.setImageBitmap(takenImage);
-                    runDetection(takenImage);
-                } else { // Result was a failure
-                    Toast.makeText(this, "Picture wasn't selected!", Toast.LENGTH_SHORT).show();
-                }
-            }
-        }
-
-    }
+            fab.setVisibility(View.GONE);
+            fabDraggable.setVisibility(View.VISIBLE);
 
 
-    public class Foundede extends AppCompatActivity {
-        private List<Bitmap> photoList;
-        private ImageLabeler imageLabeler;
-        private ImageView inputImageView;
-        private EditText outputTextView;
-
-        @Override
-        protected void onCreate(Bundle savedInstanceState) {
-            super.onCreate(savedInstanceState);
-            setContentView(R.layout.activity_founded);
-
-            //requestPermissions(new String[]{com.kurmez.iyesi.Manifest.permission.READ_EXTERNAL});
-
-            //inputImageView = findViewById(R.id.slider_image);
-            outputTextView = findViewById(R.id.companion_species);
-            // Retrieve the photos passed from Found activity
-            photoList = getIntent().getParcelableArrayListExtra("photos");
-            if (photoList == null || photoList.isEmpty()) {
-                Toast.makeText(this, "No photos found", Toast.LENGTH_SHORT).show();
-                finish();
-                return;
-            }
-            // Set up the image slider
-            ViewPager2 photoSlider = findViewById(R.id.founded_photos_slider);
-            ImageSliderAdapter sliderAdapter = new ImageSliderAdapter(photoList, this);
-            photoSlider.setAdapter(sliderAdapter);
-
-            findViewById(R.id.take_anotherphoto_button).setOnClickListener(v -> finish()); // Return to capture screen
-
-            findViewById(R.id.save_companion_button).setOnClickListener(v -> saveCompanion());
-
-            imageLabeler = ImageLabeling.getClient(new ImageLabelerOptions.Builder()
-                    .setConfidenceThreshold(0.7f)
-                    .build());
-
-        }
-        /**
-         * Saves the companion information along with photos and navigates to the Companion activity.
-         */
-        private void saveCompanion() {
-            String species = "Sarman Cat"; // Replace with actual user input
-            String foundDate = "01/01/2025";     // Replace with actual user input
-            String foundPlace = "Bishkek";     // Replace with actual user input
-            String profileId = "Veterinarian : Evren Hoca"; // Replace with actual data
-
-            if (photoList != null && !photoList.isEmpty()) {
-                Bitmap firstPhoto = photoList.get(0);
-                String photoUrl = uploadPhotoAndGetUrl(firstPhoto);
-
-                if (photoUrl != null) {
-                    Intent intent = new Intent(Kurmes_dummy.this, Companion.class);
-                    intent.putExtra("species", species);
-                    intent.putExtra("foundDate", foundDate);
-                    intent.putExtra("foundPlace", foundPlace);
-                    intent.putExtra("photoUrl", photoUrl);
-                    intent.putExtra("profileId", profileId);
-                    startActivity(intent);
-                } else {
-                    Toast.makeText(this, "Failed to upload photo", Toast.LENGTH_SHORT).show();
-                }
-            } else {
-                Toast.makeText(this, "No photo available to register companion", Toast.LENGTH_SHORT).show();
-            }
-        }
-        /**
-         * Simulates uploading the photo and returning a URL (replace with actual implementation).
-         */
-        private String uploadPhotoAndGetUrl(Bitmap photo) {
-            // TODO: Replace this with actual upload logic (e.g., Firebase Storage)
-            return "https://example.com/photo.jpg"; // Replace with the real uploaded URL
-        }
-        private void runClassification(Bitmap bitmap){
-            InputImage inputImage = InputImage.fromBitmap(bitmap,0);
-            imageLabeler.process(inputImage).addOnSuccessListener(new OnSuccessListener<List<ImageLabel>>() {
+            final int index = i;
+            animSet.addListener(new android.animation.AnimatorListenerAdapter() {
                 @Override
-                public void onSuccess(List<ImageLabel> imageLabels) {
-                    if (imageLabels.size() > 0) {
-                        StringBuilder builder = new StringBuilder();
-                        for (ImageLabel label : imageLabels) {
-                            builder.append(label.getText())
-                                    .append(" : ")
-                                    .append("\n");
-                        }
-                        outputTextView.setText(builder.toString());
-                    }else {
-                        outputTextView.setText("Could Not Classify");
-                    }
-                }
-            }).addOnFailureListener(new OnFailureListener() {
-                @Override
-                public void onFailure(@NonNull Exception e) {
-                    e.printStackTrace();
+                public void onAnimationEnd(android.animation.Animator animation) {
+                    miniFabs[index].setVisibility(View.GONE);
                 }
             });
         }
-        public void onGotoImageActivity(View view){
-            Intent intent = new Intent();
+    }                                                            //done         0
+    private void moveMiniFabs(float deltaX, float deltaY) {
+        for (int i = 0; i < miniFabs.length; i++) {
+            miniFabs[i].setX(fabPositions[i][0] + deltaX);
+            miniFabs[i].setY(fabPositions[i][1] + deltaY);
         }
+    }                                     //done     0
+    private void loadDetector(Mat gray,MatOfRect rects){
+        cascadeClassifier.detectMultiScale(gray,rects,1.1,2);
+        for (Rect rect : rects.toList()){
+
+            Mat submat = rgb.submat(rect);
+
+            Imgproc.blur(submat,submat,new Size(10,10));
+            Imgproc.rectangle(rgb,rect,new Scalar(0,255,0),10);
+        }
+    }                                        //videoYapayZeka
+    private void activateDetector(File file, InputStream inputStream){
+        try {
+            FileOutputStream fileOutputStream = new FileOutputStream(file);
+
+            byte[] data = new byte[4096];
+            int read_bytes;
+
+            while((read_bytes = inputStream.read(data)) != -1){
+                fileOutputStream.write(data,0,read_bytes);
+            }
+            cascadeClassifier = new CascadeClassifier(file.getAbsolutePath());
+            if (cascadeClassifier.empty()) cascadeClassifier=null;
+
+            inputStream.close();
+            fileOutputStream.close();
+            file.delete();
+        } catch (FileNotFoundException e) {
+            e.printStackTrace();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }                          //videoYapayZeka
+    /*    private void downloadAndLoadModel(String modelUrl) {
+            StorageReference modelRef = FirebaseStorage.getInstance().getReferenceFromUrl(modelUrl);
+
+            File localFile = new File(getFilesDir(), "model.tflite");
+
+            modelRef.getFile(localFile).addOnSuccessListener(taskSnapshot -> {
+                Log.d("Model", "Download complete");
+                loadTFLiteModel(localFile.getAbsolutePath());
+            }).addOnProgressListener(taskSnapshot -> {
+                long bytesTransferred = taskSnapshot.getBytesTransferred();
+                long totalBytes = taskSnapshot.getTotalByteCount();
+                updateDownloadProgress((int) ((bytesTransferred * 100) / totalBytes));
+            }).addOnFailureListener(e -> Log.e("Model", "Download failed", e));
+        }*/                                        //waiting//----------------------------------------------------------------createFab Button
+/*    private void loadTFLiteModel(String modelPath) {
+        try {
+            Interpreter.Options options = new Interpreter.Options();
+            tflite = new Interpreter(new File(modelPath), options);
+            Log.d("TFLite", "Model loaded successfully!");
+        } catch (Exception e) {
+            Log.e("TFLite", "Error loading model", e);
+        }
+    }*/                                            //done//----------------------------------------------------------------createFab Button
+    private void updateDownloadProgress(int progress) {
+        //fabButton.setProgress(progress);  // Assume a custom FAB with progress tracking
+    }                                            //edit//----------------------------------------------------------------createFab Button
+    private void videoYapayZeka(InputStream inputStream, @Nullable File file){
+        if (file == null){
+            file = new File(getDir("cascade", MODE_PRIVATE), "lbpcascade_frontalface.xml");
+        }
+        activateDetector(file,inputStream);
+        loadDetector(gray, rects);
+    }
+
+    interface Action {
+        void execute();
+    }
+    public Action onFabClick(View view) {
+        Log.d("FAB", "onFabClick called");
+        Action action = null;
+        if (view.getId() == R.id.fab_1) {
+            action = this::actionOne;
+            currentState = State.FACE_DETECTION;
+        } else if (view.getId() == R.id.fab_2) {
+            action = this::actionTwo;
+            currentState = State.OBJECT_DETECTION;
+        } else if (view.getId() == R.id.fab_3) {
+            action = this::actionThree;
+            currentState = State.TRACKING;
+        } else if (view.getId() == R.id.fab_4) {
+            action = this::actionFour;
+        } else if (view.getId() == R.id.fab_5) {
+            action = this::actionFive;
+        } else if (view.getId() == R.id.fab_6) {
+            action = this::actionSix;
+        } else if (view.getId() == R.id.fab_7) {
+            action = this::actionSeven;
+        } else if (view.getId() == R.id.fab_8) {
+            action = this::actionEight;
+        } else if (view.getId() == R.id.fab_9) {
+            action = this::actionNine;
+        }
+        // Execute the function if not null
+        if (action != null) {
+            action.execute();
+        } else {
+            Log.w("FAB", "Unknown FAB clicked!");
+        }
+        return action;
+    }
+    private void actionOne() {
+        cameraState(true);
+        Log.d("Action", "Action One Executed!");
+    }
+    private void actionTwo() {
+        Log.d("Action", "Action Two Executed!");
+    }
+    private void actionThree() {
+        Log.d("Action", "Action Three Executed!");
+    }
+    private void actionFour() {
+        Log.d("Action", "Action Four Executed!");
+    }
+    private void actionFive() {
+        Log.d("Action", "Action Five Executed!");
+    }
+    private void actionSix() {
+        Log.d("Action", "Action Six Executed!");
+    }
+    private void actionSeven() {
+        Log.d("Action", "Action Seven Executed!");
+    }
+    private void actionEight() {
+        Log.d("Action", "Action Eight Executed!");
+    }
+    private void actionNine() {
+        Log.d("Action", "Action Nine Executed!");
     }
 }

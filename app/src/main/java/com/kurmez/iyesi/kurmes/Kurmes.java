@@ -119,7 +119,12 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
         Log.i(TAG, "called kurmes onCreate");
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_kurmes);
+
         mAuth = FirebaseAuth.getInstance();
+
+        mOpenCvCameraView = (CameraBridgeViewBase) findViewById(R.id.kurmes_camera_view);
+        mOpenCvCameraView.setVisibility(SurfaceView.VISIBLE);
+        mOpenCvCameraView.setCvCameraViewListener(this);
 
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 
@@ -429,12 +434,10 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
         return Collections.singletonList(mOpenCvCameraView);
     }//Essential For Camera
     private void initializeCamera() {
-        mOpenCvCameraView = (CameraBridgeViewBase) findViewById(R.id.kurmes_camera_view);
-        mOpenCvCameraView.setVisibility(SurfaceView.VISIBLE);
-        mOpenCvCameraView.setCvCameraViewListener(this);
         boolean success = OpenCVLoader.initDebug();
         if (success) {
             Log.d(TAG, "OpenCV initialized successfully.");
+            Toast.makeText(this, "OpenCV initialized.", Toast.LENGTH_SHORT).show();
         } else {
             Log.e(TAG, "OpenCV initialization failed.");
             Toast.makeText(this, "OpenCV initialization failed.", Toast.LENGTH_SHORT).show();
@@ -606,11 +609,21 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
             ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE}, 200);
         }
     }
+    public static Bitmap resizeBitmap(Bitmap bitmap, int maxSize) {
+        int width = bitmap.getWidth();
+        int height = bitmap.getHeight();
+        float scale = (float) maxSize / Math.max(width, height);
+
+        return Bitmap.createScaledBitmap(bitmap, (int) (width * scale), (int) (height * scale), true);
+    }
+
     private void capturePhoto() {
         if (rgb != null && !rgb.empty()) {
             // Convert Mat to Bitmap
             Bitmap bitmap = Bitmap.createBitmap(rgb.cols(), rgb.rows(), Bitmap.Config.ARGB_8888);
             org.opencv.android.Utils.matToBitmap(rgb, bitmap);
+            Bitmap resizedBitmap = resizeBitmap(bitmap, 225); // 1024 maksimum boyut olsun
+            photoList.add(resizedBitmap); // Add photo to the list
 
             // Save the image to storage
             String filename = "Kurmes_Capture_" + System.currentTimeMillis() + ".jpg";
