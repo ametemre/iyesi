@@ -424,7 +424,6 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
     protected List<? extends CameraBridgeViewBase> getCameraViewList() {
         return Collections.singletonList(mOpenCvCameraView);
     }//Essential For Camera
-
     private boolean cameraState(Boolean state){
         if (state){
             if (mOpenCvCameraView != null) {
@@ -597,7 +596,6 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
 
         return Bitmap.createScaledBitmap(bitmap, (int) (width * scale), (int) (height * scale), true);
     }
-
     private void capturePhoto(Mat rgb) {
         if (rgb == null) {
             Log.e(TAG, "Error: rgb is null!");
@@ -630,7 +628,6 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
             Toast.makeText(this, "No valid image to capture", Toast.LENGTH_SHORT).show();
         }
     }
-
     private void navigateToFoundedActivity() {
         Intent intent = new Intent(this, Founded.class);
         intent.putParcelableArrayListExtra("photos", new ArrayList<>(photoList)); // Pass the photos
@@ -780,7 +777,6 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
         activateDetector(file,inputStream);
         loadDetector(gray, rects);
     }
-
     interface Action {
         void execute();
     }
@@ -819,30 +815,46 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
     }
     private void actionOne() {
         cameraState(true);
+        CatSpeciesRecognition();
         Log.d("Action", "Action One Executed!");
     }
     private void actionTwo() {
+        DogSpeciesRecognition();
         Log.d("Action", "Action Two Executed!");
     }
     private void actionThree() {
+        WolfSpeciesRecognition();
         Log.d("Action", "Action Three Executed!");
     }
     private void actionFour() {
+        CrowSpeciesRecognition();
         Log.d("Action", "Action Four Executed!");
     }
     private void actionFive() {
+        HawkSpeciesRecognition();
         Log.d("Action", "Action Five Executed!");
     }
     private void actionSix() {
+        EagleSpeciesRecognition();
         Log.d("Action", "Action Six Executed!");
     }
     private void actionSeven() {
+        KeklikSpeciesRecognition();
         Log.d("Action", "Action Seven Executed!");
     }
     private void actionEight() {
+        PidgeonSpeciesRecognition();
         Log.d("Action", "Action Eight Executed!");
     }
     private void actionNine() {
         Log.d("Action", "Action Nine Executed!");
     }
+    private void DogSpeciesRecognition(){}
+    private void CatSpeciesRecognition(){}
+    private void WolfSpeciesRecognition(){}
+    private void CrowSpeciesRecognition(){}
+    private void HawkSpeciesRecognition(){}
+    private void EagleSpeciesRecognition(){}
+    private void KeklikSpeciesRecognition(){}
+    private void PidgeonSpeciesRecognition(){}
 }

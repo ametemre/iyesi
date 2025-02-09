@@ -62,6 +62,7 @@
 
     <com.google.android.material.floatingactionbutton.FloatingActionButton
         android:id="@+id/fab_8"
+        android:src="@drawable/pidgeon"
         style="@style/MiniFabStyle"/>
 
     <com.google.android.material.floatingactionbutton.FloatingActionButton
