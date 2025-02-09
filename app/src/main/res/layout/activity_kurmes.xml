@@ -27,30 +27,37 @@
     <!-- Mini FABs (Initially Hidden) -->
     <com.google.android.material.floatingactionbutton.FloatingActionButton
         android:id="@+id/fab_1"
+        android:src="@drawable/kedi_"
         style="@style/MiniFabStyle"/>
 
     <com.google.android.material.floatingactionbutton.FloatingActionButton
         android:id="@+id/fab_2"
+        android:src="@drawable/dog"
         style="@style/MiniFabStyle"/>
 
     <com.google.android.material.floatingactionbutton.FloatingActionButton
         android:id="@+id/fab_3"
+        android:src="@drawable/kurt"
         style="@style/MiniFabStyle"/>
 
     <com.google.android.material.floatingactionbutton.FloatingActionButton
         android:id="@+id/fab_4"
+        android:src="@drawable/karga"
         style="@style/MiniFabStyle"/>
 
     <com.google.android.material.floatingactionbutton.FloatingActionButton
         android:id="@+id/fab_5"
+        android:src="@drawable/hawk_"
         style="@style/MiniFabStyle"/>
 
     <com.google.android.material.floatingactionbutton.FloatingActionButton
         android:id="@+id/fab_6"
+        android:src="@drawable/eagle"
         style="@style/MiniFabStyle"/>
 
     <com.google.android.material.floatingactionbutton.FloatingActionButton
         android:id="@+id/fab_7"
+        android:src="@drawable/keklik_"
         style="@style/MiniFabStyle"/>
 
     <com.google.android.material.floatingactionbutton.FloatingActionButton

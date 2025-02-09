@@ -98,7 +98,6 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
     private Interpreter tflite;
     private FrameLayout rootLayout;
     private VelocityTracker velocityTracker = null;
-    private JavaCamera2View cameraView;
     private long pressStartTime;
     private boolean isLongPressTriggered = false;
     private final int LONG_PRESS_THRESHOLD = 2000; // 2 seconds
@@ -130,24 +129,6 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
 
         labelText = findViewById(R.id.label_text);
         cameraStatusText = findViewById(R.id.camera_status_text);
-        cameraView = findViewById(R.id.kurmes_camera_view);
-        cameraState(true);
-        if (mAuth.getCurrentUser() != null){
-            (Toast.makeText(this, "OpenCV  failed!", Toast.LENGTH_LONG)).show();
-        } else {
-            (Toast.makeText(this, " initialization failed!", Toast.LENGTH_LONG)).show();
-            cameraState(true);
-        }
-
-        if (OpenCVLoader.initLocal()) {
-            Log.i(TAG, "OpenCV loaded successfully");
-
-        } else {
-            Log.e(TAG, "OpenCV initialization failed!");
-            (Toast.makeText(this, "OpenCV initialization failed!", Toast.LENGTH_LONG)).show();
-            return;
-        }
-
 
         fabDraggable = findViewById(R.id.fab_main);
         fabMain = fabDraggable;
@@ -211,8 +192,10 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
     }                                                         //done
     @Override
     public Mat onCameraFrame(CvCameraViewFrame inputFrame) {
+
         rgb = inputFrame.rgba();
         gray =inputFrame.gray();
+
         switch (currentState) {
             case FACE_DETECTION:
                 // Perform face detection
@@ -220,6 +203,11 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
                 break;
             case OBJECT_DETECTION:
                 // Perform object detection
+                // ...
+                break;
+            case CAPTURE:
+                capturePhoto(rgb);// Perform ImgCapture
+                navigateToFoundedActivity();
                 // ...
                 break;
             case TRACKING:
@@ -236,6 +224,7 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
             activeDetectorFunction.execute();
         }*/
         Log.d(TAG, "Processing camera frame...");
+        updateCameraStatus(currentState.toString() + "birde" + photoList.size());
 /*        Imgproc.cvtColor(rgb, gray, Imgproc.COLOR_RGBA2GRAY);
 
         if (catFaceDetector != null) {
@@ -282,6 +271,7 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
         FACE_DETECTION,
         OBJECT_DETECTION,
         TRACKING,
+        CAPTURE,
         // Add more states as needed
     }
     @Override
@@ -291,6 +281,7 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
             Log.d(TAG, "OpenCV loaded successfully.");
             if (mOpenCvCameraView != null) {
                 updateCameraStatus("Camera View Resumed.");
+                cameraState(true);
             }
         } else {
             Log.e(TAG, "OpenCV loading failed on resume.");
@@ -413,7 +404,7 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
         }
         return super.dispatchTouchEvent(event); // Allow other views to handle the touch
     }*/                                      //done collapses the fab menu anywhere on screen touch but overrides the other click events.
-    @Override
+/*    @Override
     protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
 
@@ -428,28 +419,18 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
         } else if (requestCode == REQUEST_IMAGE_CAPTURE) {
             Toast.makeText(this, "Photo capture cancelled", Toast.LENGTH_SHORT).show();
         }
-    }
+    }*/
     @Override
     protected List<? extends CameraBridgeViewBase> getCameraViewList() {
         return Collections.singletonList(mOpenCvCameraView);
     }//Essential For Camera
-    private void initializeCamera() {
-        boolean success = OpenCVLoader.initDebug();
-        if (success) {
-            Log.d(TAG, "OpenCV initialized successfully.");
-            Toast.makeText(this, "OpenCV initialized.", Toast.LENGTH_SHORT).show();
-        } else {
-            Log.e(TAG, "OpenCV initialization failed.");
-            Toast.makeText(this, "OpenCV initialization failed.", Toast.LENGTH_SHORT).show();
-        }
-    }//Essential For Camera
+
     private boolean cameraState(Boolean state){
         if (state){
             if (mOpenCvCameraView != null) {
                 mOpenCvCameraView.enableView();
                 mOpenCvCameraView.setVisibility(View.VISIBLE);
-                cameraView.enableView();
-                cameraView.setVisibility(View.VISIBLE);
+
                 updateCameraStatus("Camera Enabled.");
             }
         }
@@ -458,8 +439,7 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
                 if (mOpenCvCameraView.isEnabled()) {
                     mOpenCvCameraView.disableView();
                     mOpenCvCameraView.setVisibility(View.GONE);
-                    cameraView.disableView();
-                    cameraView.setVisibility(View.GONE);
+
                     currentState = State.IDLE;
                     updateCameraStatus("Camera Paused.");
                 }
@@ -521,7 +501,8 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
                             if (mAuth.getCurrentUser() != null) {
                                 toggleFabMenu();
                             } else {
-                                navigateToFoundedActivity();
+                                //capturePhoto(rgb);
+                                currentState = State.CAPTURE;
                             }
                         } else {
                             handleLongClick();
@@ -601,7 +582,7 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
             ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.CAMERA}, CAMERA_PERMISSION_REQUEST_CODE);
         } else {
-            initializeCamera();
+            cameraState(true);
         }
     }//Essential For Camera
     private void requestStoragePermission() {
@@ -617,20 +598,28 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
         return Bitmap.createScaledBitmap(bitmap, (int) (width * scale), (int) (height * scale), true);
     }
 
-    private void capturePhoto() {
-        if (rgb != null && !rgb.empty()) {
+    private void capturePhoto(Mat rgb) {
+        if (rgb == null) {
+            Log.e(TAG, "Error: rgb is null!");
+        } else {
+            Log.e(TAG, "rgb.cols(): " + rgb.cols() + ", rgb.rows(): " + rgb.rows());
+        }
+
+        if (rgb != null && !rgb.empty() && rgb.cols() > 0 && rgb.rows() > 0) {
             // Convert Mat to Bitmap
+            requestStoragePermission();
             Bitmap bitmap = Bitmap.createBitmap(rgb.cols(), rgb.rows(), Bitmap.Config.ARGB_8888);
             org.opencv.android.Utils.matToBitmap(rgb, bitmap);
-            Bitmap resizedBitmap = resizeBitmap(bitmap, 225); // 1024 maksimum boyut olsun
-            photoList.add(resizedBitmap); // Add photo to the list
+
+            Bitmap resizedBitmap = resizeBitmap(bitmap, 225);
+            photoList.add(resizedBitmap);
 
             // Save the image to storage
             String filename = "Kurmes_Capture_" + System.currentTimeMillis() + ".jpg";
             File file = new File(getExternalFilesDir(null), filename);
 
             try (FileOutputStream out = new FileOutputStream(file)) {
-                bitmap.compress(Bitmap.CompressFormat.JPEG, 100, out);
+                resizedBitmap.compress(Bitmap.CompressFormat.JPEG, 100, out);
                 out.flush();
                 Toast.makeText(this, "Photo saved: " + file.getAbsolutePath(), Toast.LENGTH_SHORT).show();
             } catch (IOException e) {
@@ -638,14 +627,11 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
                 Toast.makeText(this, "Failed to save photo", Toast.LENGTH_SHORT).show();
             }
         } else {
-            Toast.makeText(this, "No image to capture", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "No valid image to capture", Toast.LENGTH_SHORT).show();
         }
     }
 
     private void navigateToFoundedActivity() {
-
-        requestStoragePermission();
-        capturePhoto();
         Intent intent = new Intent(this, Founded.class);
         intent.putParcelableArrayListExtra("photos", new ArrayList<>(photoList)); // Pass the photos
         startActivity(intent);

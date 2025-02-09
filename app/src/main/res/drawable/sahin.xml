@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <svg width="100" height="100" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg">
+        <path d="M6 10 C5 7, 9 3, 12 3 C15 3, 19 7, 18 10 C18 14, 15 17, 12 17 C9 17, 6 14, 6 10 Z"/>
+        <circle cx="9" cy="10" r="1"/>
+        <circle cx="15" cy="10" r="1"/>
+        <path d="M9 15 Q12 17, 15 15"/>
+        <path d="M4 12 Q6 8, 6 10"/>
+        <path d="M20 12 Q18 8, 18 10"/>
+    </svg>
+
+</selector>
