@@ -44,6 +44,7 @@ import java.util.Date;
 import java.util.List;
 
 public class Founded extends AppCompatActivity {
+    private static final int IMAGE_PICK = 100;
     public final String LOG_TAG = "MLImageHelper";
     public final static int CAPTURE_IMAGE_ACTIVITY_REQUEST_CODE = 1034;
     private static final int REQUEST_IMAGE_CAPTURE = 1; // Request code for capturing a photo
@@ -299,4 +300,11 @@ public class Founded extends AppCompatActivity {
             }
         }
     }
+    public void loadImage(View view){
+        Intent intent = new Intent();
+        intent.setAction(Intent.ACTION_PICK);
+        intent.setType("image/");
+        startActivityForResult(intent,IMAGE_PICK);
+    }
+    public void predict(View view){}
 }
