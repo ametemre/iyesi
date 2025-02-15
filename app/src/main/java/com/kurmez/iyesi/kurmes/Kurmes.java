@@ -33,6 +33,7 @@ import android.view.animation.AlphaAnimation;
 import android.view.animation.Animation;
 import android.view.animation.DecelerateInterpolator;
 import android.view.animation.ScaleAnimation;
+import android.widget.Button;
 import android.widget.FrameLayout;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -70,7 +71,7 @@ import java.util.List;
 public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
     private static final int REQUEST_IMAGE_CAPTURE = 1; // Request code for capturing a photo
     private List<Bitmap> photoList = new ArrayList<>(); // List to store captured images
-    private FloatingActionButton fabDraggable;
+    private FloatingActionButton fabDraggable, fabSound;
     private float dX, dY;
     private boolean isDragging = false;
     private boolean isPressed = false;
@@ -103,7 +104,6 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
     private final int LONG_PRESS_THRESHOLD = 2000; // 2 seconds
     private final int DRAG_THRESHOLD = 20; // Minimum movement to consider a drag
     //-------------------------------------------------------------------------------------------Fab
-    private FloatingActionButton fabMain;
     private FloatingActionButton[] miniFabs = new FloatingActionButton[9];
     private boolean isFabExpanded = false;
     private float[][] fabPositions = new float[9][2]; // Stores positions of sub FABs
@@ -131,7 +131,6 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
         cameraStatusText = findViewById(R.id.camera_status_text);
 
         fabDraggable = findViewById(R.id.fab_main);
-        fabMain = fabDraggable;
         miniFabs[0] = findViewById(R.id.fab_1);
         miniFabs[1] = findViewById(R.id.fab_2);
         miniFabs[2] = findViewById(R.id.fab_3);
@@ -160,6 +159,7 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
                 }
             });
         }
+        fabSound = findViewById(R.id.fab_Sound);
     }
     @Override
     public void onCameraViewStarted(int width, int height) {
@@ -668,6 +668,7 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
             fabPositions[i][1] = y;
 
             miniFabs[i].setVisibility(View.VISIBLE);
+            fabSound.setVisibility(View.VISIBLE);
             fabDraggable.setVisibility(View.GONE);
             AnimatorSet animSet = new AnimatorSet();
             animSet.playTogether(
@@ -694,6 +695,7 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
             animSet.start();
 
             fab.setVisibility(View.GONE);
+            fabSound.setVisibility(View.GONE);
             fabDraggable.setVisibility(View.VISIBLE);
 
 

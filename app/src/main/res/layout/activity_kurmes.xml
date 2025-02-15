@@ -23,7 +23,20 @@
         app:rippleColor="@android:color/darker_gray"
         android:stateListAnimator="@null"
         android:background="@drawable/fab_glow"/>
-    <!-- Mini FABs (Hidden Initially) -->
+    <!-- Recorf FABs (Hidden Initially) -->
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/fab_Sound"
+        android:layout_width="150dp"
+        android:layout_height="150dp"
+        android:layout_centerHorizontal="true"
+        android:layout_centerVertical="true"
+        android:visibility="gone"
+        android:backgroundTint="@android:color/white"
+        android:contentDescription="Sound"
+        android:scaleType="centerInside"
+        android:src="@drawable/rec_dark"
+        app:maxImageSize="75dp"
+        app:rippleColor="@android:color/darker_gray" />
     <!-- Mini FABs (Initially Hidden) -->
     <com.google.android.material.floatingactionbutton.FloatingActionButton
         android:id="@+id/fab_1"
