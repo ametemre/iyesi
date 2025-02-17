@@ -25,6 +25,8 @@ import androidx.viewpager2.widget.ViewPager2;
 
 import com.google.android.gms.tasks.OnFailureListener;
 import com.google.android.gms.tasks.OnSuccessListener;
+import com.google.firebase.storage.FirebaseStorage;
+import com.google.firebase.storage.StorageReference;
 import com.google.mlkit.vision.common.InputImage;
 import com.google.mlkit.vision.label.ImageLabel;
 import com.google.mlkit.vision.label.ImageLabeler;
@@ -32,9 +34,11 @@ import com.google.mlkit.vision.label.ImageLabeling;
 import com.google.mlkit.vision.label.defaults.ImageLabelerOptions;
 import com.kurmez.iyesi.kurmes.Kurmes.*;
 
+import java.io.ByteArrayInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.InputStream;
+import java.io.ObjectInputStream;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -158,59 +162,121 @@ public class Kurmes_dummy extends AppCompatActivity implements CameraBridgeViewB
     interface DetectorFunction {
         void execute();
     }
-    @SuppressLint("ClickableViewAccessibility")
+    private Interpreter tflite;
+    private HashMap<String, Integer> soundColors = new HashMap<>();
+    private List<String> recognizedSounds = new ArrayList<>();
+    private FirebaseStorage storage;
+    private StorageReference modelRef, labelsRef;
+    private Handler handler = new Handler();
+    private View colorIndicator;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
-        Log.i(TAG, "called kurmes onCreate");
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_kurmes);
 
-        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        initFirebase();
+        loadModel();
+        setupSoundRecognition();
+    }
 
-        labelText = findViewById(R.id.label_text);
-        cameraStatusText = findViewById(R.id.camera_status_text);
-        cameraView = findViewById(R.id.kurmes_camera_view);
+    private void initFirebase() {
+        storage = FirebaseStorage.getInstance();
+        modelRef = storage.getReference().child("model.tflite");
+        labelsRef = storage.getReference().child("labels.pkl");
+    }
 
-        if (OpenCVLoader.initLocal()) {
-            Log.i(TAG, "OpenCV loaded successfully");
-        } else {
-            Log.e(TAG, "OpenCV initialization failed!");
-            (Toast.makeText(this, "OpenCV initialization failed!", Toast.LENGTH_LONG)).show();
-            return;
-        }
+    private void loadModel() {
+        modelRef.getBytes(Long.MAX_VALUE).addOnSuccessListener(bytes -> {
+            tflite = new Interpreter(bytes);
+        });
+        labelsRef.getBytes(Long.MAX_VALUE).addOnSuccessListener(bytes -> {
+            parseLabels(bytes);
+        });
+    }
 
-        mAuth = FirebaseAuth.getInstance();
-        fabDraggable = findViewById(R.id.fab_main);
-        fabMain = fabDraggable;
-        miniFabs[0] = findViewById(R.id.fab_1);
-        miniFabs[1] = findViewById(R.id.fab_2);
-        miniFabs[2] = findViewById(R.id.fab_3);
-        miniFabs[3] = findViewById(R.id.fab_4);
-        miniFabs[4] = findViewById(R.id.fab_5);
-        miniFabs[5] = findViewById(R.id.fab_6);
-        miniFabs[6] = findViewById(R.id.fab_7);
-        miniFabs[7] = findViewById(R.id.fab_8);
-        miniFabs[8] = findViewById(R.id.fab_9);
-        rootLayout = findViewById(android.R.id.content);
-        setupDraggableFAB();
-        checkAndRequestPermissions();
-        for (FloatingActionButton subFab : miniFabs) {
-            subFab.setOnTouchListener(new View.OnTouchListener() {
-                @Override
-                public boolean onTouch(View v, MotionEvent event) {
-                    if (event.getAction() == MotionEvent.ACTION_DOWN) {
-                        onFabClick(subFab);
-                        return true;
-                    }else if (event.getAction() == MotionEvent.ACTION_UP) {
-                        // Handle the touch up event
-                        collapseFabMenu();
-                        Log.d("Touch", "User lifted their finger off the screen");
-                    }
-                    return false;
-                }
-            });
+    private void parseLabels(byte[] bytes) {
+        try (ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(bytes))) {
+            List<String> labels = (List<String>) ois.readObject();
+            for (String label : labels) {
+                soundColors.put(label, getRandomColor());
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
         }
     }
+
+    private int getRandomColor() {
+        Random rnd = new Random();
+        return Color.rgb(rnd.nextInt(256), rnd.nextInt(256), rnd.nextInt(256));
+    }
+
+    private void setupSoundRecognition() {
+        MediaRecorder recorder = new MediaRecorder();
+        recorder.setAudioSource(MediaRecorder.AudioSource.MIC);
+        recorder.setOutputFormat(MediaRecorder.OutputFormat.THREE_GPP);
+        recorder.setOutputFile("/dev/null");
+        recorder.setAudioEncoder(MediaRecorder.AudioEncoder.AMR_NB);
+        recorder.start();
+
+        handler.postDelayed(this::analyzeAudio, 1000);
+    }
+
+    private void analyzeAudio() {
+        float[] inputData = getAudioFeatures();
+        float[][] outputData = new float[1][soundColors.size()];
+
+        if (tflite != null) {
+            tflite.run(inputData, outputData);
+            updateSoundList(outputData);
+        }
+
+        handler.postDelayed(this::analyzeAudio, 1000);
+    }
+
+    private float[] getAudioFeatures() {
+        return new float[10]; // Placeholder, replace with real features
+    }
+
+    private void updateSoundList(float[][] outputData) {
+        recognizedSounds.clear();
+        for (int i = 0; i < outputData[0].length; i++) {
+            if (outputData[0][i] > 0.5) {
+                String sound = (String) soundColors.keySet().toArray()[i];
+                recognizedSounds.add(sound);
+            }
+        }
+        updateUI();
+    }
+
+    private void updateUI() {
+        runOnUiThread(() -> {
+            colorIndicator.removeAllViews();
+            for (String sound : recognizedSounds) {
+                View dot = new View(this);
+                dot.setBackgroundColor(soundColors.get(sound));
+                dot.setLayoutParams(new LinearLayout.LayoutParams(20, 20));
+                colorIndicator.addView(dot);
+            }
+        });
+    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
     @Override
     public void onCameraViewStarted(int width, int height) {
         rgb = new Mat();

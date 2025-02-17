@@ -23,7 +23,21 @@
         app:rippleColor="@android:color/darker_gray"
         android:stateListAnimator="@null"
         android:background="@drawable/fab_glow"/>
-    <!-- Mini FABs (Hidden Initially) -->
+    <!-- Recorf FABs (Hidden Initially) -->
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/fab_Sound"
+        android:layout_width="150dp"
+        android:layout_height="150dp"
+        android:layout_centerHorizontal="true"
+        android:layout_centerVertical="true"
+        android:visibility="gone"
+        android:backgroundTint="@color/black_overlay"
+        android:contentDescription="Sound"
+        android:rotation="90"
+        android:scaleType="centerInside"
+        android:src="@drawable/hush"
+        app:maxImageSize="50dp"
+        app:rippleColor="@color/teal" />
     <!-- Mini FABs (Initially Hidden) -->
     <com.google.android.material.floatingactionbutton.FloatingActionButton
         android:id="@+id/fab_1"
@@ -115,4 +129,14 @@
         android:textColor="#FFFFFF"
         android:textSize="18sp"
         android:textStyle="bold" />
+    <LinearLayout
+        android:id="@+id/detected_sounds_list"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:layout_centerVertical="true"
+        android:layout_alignParentRight="true"
+        android:padding="8dp"
+        android:background="@android:color/black">
+    </LinearLayout>
 </RelativeLayout>
