@@ -7,6 +7,8 @@ import com.kurmez.iyesi.Founded;
 import com.kurmez.iyesi.Login;
 import com.kurmez.iyesi.R;
 import com.kurmez.iyesi.Welcome;
+import com.kurmez.iyesi.kurmes.helper.SoundClassifier;
+import com.kurmez.iyesi.kurmes.helper.TFLiteModelInspector;
 
 import android.Manifest;
 import android.animation.AnimatorSet;
@@ -18,6 +20,8 @@ import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.res.Resources;
 import android.graphics.Bitmap;
+import android.graphics.Color;
+import android.media.MediaRecorder;
 import android.os.AsyncTask;
 import android.os.Bundle;
 import android.os.Handler;
@@ -35,6 +39,7 @@ import android.view.animation.DecelerateInterpolator;
 import android.view.animation.ScaleAnimation;
 import android.widget.Button;
 import android.widget.FrameLayout;
+import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -56,12 +61,16 @@ import org.opencv.core.Size;
 import org.opencv.imgproc.Imgproc;
 import org.opencv.objdetect.CascadeClassifier;
 import org.tensorflow.lite.Interpreter;
+import org.tensorflow.lite.support.label.Category;
 
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.MappedByteBuffer;
+import java.nio.channels.FileChannel;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -75,12 +84,22 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
     private float dX, dY;
     private boolean isDragging = false;
     private boolean isPressed = false;
+    private boolean isRecording = false;
     private FirebaseAuth mAuth;
     private Handler handler = new Handler();
     private static final String TAG = "KurmesActivity";
     private static final int CAMERA_PERMISSION_REQUEST_CODE = 100;
     //private JavaCamera2View cameraView; // Using JavaCamera2View
-    private TextView labelText;
+
+    protected TextView labelText;
+    public void SetLabelText(String s){
+        if (labelText != null) {
+            labelText.setText(s);
+        } else {
+            Log.e("Kurmes", "labelText is not initialized yet.");
+        }
+    }
+
     private TextView cameraStatusText;
     private Mat rgb, gray; // RGBA frame
     MatOfRect rects;
@@ -89,6 +108,9 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
     private int lastAction;
     private CameraBridgeViewBase mOpenCvCameraView;
     public CameraCalibrator mCalibrator;
+    private MediaRecorder mediaRecorder;
+    private SoundClassifier soundClassifier;
+
     private OnCameraFrameRender mOnCameraFrameRender;
     private Menu mMenu;
     private int mWidth;
@@ -120,6 +142,15 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
         setContentView(R.layout.activity_kurmes);
 
         mAuth = FirebaseAuth.getInstance();
+        soundClassifier = new SoundClassifier(this, labelText, new SoundClassifier.OnClassificationResultListener() {
+            @Override
+            public void onResult(String result) {
+                labelText.setText(result);  // This can be removed since we're updating directly
+            }
+        },this);
+
+        int availableProcessors = Runtime.getRuntime().availableProcessors();
+        Log.d("AvailableProcessors", "Number of available threads: " + availableProcessors);
 
         mOpenCvCameraView = (CameraBridgeViewBase) findViewById(R.id.kurmes_camera_view);
         mOpenCvCameraView.setVisibility(SurfaceView.VISIBLE);
@@ -142,6 +173,9 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
         miniFabs[8] = findViewById(R.id.fab_9);
         rootLayout = findViewById(android.R.id.content);
         setupDraggableFAB();
+        requestAudioPermissions();
+        requestStoragePermission();
+        checkAudioPermission();
         checkAndRequestPermissions();
         for (FloatingActionButton subFab : miniFabs) {
             subFab.setOnTouchListener(new View.OnTouchListener() {
@@ -160,7 +194,85 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
             });
         }
         fabSound = findViewById(R.id.fab_Sound);
+        fabSound.setOnClickListener(v -> {
+            cameraState(false);
+            if (!isRecording){
+                SetLabelText("Loaded !");
+                startRecording(v);
+                isRecording = true;
+                //loadTFLiteModel(null);
+            }
+            else {stopRecording(v);
+            SetLabelText("NotLoaded !");}
+        });
     }
+    private void stopRecording(View view) {
+        if (isRecording) {
+            try {
+                mediaRecorder.stop();
+                mediaRecorder.release();
+                mediaRecorder = null;
+                isRecording = false;
+            } catch (RuntimeException e) {
+                Log.e("Recording", "Error stopping recording", e);
+            }
+            soundClassifier.onStopRecording(view);
+        }
+        int availableProcessors = Runtime.getRuntime().availableProcessors();
+        Log.d("AvailableProcessors", "Number of available threads: " + availableProcessors);
+
+    }
+    private void startRecording(View view) {
+        isRecording = true;
+        try {
+            mediaRecorder = new MediaRecorder();
+            mediaRecorder.setAudioSource(MediaRecorder.AudioSource.MIC);
+            mediaRecorder.setOutputFormat(MediaRecorder.OutputFormat.THREE_GPP);
+            mediaRecorder.setOutputFile(getExternalFilesDir(null) + "/recording.3gp");
+            mediaRecorder.setAudioEncoder(MediaRecorder.AudioEncoder.AMR_NB);
+            mediaRecorder.prepare();
+            mediaRecorder.start();
+            isRecording = true;
+
+            // 📌 Ses sınıflandırıcıyı başlat
+            soundClassifier.onStartRecording(view);
+
+        } catch (IOException e) {
+            Log.e("Recording", "Error starting recording", e);
+        }
+        int availableProcessors = Runtime.getRuntime().availableProcessors();
+        Log.d("AvailableProcessors", "Number of available threads: " + availableProcessors);
+
+    }
+    public void updateDetectedSounds(List<Category> detectedCategories) {
+        LinearLayout detectedSoundsLayout = findViewById(R.id.detected_sounds_list);
+
+        //detectedSoundsLayout.removeAllViews(); // Clear previous results
+
+        for (Category category : detectedCategories) {
+            float confidence = category.getScore();
+            if (confidence > 0.79) { // Only show confidence > 79%
+                TextView textView = new TextView(this);
+                textView.setText(category.getDisplayName() + "---" + category.getLabel() + " - " + String.format("%.2f", confidence * 100) + "%");
+                textView.setTextSize(16);
+                textView.setTextColor(Color.WHITE);
+                textView.setPadding(10, 10, 10, 10);
+
+                detectedSoundsLayout.addView(textView);
+            }
+        }
+
+        // If no high-confidence results, show "No strong detection"
+        if (detectedSoundsLayout.getChildCount() == 0) {
+            TextView noResultView = new TextView(this);
+            noResultView.setText("No strong detections");
+            noResultView.setTextSize(16);
+            noResultView.setTextColor(Color.GRAY);
+            noResultView.setPadding(10, 10, 10, 10);
+            detectedSoundsLayout.addView(noResultView);
+        }
+    }
+
     @Override
     public void onCameraViewStarted(int width, int height) {
         rgb = new Mat();
@@ -182,13 +294,21 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
             }
             mOnCameraFrameRender = new OnCameraFrameRender(new CalibrationFrameRender(mCalibrator));
         }
+        int availableProcessors = Runtime.getRuntime().availableProcessors();
+        Log.d("AvailableProcessors", "Number of available threads: " + availableProcessors);
+
     }
     @Override
     public void onCameraViewStopped() {
-        rgb.release();
-        gray.release();
-        rects.release();
-        updateCameraStatus("Camera Stopped.");
+        if (rgb != null) {
+            rgb.release();
+            gray.release();
+            rects.release();
+            updateCameraStatus("Camera Stopped.");
+        }
+        int availableProcessors = Runtime.getRuntime().availableProcessors();
+        Log.d("AvailableProcessors", "Number of available threads: " + availableProcessors);
+
     }                                                         //done
     @Override
     public Mat onCameraFrame(CvCameraViewFrame inputFrame) {
@@ -273,7 +393,7 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
         TRACKING,
         CAPTURE,
         // Add more states as needed
-    }
+        }
     @Override
     protected void onResume() {
         super.onResume();
@@ -386,40 +506,40 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
             return super.onOptionsItemSelected(item);
         }
     }
-/*    @Override
-    public boolean dispatchTouchEvent(MotionEvent event) {
-        switch (event.getAction()) {
-            case MotionEvent.ACTION_DOWN:
-                if (isFabExpanded){
-                    collapseFabMenu();
-                }
-                Log.d("TouchEvent", "Screen touched at: X=" + event.getRawX() + " Y=" + event.getRawY());
-                break;
-            case MotionEvent.ACTION_MOVE:
-                Log.d("TouchEvent", "Finger moved: X=" + event.getRawX() + " Y=" + event.getRawY());
-                break;
-            case MotionEvent.ACTION_UP:
-                Log.d("TouchEvent","Finger lifted");
-                break;
-        }
-        return super.dispatchTouchEvent(event); // Allow other views to handle the touch
-    }*/                                      //done collapses the fab menu anywhere on screen touch but overrides the other click events.
-/*    @Override
-    protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
-        super.onActivityResult(requestCode, resultCode, data);
-
-        if (requestCode == REQUEST_IMAGE_CAPTURE && resultCode == RESULT_OK && data != null) {
-            // Retrieve the captured image
-            Bitmap imageBitmap = (Bitmap) data.getExtras().get("data");
-
-            if (imageBitmap != null) {
-                photoList.add(imageBitmap); // Add photo to the list
-                navigateToFoundedActivity(); // Navigate to the next screen
+    /*    @Override
+        public boolean dispatchTouchEvent(MotionEvent event) {
+            switch (event.getAction()) {
+                case MotionEvent.ACTION_DOWN:
+                    if (isFabExpanded){
+                        collapseFabMenu();
+                    }
+                    Log.d("TouchEvent", "Screen touched at: X=" + event.getRawX() + " Y=" + event.getRawY());
+                    break;
+                case MotionEvent.ACTION_MOVE:
+                    Log.d("TouchEvent", "Finger moved: X=" + event.getRawX() + " Y=" + event.getRawY());
+                    break;
+                case MotionEvent.ACTION_UP:
+                    Log.d("TouchEvent","Finger lifted");
+                    break;
             }
-        } else if (requestCode == REQUEST_IMAGE_CAPTURE) {
-            Toast.makeText(this, "Photo capture cancelled", Toast.LENGTH_SHORT).show();
-        }
-    }*/
+            return super.dispatchTouchEvent(event); // Allow other views to handle the touch
+        }*/                                      //done collapses the fab menu anywhere on screen touch but overrides the other click events.
+    /*    @Override
+        protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
+            super.onActivityResult(requestCode, resultCode, data);
+
+            if (requestCode == REQUEST_IMAGE_CAPTURE && resultCode == RESULT_OK && data != null) {
+                // Retrieve the captured image
+                Bitmap imageBitmap = (Bitmap) data.getExtras().get("data");
+
+                if (imageBitmap != null) {
+                    photoList.add(imageBitmap); // Add photo to the list
+                    navigateToFoundedActivity(); // Navigate to the next screen
+                }
+            } else if (requestCode == REQUEST_IMAGE_CAPTURE) {
+                Toast.makeText(this, "Photo capture cancelled", Toast.LENGTH_SHORT).show();
+            }
+        }*/
     @Override
     protected List<? extends CameraBridgeViewBase> getCameraViewList() {
         return Collections.singletonList(mOpenCvCameraView);
@@ -459,6 +579,7 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
         fabDraggable.setOnTouchListener((v, event) -> {
             switch (event.getActionMasked()) {
                 case MotionEvent.ACTION_DOWN:
+                    SetLabelText("Ready !");
                     dX = v.getX() - event.getRawX();
                     dY = v.getY() - event.getRawY();
                     isDragging = false;
@@ -589,6 +710,19 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
             ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE}, 200);
         }
     }
+    private void requestAudioPermissions() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED ||
+                ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
+
+            ActivityCompat.requestPermissions(this,
+                    new String[]{Manifest.permission.RECORD_AUDIO, Manifest.permission.WRITE_EXTERNAL_STORAGE}, 200);
+        }
+    }
+    private void checkAudioPermission() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.RECORD_AUDIO}, 101);
+        }
+    }
     public static Bitmap resizeBitmap(Bitmap bitmap, int maxSize) {
         int width = bitmap.getWidth();
         int height = bitmap.getHeight();
@@ -633,12 +767,12 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
         intent.putParcelableArrayListExtra("photos", new ArrayList<>(photoList)); // Pass the photos
         startActivity(intent);
     }
-/*private void createFabButton(String modelName, String modelUrl) {
-        FloatingActionButton fab = new FloatingActionButton(this);
-        fab.setImageResource(R.drawable.holder); // Set a default icon
-        fab.setOnClickListener(v -> downloadAndLoadModel(modelUrl));
-        rootLayout.addView(fab);
-    }*/                           //----------------------------------------------------------------createFab Button
+    /*private void createFabButton(String modelName, String modelUrl) {
+            FloatingActionButton fab = new FloatingActionButton(this);
+            fab.setImageResource(R.drawable.holder); // Set a default icon
+            fab.setOnClickListener(v -> downloadAndLoadModel(modelUrl));
+            rootLayout.addView(fab);
+        }*/                           //----------------------------------------------------------------createFab Button
     private void toggleFabMenu() {
         if (mOpenCvCameraView.isEnabled()){
             cameraState(false);
@@ -746,29 +880,29 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
             e.printStackTrace();
         }
     }                          //videoYapayZeka
-/*    private void downloadAndLoadModel(String modelUrl) {
-        StorageReference modelRef = FirebaseStorage.getInstance().getReferenceFromUrl(modelUrl);
+    /*    private void downloadAndLoadModel(String modelUrl) {
+            StorageReference modelRef = FirebaseStorage.getInstance().getReferenceFromUrl(modelUrl);
 
-        File localFile = new File(getFilesDir(), "model.tflite");
+            File localFile = new File(getFilesDir(), "model.tflite");
 
-        modelRef.getFile(localFile).addOnSuccessListener(taskSnapshot -> {
-            Log.d("Model", "Download complete");
-            loadTFLiteModel(localFile.getAbsolutePath());
-        }).addOnProgressListener(taskSnapshot -> {
-            long bytesTransferred = taskSnapshot.getBytesTransferred();
-            long totalBytes = taskSnapshot.getTotalByteCount();
-            updateDownloadProgress((int) ((bytesTransferred * 100) / totalBytes));
-        }).addOnFailureListener(e -> Log.e("Model", "Download failed", e));
-    }*/                                        //waiting//----------------------------------------------------------------createFab Button
-/*    private void loadTFLiteModel(String modelPath) {
-        try {
-            Interpreter.Options options = new Interpreter.Options();
-            tflite = new Interpreter(new File(modelPath), options);
-            Log.d("TFLite", "Model loaded successfully!");
-        } catch (Exception e) {
-            Log.e("TFLite", "Error loading model", e);
-        }
-    }*/                                            //done//----------------------------------------------------------------createFab Button
+            modelRef.getFile(localFile).addOnSuccessListener(taskSnapshot -> {
+                Log.d("Model", "Download complete");
+                loadTFLiteModel(localFile.getAbsolutePath());
+            }).addOnProgressListener(taskSnapshot -> {
+                long bytesTransferred = taskSnapshot.getBytesTransferred();
+                long totalBytes = taskSnapshot.getTotalByteCount();
+                updateDownloadProgress((int) ((bytesTransferred * 100) / totalBytes));
+            }).addOnFailureListener(e -> Log.e("Model", "Download failed", e));
+        }*/                                        //waiting//----------------------------------------------------------------createFab Button
+    /*    private void loadTFLiteModel(String modelPath) {
+            try {
+                Interpreter.Options options = new Interpreter.Options();
+                tflite = new Interpreter(new File(modelPath), options);
+                Log.d("TFLite", "Model loaded successfully!");
+            } catch (Exception e) {
+                Log.e("TFLite", "Error loading model", e);
+            }
+        }*/                                            //done//----------------------------------------------------------------createFab Button
     private void updateDownloadProgress(int progress) {
         //fabButton.setProgress(progress);  // Assume a custom FAB with progress tracking
     }                                            //edit//----------------------------------------------------------------createFab Button
@@ -821,6 +955,8 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
         Log.d("Action", "Action One Executed!");
     }
     private void actionTwo() {
+        SetLabelText("denedik");
+        TFLiteModelInspection(soundClassifier.printModelDetails(0));
         DogSpeciesRecognition();
         Log.d("Action", "Action Two Executed!");
     }
@@ -851,12 +987,51 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
     private void actionNine() {
         Log.d("Action", "Action Nine Executed!");
     }
-    private void DogSpeciesRecognition(){}
+    private void DogSpeciesRecognition(){
+        TFLiteModelInspector.main(null);
+    }
     private void CatSpeciesRecognition(){}
     private void WolfSpeciesRecognition(){}
     private void CrowSpeciesRecognition(){}
     private void HawkSpeciesRecognition(){}
     private void EagleSpeciesRecognition(){}
     private void KeklikSpeciesRecognition(){}
+
     private void PidgeonSpeciesRecognition(){}
+
+    private void TFLiteModelInspection(List<String> list){
+        LinearLayout tensors = findViewById(R.id.ModelClasses_list);
+        for (String string : list) {
+            TextView textView = new TextView(this);
+                textView.setText(string + "---" + "\n");
+                textView.setTextSize(16);
+                textView.setTextColor(Color.WHITE);
+                textView.setPadding(10, 10, 10, 10);
+                tensors.addView(textView);
+        }
+    }
+
+    private void TFLiteModelInspector (String modelPath){
+        try {
+            Interpreter tflite = new Interpreter(loadModelFile(modelPath));
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+
+        int inputCount = tflite.getInputTensorCount();
+        int outputCount = tflite.getOutputTensorCount();
+
+        LinearLayout tensors = findViewById(R.id.ModelClasses_list);
+        TextView textView = new TextView(this);
+            textView.setText(inputCount + "---" + outputCount + " - " + "%");
+            textView.setTextSize(16);
+            textView.setTextColor(Color.WHITE);
+            textView.setPadding(10, 10, 10, 10);
+        tensors.addView(textView);
+    }
+    private static MappedByteBuffer loadModelFile(String modelPath) throws IOException {
+        FileInputStream fileInputStream = new FileInputStream(modelPath);
+        FileChannel fileChannel = fileInputStream.getChannel();
+        return fileChannel.map(FileChannel.MapMode.READ_ONLY, 0, fileChannel.size());
+    }
 }

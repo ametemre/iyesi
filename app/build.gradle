@@ -39,6 +39,13 @@ dependencies {
     implementation 'org.tensorflow:tensorflow-lite:2.4.0'
     implementation 'org.tensorflow:tensorflow-lite-gpu:2.4.0'
     implementation 'org.tensorflow:tensorflow-lite-support:0.2.0'
+
+    implementation 'org.tensorflow:tensorflow-lite-task-audio:0.2.0'
+    // text
+    implementation 'org.tensorflow:tensorflow-lite-task-text:0.2.0'
+
+
+
     
     implementation 'com.github.bumptech.glide:glide:4.16.0'
 
