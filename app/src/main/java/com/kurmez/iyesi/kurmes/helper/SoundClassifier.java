@@ -5,10 +5,8 @@ import android.media.AudioRecord;
 import android.util.Log;
 import android.view.View;
 import android.widget.TextView;
-import android.widget.Toast;
 
 import com.kurmez.iyesi.R;
-import com.kurmez.iyesi.Welcome;
 import com.kurmez.iyesi.kurmes.Kurmes;
 
 import org.tensorflow.lite.support.audio.TensorAudio;
@@ -32,8 +30,7 @@ public class SoundClassifier extends Kurmes {
     AudioClassifier classifier;
     private TensorAudio tensor;
     private AudioRecord record;
-    private Timer timer; // Declare a Timer object
-    private TimerTask timerTask; // Declare the TimerTask
+    private TimerTask timerTask;
     private OnClassificationResultListener resultListener;
 
     private TextView labelText;  // Add this member variable
@@ -58,21 +55,18 @@ public class SoundClassifier extends Kurmes {
         kurmesActivity.SetLabelText("Recording !");
         int availableProcessors = Runtime.getRuntime().availableProcessors();
         Log.d("AvailableProcessors", "Number of available threads: " + availableProcessors);
-        //        Toast.makeText(this, "AvailableProcessors" + "Number of available threads: " + availableProcessors, Toast.LENGTH_SHORT).show();
 
         new Thread(() -> {
-            onStopRecording(view);
             try {
                 //classifier = AudioClassifier.createFromFile(this, modelPath);
                 classifier = AudioClassifier.createFromFile(context, modelPath);  // 📌 context kullan
                 tensor = classifier.createInputTensorAudio();
                 record = classifier.createAudioRecord();
                 record.startRecording();
-                timer = new Timer();
+
                 TimerTask timerTask = new TimerTask() {
                     @Override
                     public void run() {
-                        if (record == null) return; // Prevent crash if record is null
                         if (SoundClassifier.class.getSimpleName() == null){
                             //stop Camera, stop audio, refresh Kurmes
                         }
@@ -109,15 +103,6 @@ public class SoundClassifier extends Kurmes {
                         }
 
                         runOnUiThread(() -> {
-                            if (finalOutput.isEmpty()) {
-                                kurmesActivity.SetLabelText("Listening...");
-                            } else {
-                                for (Category category : finalOutput) {
-                                    outputStr.append(category.getLabel()).append(": ")
-                                            .append(category.getScore()).append("\n");
-                                }
-                                kurmesActivity.SetLabelText(outputStr.toString());
-                            }
                             if (finalOutput2.isEmpty()) {
                                 kurmesActivity.SetLabelText("Dinliyor...");
                                 //labelText.setText("Tanımlama yapılamadı.");
@@ -132,6 +117,7 @@ public class SoundClassifier extends Kurmes {
                         });
                     }
                 };
+
                 new Timer().scheduleAtFixedRate(timerTask, 1, 500);
             } catch (IOException e) {
                 Log.e("SoundClassifier", "Model yükleme hatası", e);
@@ -141,19 +127,12 @@ public class SoundClassifier extends Kurmes {
     public void onStopRecording(View view) {
         if (timerTask != null) {
             timerTask.cancel();
-            timerTask = null; // Reset the task
-        }
-        if (timer != null) {
-            timer.cancel();
-            timer.purge();
-            timer = null; // Reset the timer
         }
         if (record != null) {
             record.stop();
             record.release();
             record = null;
         }
-        kurmesActivity.SetLabelText("Stopped Recording");
     }
 
     public List<String> printModelDetails(int get) {
