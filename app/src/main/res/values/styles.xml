@@ -8,7 +8,7 @@
         <item name="android:layout_height">72dp</item>
         <item name="android:layout_alignParentBottom">true</item>
         <item name="android:visibility">gone</item>
-        <item name="android:backgroundTint">#00BCD4</item>
+
         <item name="android:elevation">0dp</item>
         <item name="android:scaleWidth">1.5</item>
         <item name="android:scaleHeight">1.5</item>

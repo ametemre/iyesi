@@ -37,46 +37,54 @@
         android:scaleType="centerInside"
         android:src="@drawable/hush"
         app:maxImageSize="50dp"
-        app:rippleColor="@color/teal" />
+        app:rippleColor="@color/teal"/>
     <!-- Mini FABs (Initially Hidden) -->
     <com.google.android.material.floatingactionbutton.FloatingActionButton
         android:id="@+id/fab_1"
         android:src="@drawable/kedi_"
+        app:rippleColor="@color/teal"
         style="@style/MiniFabStyle"/>
 
     <com.google.android.material.floatingactionbutton.FloatingActionButton
         android:id="@+id/fab_2"
         android:src="@drawable/dog"
+        app:rippleColor="@color/teal"
         style="@style/MiniFabStyle"/>
 
     <com.google.android.material.floatingactionbutton.FloatingActionButton
         android:id="@+id/fab_3"
         android:src="@drawable/kurt"
+        app:rippleColor="@color/teal"
         style="@style/MiniFabStyle"/>
 
     <com.google.android.material.floatingactionbutton.FloatingActionButton
         android:id="@+id/fab_4"
         android:src="@drawable/karga"
+        app:rippleColor="@color/teal"
         style="@style/MiniFabStyle"/>
 
     <com.google.android.material.floatingactionbutton.FloatingActionButton
         android:id="@+id/fab_5"
         android:src="@drawable/hawk_"
+        app:rippleColor="@color/teal"
         style="@style/MiniFabStyle"/>
 
     <com.google.android.material.floatingactionbutton.FloatingActionButton
         android:id="@+id/fab_6"
         android:src="@drawable/eagle"
+        app:rippleColor="@color/teal"
         style="@style/MiniFabStyle"/>
 
     <com.google.android.material.floatingactionbutton.FloatingActionButton
         android:id="@+id/fab_7"
         android:src="@drawable/keklik_"
+        app:rippleColor="@color/teal"
         style="@style/MiniFabStyle"/>
 
     <com.google.android.material.floatingactionbutton.FloatingActionButton
         android:id="@+id/fab_8"
         android:src="@drawable/pidgeon"
+        app:rippleColor="@color/teal"
         style="@style/MiniFabStyle"/>
 
     <com.google.android.material.floatingactionbutton.FloatingActionButton
