@@ -18,12 +18,14 @@ import android.annotation.SuppressLint;
 import android.app.ProgressDialog;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.content.res.ColorStateList;
 import android.content.res.Resources;
 import android.graphics.Bitmap;
 import android.graphics.Color;
-import android.graphics.ColorFilter;
+import android.graphics.ColorMatrix;
+import android.graphics.ColorMatrixColorFilter;
 import android.graphics.PorterDuff;
-import android.graphics.PorterDuffColorFilter;
+import android.graphics.drawable.Drawable;
 import android.media.MediaRecorder;
 import android.os.AsyncTask;
 import android.os.Bundle;
@@ -127,7 +129,8 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
     private long pressStartTime;
     private boolean isLongPressTriggered = false;
     private final int LONG_PRESS_THRESHOLD = 2000; // 2 seconds
-    private final int DRAG_THRESHOLD = 20; // Minimum movement to consider a drag                   //-------------------------------------------------------------------------------------------Fab
+    private final int DRAG_THRESHOLD = 20; // Minimum movement to consider a drag
+    //-------------------------------------------------------------------------------------------Fab
     private FloatingActionButton[] miniFabs = new FloatingActionButton[9];
     private boolean isFabExpanded = false;
     private float[][] fabPositions = new float[9][2]; // Stores positions of sub FABs
@@ -173,22 +176,26 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
         miniFabs[6] = findViewById(R.id.fab_7);
         miniFabs[7] = findViewById(R.id.fab_8);
         miniFabs[8] = findViewById(R.id.fab_9);
+
         rootLayout = findViewById(android.R.id.content);
+
+        initializeFabs();
         setupDraggableFAB();
         requestAudioPermissions();
         requestStoragePermission();
         checkAudioPermission();
         checkAndRequestPermissions();
+
         for (FloatingActionButton subFab : miniFabs) {
             subFab.setOnTouchListener(new View.OnTouchListener() {
                 @Override
                 public boolean onTouch(View v, MotionEvent event) {
                     if (event.getAction() == MotionEvent.ACTION_DOWN) {
-                        onFabClick(subFab);
+                        onFabClick(v,subFab);
                         return true;
                     }else if (event.getAction() == MotionEvent.ACTION_UP) {
                         // Handle the touch up event
-                        collapseFabMenu();
+                        // collapseFabMenu();
                         Log.d("Touch", "User lifted their finger off the screen");
                     }
                     return false;
@@ -197,7 +204,9 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
         }
         fabSound = findViewById(R.id.fab_Sound);
         fabSound.setOnClickListener(v -> {
-            cameraState(false);
+            //resetAppState(soundClassifier);
+            collapseFabMenu();
+            //cameraState(false);
             if (!isRecording){
                 SetLabelText("Loaded !");
                 startRecording(v);
@@ -205,7 +214,7 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
                 //loadTFLiteModel(null);
             }
             else {stopRecording(v);
-            SetLabelText("NotLoaded !");}
+                SetLabelText("NotLoaded !");}
         });
     }
     private void stopRecording(View view) {
@@ -225,7 +234,6 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
 
     }
     private void startRecording(View view) {
-        isRecording = true;
         try {
             mediaRecorder = new MediaRecorder();
             mediaRecorder.setAudioSource(MediaRecorder.AudioSource.MIC);
@@ -274,9 +282,7 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
             detectedSoundsLayout.addView(noResultView);
         }
     }
-    private ColorFilter getColorFilter() {
-        return new PorterDuffColorFilter(Color.RED, PorterDuff.Mode.SRC_ATOP);
-    }
+
     @Override
     public void onCameraViewStarted(int width, int height) {
         rgb = new Mat();
@@ -387,7 +393,7 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
 */ //AI generated Code for image recognition (gives overload to gpu & crashes)
         //return mOnCameraFrameRender.render(inputFrame);
         return rgb; // Return the raw RGBA frame
-    }                                    //Essential For Camera
+    } //Essential For Camera
     private State currentState = State.IDLE;
     private HashMap<State, String> state = new HashMap<>();
     public enum State {
@@ -397,7 +403,7 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
         TRACKING,
         CAPTURE,
         // Add more states as needed
-        }
+    }
     @Override
     protected void onResume() {
         super.onResume();
@@ -527,7 +533,7 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
                     break;
             }
             return super.dispatchTouchEvent(event); // Allow other views to handle the touch
-        }*/                                                                                         //done collapses the fab menu anywhere on screen touch but overrides the other click events.
+        }*/                                      //done collapses the fab menu anywhere on screen touch but overrides the other click events.
     /*    @Override
         protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
             super.onActivityResult(requestCode, resultCode, data);
@@ -897,7 +903,7 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
                 long totalBytes = taskSnapshot.getTotalByteCount();
                 updateDownloadProgress((int) ((bytesTransferred * 100) / totalBytes));
             }).addOnFailureListener(e -> Log.e("Model", "Download failed", e));
-        }*/                                                                                         //waiting//----------------------------------------------------------------createFab Button
+        }*/                                        //waiting//----------------------------------------------------------------createFab Button
     /*    private void loadTFLiteModel(String modelPath) {
             try {
                 Interpreter.Options options = new Interpreter.Options();
@@ -906,7 +912,7 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
             } catch (Exception e) {
                 Log.e("TFLite", "Error loading model", e);
             }
-        }*/                                                                                         //done//----------------------------------------------------------------createFab Button
+        }*/                                            //done//----------------------------------------------------------------createFab Button
     private void updateDownloadProgress(int progress) {
         //fabButton.setProgress(progress);  // Assume a custom FAB with progress tracking
     }                                            //edit//----------------------------------------------------------------createFab Button
@@ -920,7 +926,65 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
     interface Action {
         void execute();
     }
-    public Action onFabClick(View view) {
+    private FloatingActionButton selectedFab = null; // Track the selected FAB
+
+    private void applyWhiteColorFilter(FloatingActionButton fab) {
+        Drawable drawable = fab.getDrawable();
+        if (drawable != null) {
+            drawable = drawable.mutate(); // Make sure we modify only this instance
+            drawable.setColorFilter(Color.WHITE, PorterDuff.Mode.SRC_ATOP); // Apply White Filter
+            fab.setImageDrawable(drawable);
+        }
+    }
+
+    private void resetIconColor(FloatingActionButton fab) {
+        fab.setBackgroundTintList(ColorStateList.valueOf(Color.parseColor("#FF40C4FF"))); // Teal
+        Drawable drawable = fab.getDrawable();
+        if (drawable != null) {
+            drawable = drawable.mutate();
+            drawable.clearColorFilter(); // Remove any color filters
+            fab.setImageDrawable(drawable);
+        }
+    }
+    private void initializeFabs() {
+        for (FloatingActionButton subFab : miniFabs) {
+            subFab.setBackgroundTintList(ColorStateList.valueOf(Color.parseColor("#FF40C4FF"))); // Set all FABs to Teal initially
+            resetIconColor(subFab); // Reset icon colors
+            subFab.setOnClickListener(v -> onFabClick(v,(FloatingActionButton) v)); // Attach click listener
+        }
+    }
+    /*    private void selectFabProgrammatically(FloatingActionButton fab) {
+            if (selectedFab != null) {
+                // Reset previously selected FAB to Teal
+                selectedFab.setBackgroundTintList(ColorStateList.valueOf(Color.parseColor("#008080"))); // Teal
+                resetIconColor(selectedFab);
+            }
+
+            // Select new FAB
+            fab.setBackgroundTintList(ColorStateList.valueOf(Color.RED)); // Change background to Red
+            applyWhiteColorFilter(fab); // Change icon to White
+            selectedFab = fab;
+        }*/
+    public Action onFabClick(View view ,FloatingActionButton clickedFab) {
+        if (selectedFab == clickedFab) {
+            // If clicking the same FAB, deselect it and set it back to Teal
+            clickedFab.setBackgroundTintList(ColorStateList.valueOf(Color.parseColor("#008080"))); // Teal
+            resetIconColor(clickedFab); // Restore icon color
+            selectedFab = null;
+        } else {
+            // Deselect previous FAB if there was one
+            if (selectedFab != null) {
+                selectedFab.setBackgroundTintList(ColorStateList.valueOf(Color.parseColor("#008080"))); // Teal
+                resetIconColor(selectedFab);
+            }
+
+            // Select new FAB and set to Red
+            clickedFab.setBackgroundTintList(ColorStateList.valueOf(Color.RED)); // Red
+            applyWhiteColorFilter(clickedFab); // Change icon to White
+            selectedFab = clickedFab;
+        }
+        clickedFab.invalidate(); // Force UI refresh
+        clickedFab.requestLayout(); // Ensure layout updates
         Log.d("FAB", "onFabClick called");
         Action action = null;
         if (view.getId() == R.id.fab_1) {
@@ -1001,15 +1065,17 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
     private void EagleSpeciesRecognition(){}
     private void KeklikSpeciesRecognition(){}
     private void PidgeonSpeciesRecognition(){}
+
+
     private void TFLiteModelInspection(List<String> list){
         LinearLayout tensors = findViewById(R.id.ModelClasses_list);
         for (String string : list) {
             TextView textView = new TextView(this);
-                textView.setText(string + "---" + "\n");
-                textView.setTextSize(16);
-                textView.setTextColor(Color.WHITE);
-                textView.setPadding(10, 10, 10, 10);
-                tensors.addView(textView);
+            textView.setText(string + "---" + "\n");
+            textView.setTextSize(16);
+            textView.setTextColor(Color.WHITE);
+            textView.setPadding(10, 10, 10, 10);
+            tensors.addView(textView);
         }
     }
     private void TFLiteModelInspector (String modelPath){
@@ -1024,15 +1090,60 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
 
         LinearLayout tensors = findViewById(R.id.ModelClasses_list);
         TextView textView = new TextView(this);
-            textView.setText(inputCount + "---" + outputCount + " - " + "%");
-            textView.setTextSize(16);
-            textView.setTextColor(Color.WHITE);
-            textView.setPadding(10, 10, 10, 10);
+        textView.setText(inputCount + "---" + outputCount + " - " + "%");
+        textView.setTextSize(16);
+        textView.setTextColor(Color.WHITE);
+        textView.setPadding(10, 10, 10, 10);
         tensors.addView(textView);
     }
     private static MappedByteBuffer loadModelFile(String modelPath) throws IOException {
         FileInputStream fileInputStream = new FileInputStream(modelPath);
         FileChannel fileChannel = fileInputStream.getChannel();
         return fileChannel.map(FileChannel.MapMode.READ_ONLY, 0, fileChannel.size());
+    }
+
+    private void resetAppState(SoundClassifier soundClassifier) {
+        Log.d("Reset", "Resetting app state...");
+
+        // Stop TensorFlow Lite inference
+        if (tflite != null) {
+            tflite.close();  // Release TensorFlow Lite interpreter resources
+            tflite = null;
+            Log.d("Reset", "TensorFlow Lite interpreter closed.");
+        }
+
+        // Stop recording if it's running
+        if (isRecording) {
+            stopRecording(null);  // Assuming you have stopRecording(View view)
+            isRecording = false;
+            Log.d("Reset", "Recording stopped.");
+        }
+
+        // Stop any running sound classification (if applicable)
+        if (soundClassifier != null) {
+            soundClassifier.onStop();  // Assuming your classifier has a stop() method
+            Log.d("Reset", "Sound classifier stopped.");
+        }
+
+        // Reset all FABs to default state
+        for (FloatingActionButton subFab : miniFabs) {
+            subFab.setBackgroundTintList(ColorStateList.valueOf(Color.parseColor("#008080"))); // Teal
+            resetIconColor(subFab);
+        }
+
+        // Reset selected FAB tracker
+        selectedFab = null;
+
+        // Reset UI elements (labels, camera status, etc.)
+        labelText.setText("Idle");
+        cameraStatusText.setText("Camera Ready");
+
+        // Stop any animations or delayed tasks
+        handler.removeCallbacksAndMessages(null);
+
+        // Reset Camera State (if applicable)
+        cameraState(true);
+
+        Log.d("Reset", "App state reset completed.");
     }
 }
