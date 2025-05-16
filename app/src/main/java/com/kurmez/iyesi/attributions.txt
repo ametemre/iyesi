@@ -32,7 +32,6 @@
 └ Lisans: Ultralytics Software License (free for non-commercial use)
 └ URL: [https://github.com/ultralytics/ultralytics](https://github.com/ultralytics/ultralytics)
 └ Atıf: Lisans koşullarına uygun şekilde atıf yapınız
-
 🗂️ **Veri Setleri**
 ──────────────────────────────────────────────────────────────────
 • **Pet’s Facial Expression Image Dataset** (Kaggle)
