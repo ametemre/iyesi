@@ -9,7 +9,12 @@ import com.kurmez.iyesi.R;
 import com.kurmez.iyesi.Welcome;
 import com.kurmez.iyesi.kurmes.helper.SoundClassifier;
 import com.kurmez.iyesi.kurmes.helper.TFLiteModelInspector;
-
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.graphics.ImageFormat;
+import android.graphics.Rect;
+import android.graphics.YuvImage;
+import androidx.camera.core.ImageProxy;
 import android.Manifest;
 import android.animation.AnimatorSet;
 import android.animation.ObjectAnimator;
@@ -49,6 +54,7 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.Nullable;
+import androidx.camera.core.ImageProxy;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 
@@ -60,7 +66,6 @@ import org.opencv.android.JavaCamera2View;
 import org.opencv.android.OpenCVLoader;
 import org.opencv.core.Mat;
 import org.opencv.core.MatOfRect;
-import org.opencv.core.Rect;
 import org.opencv.core.Scalar;
 import org.opencv.core.Size;
 import org.opencv.imgproc.Imgproc;
@@ -68,21 +73,67 @@ import org.opencv.objdetect.CascadeClassifier;
 import org.tensorflow.lite.Interpreter;
 import org.tensorflow.lite.support.label.Category;
 
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.ByteBuffer;
 import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
+import android.graphics.Bitmap;
+import android.util.Log;
+import androidx.annotation.Nullable;
+import android.os.Bundle;
+import android.util.Log;
+
+import androidx.annotation.Nullable;
+
+import org.opencv.android.CameraActivity;
+import org.opencv.android.JavaCameraView;
+import org.opencv.core.Mat;
+import org.opencv.android.CameraBridgeViewBase.CvCameraViewListener2;
+
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+import org.opencv.android.Utils;
+import org.opencv.core.Mat;
+import org.opencv.core.Size;
+import org.opencv.imgproc.Imgproc;
+
+import java.util.ArrayList;
+import java.util.List;import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
-
+import com.kurmez.iyesi.kurmes.Ai.Ai;
 public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
+    private static final String TAG = "Kurmes";
+
+    private CameraBridgeViewBase mOpenCvCameraView;
+    private Mat rgb, gray;
+
+    private Ai aiKedi, aiKopek, aiKurt, aiKarga;
+
+    public enum State {
+        KEDI, KOPEK, KURT, KARGA,
+        IDLE, FACE_DETECTION, OBJECT_DETECTION, TRACKING, CAPTURE
+    }
+    private State currentState = State.IDLE;
+
+    private final List<float[]> soundBuffer = new ArrayList<>();
+    private final List<float[][]> videoBuffer = new ArrayList<>();
+    private final int SOUND_THRESHOLD = 5;
+    private final int VIDEO_THRESHOLD = 5;
+
+    // Sound labels for each species model (fill in actual labels)
+    private static final String[] KEDI_SOUNDS  = {"meow", "purr"};
+    private static final String[] KOPEK_SOUNDS = {"bark", "growl"};
+    private static final String[] KURT_SOUNDS  = {"howl", "snarl"};
+    private static final String[] KARGA_SOUNDS = {"caw", "squawk"};
     private static final int REQUEST_IMAGE_CAPTURE = 1; // Request code for capturing a photo
     private List<Bitmap> photoList = new ArrayList<>(); // List to store captured images
     private FloatingActionButton fabDraggable, fabSound;
@@ -92,10 +143,8 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
     private boolean isRecording = false;
     private FirebaseAuth mAuth;
     private Handler handler = new Handler();
-    private static final String TAG = "KurmesActivity";
     private static final int CAMERA_PERMISSION_REQUEST_CODE = 100;
     //private JavaCamera2View cameraView; // Using JavaCamera2View
-
     protected TextView labelText;
     public void SetLabelText(String s){
         if (labelText != null) {
@@ -104,14 +153,11 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
             Log.e("Kurmes", "labelText is not initialized yet.");
         }
     }
-
     private TextView cameraStatusText;
-    private Mat rgb, gray; // RGBA frame
     MatOfRect rects;
     //imported---------------------------------
     //private DetectorFunction activeDetectorFunction = () -> videoYapayZeka(getResources().openRawResource(R.raw.lbpcascade_frontalface), null);
     private int lastAction;
-    private CameraBridgeViewBase mOpenCvCameraView;
     public CameraCalibrator mCalibrator;
     private MediaRecorder mediaRecorder;
     private SoundClassifier soundClassifier;
@@ -139,6 +185,7 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
     interface DetectorFunction {
         void execute();
     }
+    //--------------------------Creation
     @SuppressLint("ClickableViewAccessibility")
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -147,19 +194,34 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
         setContentView(R.layout.activity_kurmes);
 
         mAuth = FirebaseAuth.getInstance();
+
+        // OpenCV camera initialization
+        mOpenCvCameraView = findViewById(R.id.kurmes_camera_view);
+        mOpenCvCameraView.setVisibility(SurfaceView.VISIBLE);
+        mOpenCvCameraView.setCvCameraViewListener(this);
+        mOpenCvCameraView.enableView();
+
+        // Load TFLite models per species
+        try {
+            aiKedi  = new Ai(this, "kedi_sound.tflite",  "kedi_video.tflite");
+            aiKopek = new Ai(this, "kopek_sound.tflite", "kopek_video.tflite");
+            aiKurt  = new Ai(this, "kurt_sound.tflite",  "kurt_video.tflite");
+            aiKarga = new Ai(this, "karga_sound.tflite", "karga_video.tflite");
+        } catch (IOException e) {
+            Log.e(TAG, "Failed to load TFLite models", e);
+        }
+/*
         soundClassifier = new SoundClassifier(this, labelText, new SoundClassifier.OnClassificationResultListener() {
             @Override
             public void onResult(String result) {
                 labelText.setText(result);  // This can be removed since we're updating directly
             }
         },this);
-
+*/
         int availableProcessors = Runtime.getRuntime().availableProcessors();
         Log.d("AvailableProcessors", "Number of available threads: " + availableProcessors);
 
-        mOpenCvCameraView = (CameraBridgeViewBase) findViewById(R.id.kurmes_camera_view);
-        mOpenCvCameraView.setVisibility(SurfaceView.VISIBLE);
-        mOpenCvCameraView.setCvCameraViewListener(this);
+
 
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 
@@ -209,7 +271,7 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
             //cameraState(false);
             if (!isRecording){
                 SetLabelText("Loaded !");
-                startRecording(v);
+                //startRecording(v);
                 isRecording = true;
                 //loadTFLiteModel(null);
             }
@@ -217,6 +279,67 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
                 SetLabelText("NotLoaded !");}
         });
     }
+    private void initializeFabs() {
+        for (FloatingActionButton subFab : miniFabs) {
+            subFab.setBackgroundTintList(ColorStateList.valueOf(Color.parseColor("#FF40C4FF"))); // Set all FABs to Teal initially
+            resetIconColor(subFab); // Reset icon colors
+            subFab.setOnClickListener(v -> onFabClick(v,(FloatingActionButton) v)); // Attach click listener
+        }
+    }
+    public Action onFabClick(View view ,FloatingActionButton clickedFab) {
+        if (selectedFab == clickedFab) {
+            // If clicking the same FAB, deselect it and set it back to Teal
+            clickedFab.setBackgroundTintList(ColorStateList.valueOf(Color.parseColor("#008080"))); // Teal
+            resetIconColor(clickedFab); // Restore icon color
+            selectedFab = null;
+        } else {
+            // Deselect previous FAB if there was one
+            if (selectedFab != null) {
+                selectedFab.setBackgroundTintList(ColorStateList.valueOf(Color.parseColor("#008080"))); // Teal
+                resetIconColor(selectedFab);
+            }
+
+            // Select new FAB and set to Red
+            clickedFab.setBackgroundTintList(ColorStateList.valueOf(Color.RED)); // Red
+            applyWhiteColorFilter(clickedFab); // Change icon to White
+            selectedFab = clickedFab;
+        }
+        clickedFab.invalidate(); // Force UI refresh
+        clickedFab.requestLayout(); // Ensure layout updates
+        Log.d("FAB", "onFabClick called");
+        Action action = null;
+        if (view.getId() == R.id.fab_1) {
+            action = this::actionOne;
+            currentState = State.KEDI;
+        } else if (view.getId() == R.id.fab_2) {
+            action = this::actionTwo;
+            currentState = State.KOPEK;
+        } else if (view.getId() == R.id.fab_3) {
+            action = this::actionThree;
+            currentState = State.KURT;
+        } else if (view.getId() == R.id.fab_4) {
+            action = this::actionFour;
+        } else if (view.getId() == R.id.fab_5) {
+            action = this::actionFive;
+        } else if (view.getId() == R.id.fab_6) {
+            action = this::actionSix;
+        } else if (view.getId() == R.id.fab_7) {
+            action = this::actionSeven;
+        } else if (view.getId() == R.id.fab_8) {
+            action = this::actionEight;
+        } else if (view.getId() == R.id.fab_9) {
+            action = this::actionNine;
+        }
+        // Execute the function if not null
+        if (action != null) {
+            action.execute();
+        } else {
+            Log.w("FAB", "Unknown FAB clicked!");
+        }
+        return action;
+    }
+    //--------------------------Creation
+    //--------------------------Sound
     private void stopRecording(View view) {
         if (isRecording) {
             try {
@@ -282,6 +405,27 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
             detectedSoundsLayout.addView(noResultView);
         }
     }
+    //--------------------------Sound
+    //--------------------------Video
+    /*
+    private void startCameraStream() {
+        // set up CameraX or Camera2, then in your frame callback:
+        cameraAnalyzer = image -> {
+            float[][][][] frameTensor = preprocessImage(image);
+            ai.predictVideo(frameTensor, this::onVideoResult);
+            image.close();
+        };
+    }
+
+    private void onVideoResult(float[][] output) {
+        // This callback runs on a background thread.
+        runOnUiThread(() -> {
+            // e.g. draw bounding boxes or labels based on `output`
+            updateOverlay(output);
+        });
+    }
+    */
+    //--------------------------Video
 
     @Override
     public void onCameraViewStarted(int width, int height) {
@@ -321,15 +465,27 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
 
     }                                                         //done
     @Override
-    public Mat onCameraFrame(CvCameraViewFrame inputFrame) {
+    public Mat onCameraFrame(CameraBridgeViewBase.CvCameraViewFrame inputFrame) {
 
         rgb = inputFrame.rgba();
         gray =inputFrame.gray();
 
         switch (currentState) {
+            case KEDI:
+                handleSpecies(rgb, aiKedi);
+                break;
+            case KOPEK:
+                handleSpecies(rgb, aiKopek);
+                break;
+            case KURT:
+                handleSpecies(rgb, aiKurt);
+                break;
+            case KARGA:
+                handleSpecies(rgb, aiKarga);
+                break;
             case FACE_DETECTION:
                 // Perform face detection
-                videoYapayZeka(getResources().openRawResource(R.raw.lbpcascade_frontalface), null);
+                //videoYapayZeka(getResources().openRawResource(R.raw.lbpcascade_frontalface), null);
                 break;
             case OBJECT_DETECTION:
                 // Perform object detection
@@ -350,6 +506,7 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
             default:
                 break;
         }
+
 /*        if (activeDetectorFunction != null) {
             activeDetectorFunction.execute();
         }*/
@@ -394,16 +551,9 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
         //return mOnCameraFrameRender.render(inputFrame);
         return rgb; // Return the raw RGBA frame
     } //Essential For Camera
-    private State currentState = State.IDLE;
+
     private HashMap<State, String> state = new HashMap<>();
-    public enum State {
-        IDLE,
-        FACE_DETECTION,
-        OBJECT_DETECTION,
-        TRACKING,
-        CAPTURE,
-        // Add more states as needed
-    }
+
     @Override
     protected void onResume() {
         super.onResume();
@@ -428,11 +578,17 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
     }
     @Override
     protected void onDestroy() {
-        super.onDestroy();
+        // release TFLite resources
+        aiKedi.close();
+        aiKopek.close();
+        aiKurt.close();
+        aiKarga.close();
+        if (mOpenCvCameraView != null) mOpenCvCameraView.disableView();
         if (mOpenCvCameraView != null) {
             cameraState(false);
             updateCameraStatus("Camera View Destroyed.");
         }
+        super.onDestroy();
     }
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
@@ -457,17 +613,20 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
                     new OnCameraFrameRender(new CalibrationFrameRender(mCalibrator));
             item.setChecked(true);
             return true;
-        } else if (item.getItemId() == R.id.undistortion) {
+        }
+        else if (item.getItemId() == R.id.undistortion) {
             mOnCameraFrameRender =
                     new OnCameraFrameRender(new UndistortionFrameRender(mCalibrator));
             item.setChecked(true);
             return true;
-        } else if (item.getItemId() == R.id.comparison) {
+        }
+        else if (item.getItemId() == R.id.comparison) {
             mOnCameraFrameRender =
                     new OnCameraFrameRender(new ComparisonFrameRender(mCalibrator, mWidth, mHeight, getResources()));
             item.setChecked(true);
             return true;
-        } else if (item.getItemId() == R.id.calibrate) {
+        }
+        else if (item.getItemId() == R.id.calibrate) {
             final Resources res = getResources();
             if (mCalibrator.getCornersBufferSize() < 2) {
                 (Toast.makeText(this, res.getString(R.string.more_samples), Toast.LENGTH_SHORT)).show();
@@ -512,7 +671,8 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
                 }
             }.execute();
             return true;
-        } else {
+        }
+        else {
             return super.onOptionsItemSelected(item);
         }
     }
@@ -858,6 +1018,7 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
             miniFabs[i].setY(fabPositions[i][1] + deltaY);
         }
     }                                     //done     0
+    /*
     private void loadDetector(Mat gray,MatOfRect rects){
         cascadeClassifier.detectMultiScale(gray,rects,1.1,2);
         for (Rect rect : rects.toList()){
@@ -868,6 +1029,13 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
             Imgproc.rectangle(rgb,rect,new Scalar(0,255,0),10);
         }
     }                                        //videoYapayZeka
+        private void videoYapayZeka(InputStream inputStream, @Nullable File file){
+        if (file == null){
+            file = new File(getDir("cascade", MODE_PRIVATE), "lbpcascade_frontalface.xml");
+        }
+        activateDetector(file,inputStream);
+        loadDetector(gray, rects);
+    }
     private void activateDetector(File file, InputStream inputStream){
         try {
             FileOutputStream fileOutputStream = new FileOutputStream(file);
@@ -890,6 +1058,7 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
             e.printStackTrace();
         }
     }                          //videoYapayZeka
+    */                                                                                         //depritiated//--------------------------------------------------------------videoYapayZeka
     /*    private void downloadAndLoadModel(String modelUrl) {
             StorageReference modelRef = FirebaseStorage.getInstance().getReferenceFromUrl(modelUrl);
 
@@ -903,7 +1072,7 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
                 long totalBytes = taskSnapshot.getTotalByteCount();
                 updateDownloadProgress((int) ((bytesTransferred * 100) / totalBytes));
             }).addOnFailureListener(e -> Log.e("Model", "Download failed", e));
-        }*/                                        //waiting//----------------------------------------------------------------createFab Button
+        }*/                                                                                         //waiting//----------------------------------------------------------------createFab Button
     /*    private void loadTFLiteModel(String modelPath) {
             try {
                 Interpreter.Options options = new Interpreter.Options();
@@ -912,17 +1081,11 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
             } catch (Exception e) {
                 Log.e("TFLite", "Error loading model", e);
             }
-        }*/                                            //done//----------------------------------------------------------------createFab Button
+        }*/                                                                                         //done//----------------------------------------------------------------createFab Button
     private void updateDownloadProgress(int progress) {
         //fabButton.setProgress(progress);  // Assume a custom FAB with progress tracking
     }                                            //edit//----------------------------------------------------------------createFab Button
-    private void videoYapayZeka(InputStream inputStream, @Nullable File file){
-        if (file == null){
-            file = new File(getDir("cascade", MODE_PRIVATE), "lbpcascade_frontalface.xml");
-        }
-        activateDetector(file,inputStream);
-        loadDetector(gray, rects);
-    }
+
     interface Action {
         void execute();
     }
@@ -936,7 +1099,6 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
             fab.setImageDrawable(drawable);
         }
     }
-
     private void resetIconColor(FloatingActionButton fab) {
         fab.setBackgroundTintList(ColorStateList.valueOf(Color.parseColor("#FF40C4FF"))); // Teal
         Drawable drawable = fab.getDrawable();
@@ -946,13 +1108,7 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
             fab.setImageDrawable(drawable);
         }
     }
-    private void initializeFabs() {
-        for (FloatingActionButton subFab : miniFabs) {
-            subFab.setBackgroundTintList(ColorStateList.valueOf(Color.parseColor("#FF40C4FF"))); // Set all FABs to Teal initially
-            resetIconColor(subFab); // Reset icon colors
-            subFab.setOnClickListener(v -> onFabClick(v,(FloatingActionButton) v)); // Attach click listener
-        }
-    }
+
     /*    private void selectFabProgrammatically(FloatingActionButton fab) {
             if (selectedFab != null) {
                 // Reset previously selected FAB to Teal
@@ -965,58 +1121,6 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
             applyWhiteColorFilter(fab); // Change icon to White
             selectedFab = fab;
         }*/
-    public Action onFabClick(View view ,FloatingActionButton clickedFab) {
-        if (selectedFab == clickedFab) {
-            // If clicking the same FAB, deselect it and set it back to Teal
-            clickedFab.setBackgroundTintList(ColorStateList.valueOf(Color.parseColor("#008080"))); // Teal
-            resetIconColor(clickedFab); // Restore icon color
-            selectedFab = null;
-        } else {
-            // Deselect previous FAB if there was one
-            if (selectedFab != null) {
-                selectedFab.setBackgroundTintList(ColorStateList.valueOf(Color.parseColor("#008080"))); // Teal
-                resetIconColor(selectedFab);
-            }
-
-            // Select new FAB and set to Red
-            clickedFab.setBackgroundTintList(ColorStateList.valueOf(Color.RED)); // Red
-            applyWhiteColorFilter(clickedFab); // Change icon to White
-            selectedFab = clickedFab;
-        }
-        clickedFab.invalidate(); // Force UI refresh
-        clickedFab.requestLayout(); // Ensure layout updates
-        Log.d("FAB", "onFabClick called");
-        Action action = null;
-        if (view.getId() == R.id.fab_1) {
-            action = this::actionOne;
-            currentState = State.FACE_DETECTION;
-        } else if (view.getId() == R.id.fab_2) {
-            action = this::actionTwo;
-            currentState = State.OBJECT_DETECTION;
-        } else if (view.getId() == R.id.fab_3) {
-            action = this::actionThree;
-            currentState = State.TRACKING;
-        } else if (view.getId() == R.id.fab_4) {
-            action = this::actionFour;
-        } else if (view.getId() == R.id.fab_5) {
-            action = this::actionFive;
-        } else if (view.getId() == R.id.fab_6) {
-            action = this::actionSix;
-        } else if (view.getId() == R.id.fab_7) {
-            action = this::actionSeven;
-        } else if (view.getId() == R.id.fab_8) {
-            action = this::actionEight;
-        } else if (view.getId() == R.id.fab_9) {
-            action = this::actionNine;
-        }
-        // Execute the function if not null
-        if (action != null) {
-            action.execute();
-        } else {
-            Log.w("FAB", "Unknown FAB clicked!");
-        }
-        return action;
-    }
     private void actionOne() {
         cameraState(true);
         CatSpeciesRecognition();
@@ -1065,7 +1169,6 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
     private void EagleSpeciesRecognition(){}
     private void KeklikSpeciesRecognition(){}
     private void PidgeonSpeciesRecognition(){}
-
 
     private void TFLiteModelInspection(List<String> list){
         LinearLayout tensors = findViewById(R.id.ModelClasses_list);
@@ -1145,5 +1248,127 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
         cameraState(true);
 
         Log.d("Reset", "App state reset completed.");
+    }
+
+    private static final int INPUT_W = 224;  // your model’s width
+    private static final int INPUT_H = 224;  // your model’s height
+
+    private float[][][][] preprocessImage(ImageProxy image) {
+        // 1) Extract YUV planes
+        ByteBuffer yBuf = image.getPlanes()[0].getBuffer();
+        ByteBuffer uBuf = image.getPlanes()[1].getBuffer();
+        ByteBuffer vBuf = image.getPlanes()[2].getBuffer();
+        byte[] y = new byte[yBuf.remaining()]; yBuf.get(y);
+        byte[] u = new byte[uBuf.remaining()]; uBuf.get(u);
+        byte[] v = new byte[vBuf.remaining()]; vBuf.get(v);
+
+        // 2) Build NV21 array (Y + VU)
+        byte[] nv21 = new byte[y.length + u.length + v.length];
+        System.arraycopy(y, 0,       nv21, 0,         y.length);
+        System.arraycopy(v, 0,       nv21, y.length,  v.length);
+        System.arraycopy(u, 0,       nv21, y.length+v.length, u.length);
+
+        // 3) YUV → JPEG → Bitmap
+        YuvImage yuv = new YuvImage(nv21, ImageFormat.NV21,
+                image.getWidth(), image.getHeight(), null);
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        yuv.compressToJpeg(
+                new Rect(0,0,image.getWidth(),image.getHeight()), 100, out);
+        byte[] jpeg = out.toByteArray();
+        Bitmap bmp = BitmapFactory.decodeByteArray(jpeg, 0, jpeg.length);
+
+        // 4) Scale to model input size
+        Bitmap scaled = Bitmap.createScaledBitmap(bmp, INPUT_W, INPUT_H, false);
+
+        // 5) Copy pixels into [1][H][W][3], normalize to [0,1]
+        float[][][][] input = new float[1][INPUT_H][INPUT_W][3];
+        for (int y0=0; y0<INPUT_H; y0++) {
+            for (int x0=0; x0<INPUT_W; x0++) {
+                int p = scaled.getPixel(x0, y0);
+                input[0][y0][x0][0] = ((p>>16)&0xFF) / 255f;
+                input[0][y0][x0][1] = ((p>>8)&0xFF) / 255f;
+                input[0][y0][x0][2] = ( p     &0xFF) / 255f;
+            }
+        }
+
+        image.close();  // don’t forget
+        return input;
+    }
+    private void handleSpecies(Mat frame, Ai ai) {
+        // video inference
+        float[][][][] imgTensor = preprocessImage(frame);
+        ai.predictVideo(imgTensor, videoOut -> {
+            synchronized (videoBuffer) {
+                videoBuffer.add(videoOut);
+            }
+        });
+
+        // sound inference
+        float[][] audioTensor = captureAudioFeatures();
+        ai.predictSound(audioTensor, soundOut -> {
+            synchronized (soundBuffer) {
+                soundBuffer.add(soundOut);
+            }
+        });
+
+        // combine when thresholds reached
+        if (videoBuffer.size() >= VIDEO_THRESHOLD && soundBuffer.size() >= SOUND_THRESHOLD) {
+            runOnUiThread(() -> matchPercepts(currentState, videoBuffer, soundBuffer));
+            videoBuffer.clear();
+            soundBuffer.clear();
+        }
+    }
+
+    private void matchPercepts(State state, List<float[][]> vidBuf, List<float[]> sndBuf) {
+        switch (state) {
+            case KEDI:
+                float[] catSound = sndBuf.get(sndBuf.size() - 1);
+                int idxCat = argmax(catSound);
+                String catLabel = KEDI_SOUNDS[idxCat];
+                Log.i(TAG, "Detected cat sound: " + catLabel);
+                break;
+            case KOPEK:
+                float[] dogSound = sndBuf.get(sndBuf.size() - 1);
+                int idxDog = argmax(dogSound);
+                String dogLabel = KOPEK_SOUNDS[idxDog];
+                Log.i(TAG, "Detected dog sound: " + dogLabel);
+                break;
+            case KURT:
+                float[] wolfSound = sndBuf.get(sndBuf.size() - 1);
+                int idxWolf = argmax(wolfSound);
+                String wolfLabel = KURT_SOUNDS[idxWolf];
+                Log.i(TAG, "Detected wolf sound: " + wolfLabel);
+                break;
+            case KARGA:
+                float[] crowSound = sndBuf.get(sndBuf.size() - 1);
+                int idxCrow = argmax(crowSound);
+                String crowLabel = KARGA_SOUNDS[idxCrow];
+                Log.i(TAG, "Detected crow sound: " + crowLabel);
+                break;
+            default:
+                break;
+        }
+    }
+    // placeholders:
+    // Placeholders for preprocessing
+    // Utility to find the index of the highest-probability class
+    private int argmax(float[] array) {
+        int maxIdx = 0;
+        float maxVal = array[0];
+        for (int i = 1; i < array.length; i++) {
+            if (array[i] > maxVal) {
+                maxVal = array[i];
+                maxIdx = i;
+            }
+        }
+        return maxIdx;
+    }
+    private float[][][][] preprocessImage(Mat frame) {
+        // TODO: implement frame → tensor conversion
+        return new float[1][224][224][3];
+    }
+    private float[][] captureAudioFeatures() {
+        // TODO: implement audio capture → feature vector
+        return new float[1][40];
     }
 }

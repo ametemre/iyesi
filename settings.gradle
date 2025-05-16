@@ -22,7 +22,9 @@ dependencyResolutionManagement {
 rootProject.name = "iyesi"
 include ':app'
 include ':OpenCV_4.10.0'
-project(':OpenCV_4.10.0').projectDir = file("${rootDir}/Resources/opencv-4.10.0-android-sdk/OpenCV-android-sdk/sdk/")
+project(':OpenCV_4.10.0').projectDir = file("${rootDir}/opencv-4.10.0-android-sdk/OpenCV-android-sdk/sdk/")
 
 // OpenCV modülünün yolu doğru şekilde tanımlanmıştır.
 //project(':OpenCV').projectDir = file("${rootDir}/Resources/opencv-3.4.16-android-sdk/OpenCV-android-sdk/sdk")
+//include ':OpenCV'
+//project(':OpenCV').projectDir = new File(rootDir, 'opencv-4.10.0-android-sdk/OpenCV-android-sdk/sdk/')
