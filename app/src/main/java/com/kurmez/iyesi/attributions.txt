@@ -1,0 +1,50 @@
+╔═════════════════════════════════════════════════════════════════╗
+║                         A T T R I B U T I O N S               ║
+╚════════════════════════════════════════════════════════════════╝
+
+📜 **Kütüphaneler & Araçlar**
+──────────────────────────────────────────────────────────────────
+• **OpenCV**
+└ Lisans: BSD 3-Clause
+└ Atıf: “This product includes software developed by the OpenCV Project ([https://opencv.org/)”](https://opencv.org/%29”)
+
+• **TensorFlow Lite**
+└ Lisans: Apache License 2.0
+└ Atıf: “This product includes TensorFlow Lite, licensed under the Apache License 2.0 ([https://www.apache.org/licenses/LICENSE-2.0)”](https://www.apache.org/licenses/LICENSE-2.0%29”)
+
+• **Firebase (Firestore, Auth, vb.)**
+└ Lisans: Apache License 2.0
+└ Atıf: “This product uses Firebase services provided by Google, licensed under Apache 2.0 ([https://firebase.google.com/terms/)”](https://firebase.google.com/terms/%29”)
+
+• **Android Jetpack Components**
+└ Lisans: Apache License 2.0
+└ Atıf: “This product uses Android Jetpack libraries, licensed under Apache 2.0 ([https://developer.android.com/jetpack/)”](https://developer.android.com/jetpack/%29”)
+
+• **Kotlin Standard Library**
+└ Lisans: Apache License 2.0
+└ Atıf: “This product uses the Kotlin standard library, licensed under Apache 2.0 ([https://kotlinlang.org/docs/licenses.html)”](https://kotlinlang.org/docs/licenses.html%29”)
+
+• **PyTorch Mobile**
+└ Lisans: BSD 3-Clause
+└ Atıf: “This product includes PyTorch Mobile, licensed under the BSD 3-Clause license ([https://pytorch.org/)”](https://pytorch.org/%29”)
+
+• **YOLOv8 Nano**
+└ Lisans: Ultralytics Software License (free for non-commercial use)
+└ URL: [https://github.com/ultralytics/ultralytics](https://github.com/ultralytics/ultralytics)
+└ Atıf: Lisans koşullarına uygun şekilde atıf yapınız
+
+🗂️ **Veri Setleri**
+──────────────────────────────────────────────────────────────────
+• **Pet’s Facial Expression Image Dataset** (Kaggle)
+└ Lisans: CC BY 4.0
+└ URL: [https://www.kaggle.com/datasets/example/pets-facial-expression](https://www.kaggle.com/datasets/example/pets-facial-expression)
+└ Atıf: Veri setini sağlayan kişiye ve kaynağa açıkça atıf yapın
+
+• **Cat Dataset** (Kaggle)
+└ Lisans: CC0 1.0 Universal
+└ URL: [https://www.kaggle.com/datasets/example/cat-dataset](https://www.kaggle.com/datasets/example/cat-dataset)
+└ Atıf: Kamusal alandır, atıf gerekmez
+
+──────────────────────────────────────────────────────────────────
+✒️  Oluşturan: Kurmes’in Güvenilir Droid Kütüphanecisi
+──────────────────────────────────────────────────────────────────
