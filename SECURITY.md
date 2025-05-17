@@ -43,4 +43,4 @@ Include the following information in your report:
 
 ## Contact
 
-Maintained by **Ahmet Emre**. For any questions regarding this policy, email **[security@ametemre.dev](mailto:ametemre@gmail.com)**.
+Maintained by **Ahmet Emre**. For any questions regarding this policy, email **[ametemre@gmail.com](mailto:ametemre@gmail.com)**.
