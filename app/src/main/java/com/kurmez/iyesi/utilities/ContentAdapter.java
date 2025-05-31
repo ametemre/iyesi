@@ -1,4 +1,4 @@
-package com.kurmez.iyesi;
+package com.kurmez.iyesi.utilities;
 
 import android.content.Context;
 import android.database.DataSetObserver;
@@ -13,6 +13,8 @@ import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.bumptech.glide.Glide;
+import com.kurmez.iyesi.social.Content;
+import com.kurmez.iyesi.R;
 
 import java.util.List;
 

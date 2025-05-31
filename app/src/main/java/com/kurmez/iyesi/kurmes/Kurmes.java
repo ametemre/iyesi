@@ -1,12 +1,10 @@
 package com.kurmez.iyesi.kurmes;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.google.firebase.auth.FirebaseAuth;
-import com.google.firebase.storage.FirebaseStorage;
-import com.google.firebase.storage.StorageReference;
-import com.kurmez.iyesi.Founded;
+import com.kurmez.iyesi.sahiplendirme.Founded;
 import com.kurmez.iyesi.Login;
 import com.kurmez.iyesi.R;
-import com.kurmez.iyesi.Welcome;
+import com.kurmez.iyesi.sahiplendirme.Welcome;
 import com.kurmez.iyesi.kurmes.helper.SoundClassifier;
 import com.kurmez.iyesi.kurmes.helper.TFLiteModelInspector;
 import android.graphics.Bitmap;
@@ -25,10 +23,7 @@ import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.res.ColorStateList;
 import android.content.res.Resources;
-import android.graphics.Bitmap;
 import android.graphics.Color;
-import android.graphics.ColorMatrix;
-import android.graphics.ColorMatrixColorFilter;
 import android.graphics.PorterDuff;
 import android.graphics.drawable.Drawable;
 import android.media.MediaRecorder;
@@ -47,28 +42,20 @@ import android.view.animation.AlphaAnimation;
 import android.view.animation.Animation;
 import android.view.animation.DecelerateInterpolator;
 import android.view.animation.ScaleAnimation;
-import android.widget.Button;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import androidx.annotation.Nullable;
-import androidx.camera.core.ImageProxy;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 
 import org.opencv.android.CameraActivity;
 import org.opencv.android.CameraBridgeViewBase;
-import org.opencv.android.CameraBridgeViewBase.CvCameraViewFrame;
 import org.opencv.android.CameraBridgeViewBase.CvCameraViewListener2;
-import org.opencv.android.JavaCamera2View;
 import org.opencv.android.OpenCVLoader;
 import org.opencv.core.Mat;
 import org.opencv.core.MatOfRect;
-import org.opencv.core.Scalar;
-import org.opencv.core.Size;
-import org.opencv.imgproc.Imgproc;
 import org.opencv.objdetect.CascadeClassifier;
 import org.tensorflow.lite.Interpreter;
 import org.tensorflow.lite.support.label.Category;
@@ -76,43 +63,24 @@ import org.tensorflow.lite.support.label.Category;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
 import java.util.ArrayList;
-import android.graphics.Bitmap;
-import android.util.Log;
-import androidx.annotation.Nullable;
-import android.os.Bundle;
-import android.util.Log;
 
-import androidx.annotation.Nullable;
-
-import org.opencv.android.CameraActivity;
-import org.opencv.android.JavaCameraView;
-import org.opencv.core.Mat;
-import org.opencv.android.CameraBridgeViewBase.CvCameraViewListener2;
-
-import java.io.IOException;
-import java.util.ArrayList;
 import java.util.List;
-import org.opencv.android.Utils;
-import org.opencv.core.Mat;
-import org.opencv.core.Size;
-import org.opencv.imgproc.Imgproc;
 
-import java.util.ArrayList;
-import java.util.List;import java.util.Collections;
+import java.util.Collections;
 import java.util.HashMap;
-import java.util.List;
+
 import com.kurmez.iyesi.kurmes.Ai.Ai;
+import com.kurmez.iyesi.utilities.MiniFabs;
+
 public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
     private static final String TAG = "Kurmes";
-
+    private MiniFabs miniFabs;   // saha değişkeni
     private CameraBridgeViewBase mOpenCvCameraView;
     private Mat rgb, gray;
 
@@ -177,7 +145,7 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
     private final int LONG_PRESS_THRESHOLD = 2000; // 2 seconds
     private final int DRAG_THRESHOLD = 20; // Minimum movement to consider a drag
     //-------------------------------------------------------------------------------------------Fab
-    private FloatingActionButton[] miniFabs = new FloatingActionButton[9];
+    //private FloatingActionButton[] miniFabs = new FloatingActionButton[9];
     private boolean isFabExpanded = false;
     private float[][] fabPositions = new float[9][2]; // Stores positions of sub FABs
     private float mainFabX, mainFabY; // Stores main FAB's position
@@ -189,10 +157,11 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
     @SuppressLint("ClickableViewAccessibility")
     @Override
     protected void onCreate(Bundle savedInstanceState) {
-        Log.i(TAG, "called kurmes onCreate");
+        Log.i(TAG, "called Kurmes onCreate");
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_kurmes);
 
+        // Firebase Auth
         mAuth = FirebaseAuth.getInstance();
 
         // OpenCV camera initialization
@@ -210,82 +179,74 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
         } catch (IOException e) {
             Log.e(TAG, "Failed to load TFLite models", e);
         }
-/*
-        soundClassifier = new SoundClassifier(this, labelText, new SoundClassifier.OnClassificationResultListener() {
-            @Override
-            public void onResult(String result) {
-                labelText.setText(result);  // This can be removed since we're updating directly
-            }
-        },this);
-*/
-        int availableProcessors = Runtime.getRuntime().availableProcessors();
-        Log.d("AvailableProcessors", "Number of available threads: " + availableProcessors);
 
-
-
+        // Keep screen on
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 
-        labelText = findViewById(R.id.label_text);
+        // UI elements
+        labelText        = findViewById(R.id.label_text);
         cameraStatusText = findViewById(R.id.camera_status_text);
+        fabDraggable     = findViewById(R.id.fab_main);
+        fabSound         = findViewById(R.id.fab_Sound);
+        rootLayout       = findViewById(android.R.id.content);
 
-        fabDraggable = findViewById(R.id.fab_main);
-        miniFabs[0] = findViewById(R.id.fab_1);
-        miniFabs[1] = findViewById(R.id.fab_2);
-        miniFabs[2] = findViewById(R.id.fab_3);
-        miniFabs[3] = findViewById(R.id.fab_4);
-        miniFabs[4] = findViewById(R.id.fab_5);
-        miniFabs[5] = findViewById(R.id.fab_6);
-        miniFabs[6] = findViewById(R.id.fab_7);
-        miniFabs[7] = findViewById(R.id.fab_8);
-        miniFabs[8] = findViewById(R.id.fab_9);
+        // Instantiate MiniFabs helper and keep as field
+        int[] miniFabIds = {
+                R.id.fab_1, R.id.fab_2, R.id.fab_3,
+                R.id.fab_4, R.id.fab_5, R.id.fab_6,
+                R.id.fab_7, R.id.fab_8, R.id.fab_9
+        };
+        miniFabs = new MiniFabs(
+                this,
+                fabDraggable,
+                fabSound,
+                miniFabIds
+        );
 
-        rootLayout = findViewById(android.R.id.content);
+        // Apply initial teal/default colors
+        miniFabs.applyDefaultColors();
 
-        initializeFabs();
-        setupDraggableFAB();
+        // Collapse on outside touch (camera view or root)
+        View.OnTouchListener outsideListener = (v, ev) -> {
+            return miniFabs.handleOutsideTouch(ev);
+        };
+        mOpenCvCameraView.setOnTouchListener(outsideListener);
+        rootLayout.setOnTouchListener(outsideListener);
+
+        // Set up draggable & expand/collapse behavior
+        setupDraggableFAB(miniFabs);
+
+        // Wire each miniFAB to call selectFab() + your onFabClick logic
+        for (FloatingActionButton fab : miniFabs.getFabs()) {
+            fab.setOnClickListener(v -> {
+                // Highlight selection
+                miniFabs.selectFab((FloatingActionButton)v);
+                // Your existing FAB-action logic:
+                onFabClick(v, (FloatingActionButton)v);
+            });
+        }
+
+        // Sound FAB click (if needed)
+        fabSound.setOnClickListener(v -> {
+            miniFabs.collapse();
+            // ... your existing recording start/stop ...
+        });
+
+        // Permissions
         requestAudioPermissions();
         requestStoragePermission();
         checkAudioPermission();
         checkAndRequestPermissions();
-
-        for (FloatingActionButton subFab : miniFabs) {
-            subFab.setOnTouchListener(new View.OnTouchListener() {
-                @Override
-                public boolean onTouch(View v, MotionEvent event) {
-                    if (event.getAction() == MotionEvent.ACTION_DOWN) {
-                        onFabClick(v,subFab);
-                        return true;
-                    }else if (event.getAction() == MotionEvent.ACTION_UP) {
-                        // Handle the touch up event
-                        // collapseFabMenu();
-                        Log.d("Touch", "User lifted their finger off the screen");
-                    }
-                    return false;
-                }
-            });
-        }
-        fabSound = findViewById(R.id.fab_Sound);
-        fabSound.setOnClickListener(v -> {
-            //resetAppState(soundClassifier);
-            collapseFabMenu();
-            //cameraState(false);
-            if (!isRecording){
-                SetLabelText("Loaded !");
-                //startRecording(v);
-                isRecording = true;
-                //loadTFLiteModel(null);
-            }
-            else {stopRecording(v);
-                SetLabelText("NotLoaded !");}
-        });
     }
+
+/*
     private void initializeFabs() {
         for (FloatingActionButton subFab : miniFabs) {
             subFab.setBackgroundTintList(ColorStateList.valueOf(Color.parseColor("#FF40C4FF"))); // Set all FABs to Teal initially
             resetIconColor(subFab); // Reset icon colors
             subFab.setOnClickListener(v -> onFabClick(v,(FloatingActionButton) v)); // Attach click listener
         }
-    }
+    }*/
     public Action onFabClick(View view ,FloatingActionButton clickedFab) {
         if (selectedFab == clickedFab) {
             // If clicking the same FAB, deselect it and set it back to Teal
@@ -578,18 +539,35 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
     }
     @Override
     protected void onDestroy() {
-        // release TFLite resources
-        aiKedi.close();
-        aiKopek.close();
-        aiKurt.close();
-        aiKarga.close();
-        if (mOpenCvCameraView != null) mOpenCvCameraView.disableView();
-        if (mOpenCvCameraView != null) {
-            cameraState(false);
-            updateCameraStatus("Camera View Destroyed.");
+        // TFLite ve OpenCV kaynaklarını güvenle kapat
+        if (aiKedi != null) {
+            aiKedi.close();
+            aiKedi = null;
         }
+
+        if (aiKopek != null) {
+            aiKopek.close();
+            aiKopek = null;
+        }
+
+        if (aiKurt != null) {
+            aiKurt.close();
+            aiKurt = null;
+        }
+
+        if (aiKarga != null) {
+            aiKarga.close();
+            aiKarga = null;
+        }
+
+        if (mOpenCvCameraView != null) {
+            mOpenCvCameraView.disableView();
+            mOpenCvCameraView = null;
+        }
+
         super.onDestroy();
     }
+
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
         super.onCreateOptionsMenu(menu);
@@ -614,18 +592,21 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
             item.setChecked(true);
             return true;
         }
+
         else if (item.getItemId() == R.id.undistortion) {
             mOnCameraFrameRender =
                     new OnCameraFrameRender(new UndistortionFrameRender(mCalibrator));
             item.setChecked(true);
             return true;
         }
+
         else if (item.getItemId() == R.id.comparison) {
             mOnCameraFrameRender =
                     new OnCameraFrameRender(new ComparisonFrameRender(mCalibrator, mWidth, mHeight, getResources()));
             item.setChecked(true);
             return true;
         }
+
         else if (item.getItemId() == R.id.calibrate) {
             final Resources res = getResources();
             if (mCalibrator.getCornersBufferSize() < 2) {
@@ -676,6 +657,15 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
             return super.onOptionsItemSelected(item);
         }
     }
+    @Override
+    public boolean dispatchTouchEvent(MotionEvent ev) {
+        // Eğer miniFabs boş değil ve dokunmayı işlediyse, burada false yerine true dönün:
+        if (miniFabs != null && miniFabs.handleOutsideTouch(ev)) {
+            return true;   // Event burada tüketildi
+        }
+        // Aksi takdirde normal akışı devam ettir
+        return super.dispatchTouchEvent(ev);
+    }
     /*    @Override
         public boolean dispatchTouchEvent(MotionEvent event) {
             switch (event.getAction()) {
@@ -693,7 +683,7 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
                     break;
             }
             return super.dispatchTouchEvent(event); // Allow other views to handle the touch
-        }*/                                      //done collapses the fab menu anywhere on screen touch but overrides the other click events.
+        }*/                                                                                         //done collapses the fab menu anywhere on screen touch but overrides the other click events.
     /*    @Override
         protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
             super.onActivityResult(requestCode, resultCode, data);
@@ -745,70 +735,73 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
         });
     }//Essential For Camera
     @SuppressLint("ClickableViewAccessibility")
-    private void setupDraggableFAB() {
+    private void setupDraggableFAB(MiniFabs miniFabs) {
         fabDraggable.setOnTouchListener((v, event) -> {
             switch (event.getActionMasked()) {
                 case MotionEvent.ACTION_DOWN:
-                    SetLabelText("Ready !");
+                    // Başlangıç pozisyonlarını ve zaman damgasını ayarla
                     dX = v.getX() - event.getRawX();
                     dY = v.getY() - event.getRawY();
+                    mainFabX = v.getX();
+                    mainFabY = v.getY();
                     isDragging = false;
-                    isLongPressTriggered = false;
                     pressStartTime = System.currentTimeMillis();
+                    // VelocityTracker hazırla
                     if (velocityTracker == null) {
                         velocityTracker = VelocityTracker.obtain();
                     } else {
                         velocityTracker.clear();
                     }
                     velocityTracker.addMovement(event);
+                    SetLabelText("Ready !");
                     return true;
 
                 case MotionEvent.ACTION_MOVE:
-                    float moveX = event.getRawX() + dX;
-                    float moveY = event.getRawY() + dY;
-                    if (Math.abs(moveX - v.getX()) > DRAG_THRESHOLD || Math.abs(moveY - v.getY()) > DRAG_THRESHOLD) {
-                        isDragging = true;
-                    }
-                    velocityTracker.addMovement(event);
-                    velocityTracker.computeCurrentVelocity(1000); // Calculate speed in pixels per second
+                    // Yeni pozisyonu hesapla
                     float newX = event.getRawX() + dX;
                     float newY = event.getRawY() + dY;
+                    // Sürükleme eşiğini kontrol et
+                    if (Math.abs(newX - v.getX()) > DRAG_THRESHOLD ||
+                            Math.abs(newY - v.getY()) > DRAG_THRESHOLD) {
+                        isDragging = true;
+                    }
+                    // Hız takibi
+                    velocityTracker.addMovement(event);
+                    velocityTracker.computeCurrentVelocity(1000);
+                    // FAB ve miniFAB’ları taşı
                     v.setX(newX);
                     v.setY(newY);
-
-                    moveMiniFabs(newX - mainFabX, newY - mainFabY);
-
+                    miniFabs.move(newX - mainFabX, newY - mainFabY);
                     mainFabX = newX;
                     mainFabY = newY;
-
-                    v.animate().x(moveX).y(moveY).setDuration(0).start();
                     return true;
+
                 case MotionEvent.ACTION_UP:
                     velocityTracker.addMovement(event);
                     velocityTracker.computeCurrentVelocity(1000);
                     if (!isDragging) {
-                        if ((System.currentTimeMillis() - pressStartTime) < LONG_PRESS_THRESHOLD) {
-                            if (mAuth.getCurrentUser() != null) {
-                                toggleFabMenu();
-                            } else {
-                                //capturePhoto(rgb);
-                                currentState = State.CAPTURE;
-                            }
+                        long pressDuration = System.currentTimeMillis() - pressStartTime;
+                        if (pressDuration < LONG_PRESS_THRESHOLD) {
+                            // Kısa tıklama: miniFAB menüsünü toggle et
+                            miniFabs.toggle();
                         } else {
+                            // Uzun basış
                             handleLongClick();
                         }
                     } else {
-                        // Apply momentum-based gravity effect
-                        float velocityY = velocityTracker.getYVelocity();
-                        float velocityX = velocityTracker.getXVelocity();
-                        animateMomentumGravity(v, velocityX, velocityY);
+                        // Sürükleme sonrası momentumlu animasyon
+                        float vx = velocityTracker.getXVelocity();
+                        float vy = velocityTracker.getYVelocity();
+                        animateMomentumGravity(v, vx, vy);
                     }
                     return true;
+
                 default:
                     return false;
             }
         });
     }
+
     private void handleLongClick() {
         animateButtonPress();
         if (mAuth.getCurrentUser() != null) {
@@ -943,81 +936,7 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
             fab.setOnClickListener(v -> downloadAndLoadModel(modelUrl));
             rootLayout.addView(fab);
         }*/                           //----------------------------------------------------------------createFab Button
-    private void toggleFabMenu() {
-        if (mOpenCvCameraView.isEnabled()){
-            cameraState(false);
-        }
 
-        if (isFabExpanded) {
-            collapseFabMenu();
-        } else {
-            expandFabMenu();
-        }
-        isFabExpanded = !isFabExpanded;
-    }                                                              //done          0
-    private void expandFabMenu() {
-        float radius = 800; // Distance from center FAB
-        for (int i = 0; i < miniFabs.length; i++) {
-            float angle = (float) (i * (2 * Math.PI / miniFabs.length)/3);
-            float x = (float) (radius * Math.cos(angle));
-            float y = (float) (radius * Math.sin(angle));
-            if (x<0){
-
-            }
-            if (y<0){
-
-            }
-
-            fabPositions[i][0] = x;
-            fabPositions[i][1] = y;
-
-            miniFabs[i].setVisibility(View.VISIBLE);
-            fabSound.setVisibility(View.VISIBLE);
-            fabDraggable.setVisibility(View.GONE);
-            AnimatorSet animSet = new AnimatorSet();
-            animSet.playTogether(
-                    ObjectAnimator.ofFloat(miniFabs[i], "x", mainFabX, x),
-                    ObjectAnimator.ofFloat(miniFabs[i], "y", mainFabY, y),
-                    ObjectAnimator.ofFloat(miniFabs[i], "alpha", 0f, 1f)
-            );
-            animSet.setInterpolator(new DecelerateInterpolator());
-            animSet.setDuration(800);
-            animSet.start();
-        }
-    }                                                              //done           0
-    private void collapseFabMenu() {
-        for (FloatingActionButton fab : miniFabs) {
-            int i = 0;
-            AnimatorSet animSet = new AnimatorSet();
-            animSet.playTogether(
-                    ObjectAnimator.ofFloat(miniFabs[i], "x", miniFabs[i].getX(), mainFabX),
-                    ObjectAnimator.ofFloat(miniFabs[i], "y", miniFabs[i].getY(), mainFabY),
-                    ObjectAnimator.ofFloat(miniFabs[i], "alpha", 1f, 0f)
-            );
-            animSet.setInterpolator(new DecelerateInterpolator());
-            animSet.setDuration(1200);
-            animSet.start();
-
-            fab.setVisibility(View.GONE);
-            fabSound.setVisibility(View.GONE);
-            fabDraggable.setVisibility(View.VISIBLE);
-
-
-            final int index = i;
-            animSet.addListener(new android.animation.AnimatorListenerAdapter() {
-                @Override
-                public void onAnimationEnd(android.animation.Animator animation) {
-                    miniFabs[index].setVisibility(View.GONE);
-                }
-            });
-        }
-    }                                                            //done         0
-    private void moveMiniFabs(float deltaX, float deltaY) {
-        for (int i = 0; i < miniFabs.length; i++) {
-            miniFabs[i].setX(fabPositions[i][0] + deltaX);
-            miniFabs[i].setY(fabPositions[i][1] + deltaY);
-        }
-    }                                     //done     0
     /*
     private void loadDetector(Mat gray,MatOfRect rects){
         cascadeClassifier.detectMultiScale(gray,rects,1.1,2);
@@ -1127,6 +1046,10 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
         Log.d("Action", "Action One Executed!");
     }
     private void actionTwo() {
+        if (soundClassifier == null) {
+            Log.w(TAG, "SoundClassifier is null—skipping model inspection");
+            return;
+        }
         SetLabelText("denedik");
         TFLiteModelInspection(soundClassifier.printModelDetails(0));
         DogSpeciesRecognition();
@@ -1227,13 +1150,13 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
             soundClassifier.onStop();  // Assuming your classifier has a stop() method
             Log.d("Reset", "Sound classifier stopped.");
         }
-
+/*
         // Reset all FABs to default state
         for (FloatingActionButton subFab : miniFabs) {
             subFab.setBackgroundTintList(ColorStateList.valueOf(Color.parseColor("#008080"))); // Teal
             resetIconColor(subFab);
         }
-
+*/
         // Reset selected FAB tracker
         selectedFab = null;
 
@@ -1295,6 +1218,10 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
         return input;
     }
     private void handleSpecies(Mat frame, Ai ai) {
+        if (ai == null) {
+            Log.w(TAG, "AI model is null—skipping inference for state " + currentState);
+            return;
+        }
         // video inference
         float[][][][] imgTensor = preprocessImage(frame);
         ai.predictVideo(imgTensor, videoOut -> {

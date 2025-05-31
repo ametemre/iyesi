@@ -1,4 +1,5 @@
-package com.kurmez.iyesi;
+//CompanionAdapter.java
+package com.kurmez.iyesi.utilities;
 
 import android.content.Context;
 import android.view.LayoutInflater;
@@ -9,6 +10,8 @@ import android.widget.ImageView;
 import android.widget.TextView;
 
 import com.bumptech.glide.Glide;
+import com.kurmez.iyesi.sahiplendirme.PetCompanion;
+import com.kurmez.iyesi.R;
 
 import java.util.List;
 public class CompanionAdapter extends ArrayAdapter<PetCompanion> {

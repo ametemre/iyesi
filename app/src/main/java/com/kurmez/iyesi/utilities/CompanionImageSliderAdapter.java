@@ -1,7 +1,6 @@
-package com.kurmez.iyesi;
+package com.kurmez.iyesi.utilities;
 
 import android.content.Context;
-import android.graphics.Bitmap;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -11,6 +10,7 @@ import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.bumptech.glide.Glide;
+import com.kurmez.iyesi.R;
 
 import java.util.List;
 

@@ -1,4 +1,4 @@
-package com.kurmez.iyesi;
+package com.kurmez.iyesi.sahiplendirme;
 
 public class MissingPet {
     private String petName;

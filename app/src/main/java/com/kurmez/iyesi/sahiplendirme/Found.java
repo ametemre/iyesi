@@ -1,4 +1,4 @@
-package com.kurmez.iyesi;
+package com.kurmez.iyesi.sahiplendirme;
 
 import android.content.Intent;
 import android.graphics.Bitmap;
@@ -6,9 +6,10 @@ import android.os.Bundle;
 import android.provider.MediaStore;
 import android.widget.Toast;
 
-import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
+
+import com.kurmez.iyesi.R;
 
 import java.util.ArrayList;
 import java.util.List;

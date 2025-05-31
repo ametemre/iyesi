@@ -1,4 +1,4 @@
-package com.kurmez.iyesi;
+package com.kurmez.iyesi.sahiplendirme;
 
 import android.Manifest;
 import android.annotation.SuppressLint;
@@ -17,7 +17,6 @@ import android.util.Log;
 import android.view.View;
 import android.widget.EditText;
 import android.widget.ImageView;
-import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
@@ -33,13 +32,12 @@ import com.google.mlkit.vision.label.ImageLabel;
 import com.google.mlkit.vision.label.ImageLabeler;
 import com.google.mlkit.vision.label.ImageLabeling;
 import com.google.mlkit.vision.label.defaults.ImageLabelerOptions;
-import com.kurmez.iyesi.kurmes.Kurmes;
-import com.kurmez.iyesi.kurmes.Kurmes.*;
+import com.kurmez.iyesi.utilities.ImageSliderAdapter;
+import com.kurmez.iyesi.R;
 
 import java.io.File;
 import java.io.IOException;
 import java.text.SimpleDateFormat;
-import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 
@@ -107,7 +105,7 @@ public class Founded extends AppCompatActivity {
             String photoUrl = uploadPhotoAndGetUrl(firstPhoto);
 
             if (photoUrl != null) {
-                Intent intent = new Intent(Founded.this, Companion.class);
+                Intent intent = new Intent(Founded.this, com.kurmez.iyesi.sahiplendirme.Companion.class);
                 intent.putExtra("species", species);
                 intent.putExtra("foundDate", foundDate);
                 intent.putExtra("foundPlace", foundPlace);

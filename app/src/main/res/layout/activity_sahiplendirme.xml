@@ -1,0 +1,157 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.cardview.widget.CardView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/companion"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:layout_margin="25dp"
+    app:cardCornerRadius="40dp"
+    tools:context=".Login">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:weightSum="10"
+        android:layout_gravity="center">
+
+        <androidx.viewpager2.widget.ViewPager2
+            android:id="@+id/companion_image"
+            android:clickable="true"
+            android:layout_width="match_parent"
+            android:layout_height="200dp"
+            android:layout_gravity="center"
+            android:layout_weight="1"
+            android:contentDescription="pres or pres and hold"
+            android:scaleX="0.5"
+            android:scaleY="0.5"
+            android:src="@drawable/holder"
+            tools:ignore="HardcodedText" />
+
+        <ImageView
+            android:id="@+id/soul_text"
+            android:clickable="true"
+            android:layout_width="250dp"
+            android:layout_height="140dp"
+            android:layout_gravity="center"
+            android:layout_weight="2"
+            android:contentDescription="pres or pres and hold"
+            android:src="@drawable/soul"
+            tools:ignore="HardcodedText" />
+
+        <LinearLayout
+            android:layout_marginTop="50dp"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_weight="8"
+            android:orientation="vertical">
+
+            <EditText
+                android:id="@+id/soul_companion"
+                android:layout_width="match_parent"
+                android:layout_height="24dp"
+                android:layout_marginTop="5dp"
+                android:layout_marginLeft="50dp"
+                android:layout_marginRight="50dp"
+                android:hint="Companion"
+                android:padding="4dp"
+                android:selectAllOnFocus="true"
+                android:focusableInTouchMode="true"
+                android:singleLine="true" />
+
+            <EditText
+                android:id="@+id/species"
+                android:layout_width="match_parent"
+                android:layout_height="24dp"
+                android:layout_marginTop="5dp"
+                android:layout_marginLeft="50dp"
+                android:layout_marginRight="50dp"
+                android:hint="Species"
+                android:padding="4dp"
+                android:selectAllOnFocus="true"
+                android:focusableInTouchMode="true"
+                android:singleLine="true" />
+
+            <EditText
+                android:id="@+id/breed"
+                android:layout_width="match_parent"
+                android:layout_height="24dp"
+                android:layout_marginTop="5dp"
+                android:layout_marginLeft="50dp"
+                android:layout_marginRight="50dp"
+                android:hint="Breed"
+                android:padding="4dp"
+                android:selectAllOnFocus="true"
+                android:focusableInTouchMode="true"
+                android:singleLine="true" />
+
+            <EditText
+                android:id="@+id/age"
+                android:layout_width="match_parent"
+                android:layout_height="24dp"
+                android:layout_marginTop="5dp"
+                android:layout_marginLeft="50dp"
+                android:layout_marginRight="50dp"
+                android:hint="Age"
+                android:padding="4dp"
+                android:selectAllOnFocus="true"
+                android:focusableInTouchMode="true"
+                android:singleLine="true" />
+
+            <EditText
+                android:id="@+id/health"
+                android:layout_width="match_parent"
+                android:layout_height="24dp"
+                android:layout_marginTop="5dp"
+                android:layout_marginLeft="50dp"
+                android:layout_marginRight="50dp"
+                android:hint="Health"
+                android:padding="4dp"
+                android:selectAllOnFocus="true"
+                android:focusableInTouchMode="true"
+                android:singleLine="true" />
+
+            <EditText
+                android:id="@+id/found_Date"
+                android:layout_width="match_parent"
+                android:layout_height="24dp"
+                android:layout_marginTop="5dp"
+                android:layout_marginLeft="50dp"
+                android:layout_marginRight="50dp"
+                android:hint="Found Date"
+                android:padding="4dp"
+                android:selectAllOnFocus="true"
+                android:focusableInTouchMode="true"
+                android:singleLine="true" />
+
+            <EditText
+                android:id="@+id/found_place"
+                android:layout_width="match_parent"
+                android:layout_height="24dp"
+                android:layout_marginTop="5dp"
+                android:layout_marginLeft="50dp"
+                android:layout_marginRight="50dp"
+                android:hint="Found Place"
+                android:padding="4dp"
+                android:selectAllOnFocus="true"
+                android:focusableInTouchMode="true"
+                android:singleLine="true" />
+
+            <EditText
+                android:id="@+id/veterineary_ulgen"
+                android:layout_width="match_parent"
+                android:layout_height="24dp"
+                android:layout_marginTop="5dp"
+                android:layout_marginLeft="50dp"
+                android:layout_marginRight="50dp"
+                android:hint="Veterinary"
+                android:padding="4dp"
+                android:selectAllOnFocus="true"
+                android:focusableInTouchMode="true"
+                android:singleLine="true" />
+
+        </LinearLayout>
+    </LinearLayout>
+</androidx.cardview.widget.CardView>

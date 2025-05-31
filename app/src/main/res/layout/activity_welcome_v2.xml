@@ -6,20 +6,50 @@
     android:id="@+id/welcome"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:layout_marginBottom="25dp"
-    android:layout_marginLeft="25dp"
-    android:layout_marginRight="25dp"
-    android:layout_marginTop="25dp"
+    android:layout_margin="25dp"
     app:cardCornerRadius="40dp"
     tools:context=".Login">
-    <Button
-        android:id="@+id/quit"
-        android:layout_width="30dp"
-        android:layout_height="30dp"
-        android:layout_gravity="right"
-        android:gravity="top"
-        android:clickable="true">
-    </Button>
+
+    <!-- Üst sağ üçlü buton grubu -->
+    <LinearLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_gravity="end|top"
+        android:padding="8dp">
+
+        <!-- Mesaj butonu -->
+        <Button
+            android:id="@+id/message"
+            android:layout_width="15dp"
+            android:layout_height="30dp"
+            android:backgroundTint="?attr/colorAccent"
+            android:clickable="true" />
+
+        <!-- Bildirim butonu -->
+        <Button
+            android:id="@+id/notification"
+            android:layout_width="15dp"
+            android:layout_height="30dp"
+            android:layout_marginStart="4dp"
+            android:backgroundTint="?attr/colorAccent"
+            android:clickable="true" />
+
+        <!-- Quit butonu (diğerlerinden biraz uzakta) -->
+        <View
+            android:layout_width="8dp"
+            android:layout_height="match_parent" />
+
+        <Button
+            android:id="@+id/quit"
+            android:layout_width="30dp"
+            android:layout_height="30dp"
+            android:layout_marginStart="8dp"
+            android:backgroundTint="?attr/colorPrimary"
+            android:clickable="true" />
+
+    </LinearLayout>
+
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="match_parent"
@@ -27,17 +57,19 @@
         android:orientation="vertical"
         android:weightSum="10"
         android:layout_gravity="center">
+
         <ImageView
             android:id="@+id/img_welcome"
             android:layout_weight="2.7"
-            android:layout_width="match_parent"
+            android:layout_width="wrap_content"
             android:layout_height="match_parent"
             android:layout_gravity="center"
             android:contentDescription="pres or pres and hold"
             android:src="@drawable/pati"
             tools:ignore="HardcodedText"
             android:clickable="true"
-            android:focusable="true"/>
+            android:focusable="true" />
+
         <ImageView
             android:id="@+id/welcome_text"
             android:layout_width="match_parent"
@@ -59,12 +91,15 @@
             android:contentDescription="Scroll Header"
             android:src="@drawable/seeking"
             tools:ignore="HardcodedText" />
+
         <ListView
             android:id="@+id/list_view"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:divider="@color/black"
             android:dividerHeight="1dp"
-            android:scrollbarAlwaysDrawHorizontalTrack="true"/>
+            android:scrollbarAlwaysDrawHorizontalTrack="true" />
+
     </LinearLayout>
+
 </androidx.cardview.widget.CardView>

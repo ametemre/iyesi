@@ -5,10 +5,7 @@ import android.media.AudioRecord;
 import android.util.Log;
 import android.view.View;
 import android.widget.TextView;
-import android.widget.Toast;
 
-import com.kurmez.iyesi.R;
-import com.kurmez.iyesi.Welcome;
 import com.kurmez.iyesi.kurmes.Kurmes;
 
 import org.tensorflow.lite.support.audio.TensorAudio;
@@ -17,7 +14,6 @@ import org.tensorflow.lite.task.audio.classifier.AudioClassifier;
 import org.tensorflow.lite.task.audio.classifier.Classifications;
 
 import java.io.IOException;
-import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;

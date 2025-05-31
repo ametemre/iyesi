@@ -1,4 +1,5 @@
-package com.kurmez.iyesi;
+//Content.java
+package com.kurmez.iyesi.social;
 
 import java.io.Serializable;
 

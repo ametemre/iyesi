@@ -1,4 +1,5 @@
-package com.kurmez.iyesi;
+//Explore.java
+package com.kurmez.iyesi.social;
 
 import android.content.Intent;
 import android.os.Bundle;
@@ -9,27 +10,31 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
+import com.kurmez.iyesi.MockData;
+import com.kurmez.iyesi.R;
+import com.kurmez.iyesi.utilities.ContentAdapter;
+
 import java.util.List;
 
-public class ExplorePrivate extends AppCompatActivity {
+public class Explore extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_explore_private);
+        setContentView(R.layout.activity_explore);
 
         // Bind RecyclerView
-        RecyclerView recyclerView = findViewById(R.id.recycler_private_explore);
+        RecyclerView recyclerView = findViewById(R.id.recycler_explore);
         recyclerView.setLayoutManager(new LinearLayoutManager(this));
 
-        // Fetch private content
-        List<Content> privateContent = MockData.getPrivateContent();
-        ContentAdapter adapter = new ContentAdapter(privateContent, this);
+        // Fetch public content
+        List<Content> publicContent = MockData.getPublicContent();
+        ContentAdapter adapter = new ContentAdapter(publicContent, this);
         recyclerView.setAdapter(adapter);
 
         // Profile Header Click
         View profileHeader = findViewById(R.id.profile_header);
         profileHeader.setOnClickListener(v -> {
-            Intent intent = new Intent(ExplorePrivate.this, Profile.class);
+            Intent intent = new Intent(Explore.this, Profile.class);
             startActivity(intent);
         });
 
@@ -39,8 +44,8 @@ public class ExplorePrivate extends AppCompatActivity {
         TextView followers = findViewById(R.id.profile_followers);
 
         // Mock data (replace with real user data)
-        username.setText("Jane Smith");
-        bio.setText("Lover of all animals!");
-        followers.setText("Followers: 120");
+        username.setText("John Doe");
+        bio.setText("Exploring the world with pets!");
+        followers.setText("Followers: 200");
     }
 }

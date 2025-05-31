@@ -1,4 +1,5 @@
-package com.kurmez.iyesi;
+//ImageSliderAdapter.java
+package com.kurmez.iyesi.utilities;
 
 import android.content.Context;
 import android.graphics.Bitmap;
@@ -9,6 +10,8 @@ import android.widget.ImageView;
 
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
+
+import com.kurmez.iyesi.R;
 
 import java.util.List;
 

@@ -1,16 +1,17 @@
-package com.kurmez.iyesi;
+package com.kurmez.iyesi.social;
 
 import android.app.Dialog;
 import android.content.Intent;
 import android.os.Bundle;
 import android.provider.MediaStore;
-import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.TextView;
 
 import androidx.appcompat.app.AppCompatActivity;
+
+import com.kurmez.iyesi.R;
 
 public class Profile extends AppCompatActivity {
 
