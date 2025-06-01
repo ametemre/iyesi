@@ -1,13 +1,14 @@
 package com.kurmez.iyesi.sahiplendirme;
 
-import static android.widget.Toast.LENGTH_SHORT;
+import okhttp3.Request;
+import okhttp3.Response;
 
 import android.content.Context;
-import android.content.Intent;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
-import android.os.Bundle;
 import android.util.Log;
+import android.content.Intent;
+import android.os.Bundle;
 import android.widget.Button;
 import android.widget.ImageButton;
 import android.widget.ImageView;
@@ -19,9 +20,9 @@ import androidx.appcompat.app.AppCompatActivity;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 import com.kurmez.iyesi.Login;
+import com.kurmez.iyesi.MainActivity;
 import com.kurmez.iyesi.R;
-import com.kurmez.iyesi.social.Explore;
-import com.kurmez.iyesi.social.Messaging;
+import com.kurmez.iyesi.social.ExplorePrivate;
 import com.kurmez.iyesi.utilities.CompanionAdapter;
 
 import org.json.JSONArray;
@@ -35,21 +36,25 @@ import java.util.List;
 import okhttp3.Call;
 import okhttp3.Callback;
 import okhttp3.OkHttpClient;
-import okhttp3.Request;
-import okhttp3.Response;
 
-public class Welcome extends AppCompatActivity {
-    private static final String TAG = "WelcomeActivity";
-    private static final String CF_GET_PRIORITY = "https://us-central1-iyesi-a651a.cloudfunctions.net/getPriorityPets";
+/**
+ * Welcome Activity:
+ * - Uygulamanın ana karşılama ekranı.
+ * - “Priority Pets” Cloud Function’dan hayvan listesini çeker.
+ * - Kullanıcı etkileşimlerine (dokunma, buton tıklama) göre veri yeniler.
+ * - Firebase ID Token ile her isteği kimlik doğrulamalı.
+ */
+public class WelcomeDummy extends AppCompatActivity {
+    String gatewayUrl = "https://iyesi-gateway-abc123-uc.a.gateway.dev/getPriorityPets?limit=5";
+    // Çıkış için MainActivity.Quit() metodunu kullanıyoruz.
+    private MainActivity mainActivity = new MainActivity();
 
-    private ImageView imgWelcome;
-    private ImageButton quitButton;
-    private ImageButton messageButton;
-    private ImageButton notificationButton;
+    // Liste görüntülemek için ListView ve adapter
     private ListView listView;
-    private String idToken;
     private CompanionAdapter adapter;
     private final List<PetCompanion> companions = new ArrayList<>();
+
+    // HTTP istekleri için OkHttpClient
     private final OkHttpClient httpClient = new OkHttpClient.Builder()
             .addInterceptor(chain -> {
                 Request req = chain.request();
@@ -61,25 +66,27 @@ public class Welcome extends AppCompatActivity {
             })
             .build();
 
+    // Firebase ID Token (Bearer olarak header'a eklenecek)
+    private String idToken;
+
+    // --- Cloud Function uç noktaları (güncellendi) ---
+    private static final String CF_GET_PRIORITY = "https://us-central1-iyesi-a651a.cloudfunctions.net/getPriorityPets";
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_welcome_v2);
 
-        // UI bileşenlerini bağla
-        imgWelcome = findViewById(R.id.img_welcome);
-        quitButton = findViewById(R.id.quit);
-        messageButton = findViewById(R.id.message);
-        notificationButton = findViewById(R.id.notification);
-        listView = findViewById(R.id.list_view);
+        // UI bileşenleri
+        ImageView imgWelcome    = findViewById(R.id.img_welcome);
+        listView                = findViewById(R.id.list_view);
+        ImageButton quit             = findViewById(R.id.quit);
+        ImageButton messageBtn       = findViewById(R.id.message);
+        ImageButton notificationBtn  = findViewById(R.id.notification);
 
-        // Adapter kurulumu
+        // ListView + adapter kurulumu
         adapter = new CompanionAdapter(this, companions);
         listView.setAdapter(adapter);
-
-        // UI event listener'ları
-        setupUIListeners();
-
 
         // İnternet bağlantısını kontrol et
         ConnectivityManager cm = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
@@ -107,7 +114,7 @@ public class Welcome extends AppCompatActivity {
                             Exception e = task.getException();
                             Log.e("TOKEN_ERROR", "Token alınamadı", e);
                             Toast.makeText(
-                                    Welcome.this,
+                                    WelcomeDummy.this,
                                     "Token alınırken hata oluştu. Lütfen tekrar giriş yapın.",
                                     Toast.LENGTH_LONG
                             ).show();
@@ -118,7 +125,7 @@ public class Welcome extends AppCompatActivity {
                         idToken = task.getResult().getToken();
                         if (idToken == null || idToken.isEmpty()) {
                             Toast.makeText(
-                                    Welcome.this,
+                                    WelcomeDummy.this,
                                     "Token boş geldi! Lütfen tekrar deneyin.",
                                     Toast.LENGTH_SHORT
                             ).show();
@@ -132,7 +139,7 @@ public class Welcome extends AppCompatActivity {
                             Log.e("FETCH_ERROR", "Öncelikli hayvanlar yüklenirken hata", e);
                             runOnUiThread(() ->
                                     Toast.makeText(
-                                            Welcome.this,
+                                            WelcomeDummy.this,
                                             "Veri yüklenirken beklenmedik bir hata oluştu.",
                                             Toast.LENGTH_SHORT
                                     ).show()
@@ -149,41 +156,37 @@ public class Welcome extends AppCompatActivity {
             finish();
             return;
         }
-    }
-    private void setupUIListeners() {
+
+        // Kısa tıklamada private feed ekranına geç
         imgWelcome.setOnClickListener(v -> {
-            startActivity(new Intent(this, Explore.class));
+            startActivity(new Intent(WelcomeDummy.this, ExplorePrivate.class));
+            Toast.makeText(WelcomeDummy.this, "Private Explore açıldı", Toast.LENGTH_SHORT).show();
         });
 
+        // Uzun tıklamada sahiplendirme formuna geç
         imgWelcome.setOnLongClickListener(v -> {
-            // TODO: Sahiplendirme formunu açma
+            startActivity(new Intent(WelcomeDummy.this, Sahiplendirme.class));
+            Toast.makeText(WelcomeDummy.this, "Sahiplendirme formu açıldı", Toast.LENGTH_SHORT).show();
             return true;
         });
 
-        quitButton.setOnClickListener(v -> {
-            FirebaseAuth.getInstance().signOut();
+        // Mesaj gönderme (ilk listedeki hayvana test mesajı)
+        messageBtn.setOnClickListener(v -> {
+            if (companions.isEmpty()) {
+                Toast.makeText(WelcomeDummy.this, "Henüz hayvan listesi boş.", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            PetCompanion first = companions.get(0);
+            //sendMessage(first.getFinderName(), "Merhaba!", 42);
+        });
+
+        // Çıkış butonu: uygulamayı kapat
+        quit.setOnClickListener(v -> {
+            mainActivity.Quit();
             finish();
         });
-        listView.setOnItemClickListener((parent, view, position, id) -> {
-            // Get the selected companion
-            PetCompanion selectedCompanion = companions.get(position);
-            Toast.makeText(this, "Selected: " + selectedCompanion.getBreed(), Toast.LENGTH_SHORT).show();
-
-            // Navigate to Companion activity with the selected item's data
-            Intent intent = new Intent(Welcome.this, Companion.class);
-            intent.putExtra("species", selectedCompanion.getBreed());
-            intent.putExtra("foundDate", selectedCompanion.getFoundDate());
-            intent.putExtra("foundPlace", selectedCompanion.getFoundLocation());
-            intent.putExtra("photoUrl", selectedCompanion.getImageResId());
-            intent.putExtra("profileId", selectedCompanion.getFinderName());
-            startActivity(intent);
-        });
-        // Diğer butonlar için basit işlevler
-        messageButton.setOnClickListener(v ->
-                startActivity(new Intent(this, Messaging.class))
-        );
-        notificationButton.setOnClickListener(v -> showToast("Bildirim özelliği yakında gelecek"));
     }
+
 
     /**
      * getPriorityPets Cloud Function'ına GET isteği yapar.
@@ -191,58 +194,64 @@ public class Welcome extends AppCompatActivity {
      */
     private void fetchPriorityPets() {
         FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
-        if (user == null) {
-            Toast.makeText(this, "Kullanıcı girişi yok", Toast.LENGTH_SHORT).show();
-            return;
-        }
-
+        if (user == null) return;
         user.getIdToken(true).addOnCompleteListener(task -> {
             if (!task.isSuccessful()) {
                 Log.e("TOKEN_REFRESH", "Token refresh failed", task.getException());
-                Toast.makeText(Welcome.this, "Token alınamadı", Toast.LENGTH_SHORT).show();
                 return;
             }
 
-            String idToken = task.getResult().getToken();
-            if (idToken == null || idToken.isEmpty()) {
-                Toast.makeText(Welcome.this, "Token boş", Toast.LENGTH_SHORT).show();
-                return;
-            }
+            idToken = task.getResult().getToken();
+            if (idToken == null || idToken.isEmpty()) return;
 
+            // İsteği yeni token ile gönder
             Request request = new Request.Builder()
                     .url(CF_GET_PRIORITY)
                     .addHeader("Authorization", "Bearer " + idToken)
                     .build();
 
-            httpClient.newCall(request).enqueue(new Callback() {
-                @Override
-                public void onFailure(Call call, IOException e) {
-                    Log.e("HTTP-ERROR", "İstek başarısız: " + e.getMessage());
-                    runOnUiThread(() -> Toast.makeText(
-                            Welcome.this,
-                            "Sunucuya bağlanılamadı",
-                            Toast.LENGTH_SHORT
-                    ).show());
-                }
+            // Mevcut HTTP istek kodunuz...
+        });
 
-                @Override
-                public void onResponse(Call call, Response response) throws IOException {
-                    String body = response.body().string();
-                    Log.d("HTTP-RESPONSE", "Response: " + body);
+        if (idToken == null || idToken.isEmpty()) return;
 
-                    runOnUiThread(() -> {
-                        if (!response.isSuccessful()) {
-                            Toast.makeText(
-                                    Welcome.this,
-                                    "Sunucu hatası: " + response.code(),
-                                    Toast.LENGTH_SHORT
-                            ).show();
-                            return;
-                        }
+        Request request = new Request.Builder()
+                .url(CF_GET_PRIORITY)
+                .addHeader("Authorization", "Bearer " + idToken)
+                .build();
+
+        httpClient.newCall(request).enqueue(new Callback() {
+            @Override
+            public void onFailure(Call call, IOException e) {
+                Log.d("HTTP-RESP", "Failure: " + e.getMessage());
+                runOnUiThread(() ->
+                        Toast.makeText(
+                                WelcomeDummy.this,
+                                "Öncelikli hayvanlar yüklenemedi",
+                                Toast.LENGTH_SHORT
+                        ).show()
+                );
+            }
+
+            @Override
+            public void onResponse(Call call, Response response) throws IOException {
+                String body = response.body().string();
+                Log.d("HTTP-RESP", "Code: " + response.code() + ", Body: " + body);
+
+                runOnUiThread(() -> {
+                    if (response.isSuccessful()) {
                         parsePriorityPets(body);
-                    });
-                }
-            });
+                    } else {
+                        try {
+                            JSONObject errorJson = new JSONObject(body);
+                            String errorMsg = errorJson.optString("details", "Unknown error");
+                            Toast.makeText(WelcomeDummy.this, "Error: " + errorMsg, Toast.LENGTH_LONG).show();
+                        } catch (JSONException e) {
+                            Toast.makeText(WelcomeDummy.this, "Error: " + body, Toast.LENGTH_LONG).show();
+                        }
+                    }
+                });
+            }
         });
     }
 
@@ -288,8 +297,5 @@ public class Welcome extends AppCompatActivity {
         } catch (Exception e) {
             e.printStackTrace();
         }
-    }
-    private void showToast(String message){
-            Toast.makeText(Welcome.this,message,LENGTH_SHORT).show();
     }
 }

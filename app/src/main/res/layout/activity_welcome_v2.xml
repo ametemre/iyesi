@@ -19,20 +19,22 @@
         android:padding="8dp">
 
         <!-- Mesaj butonu -->
-        <Button
+        <ImageButton
             android:id="@+id/message"
-            android:layout_width="15dp"
+            android:src="@drawable/mesaj"
+            android:scaleType="centerCrop"
+            android:layout_width="30dp"
             android:layout_height="30dp"
-            android:backgroundTint="?attr/colorAccent"
             android:clickable="true" />
 
         <!-- Bildirim butonu -->
-        <Button
+        <ImageButton
             android:id="@+id/notification"
-            android:layout_width="15dp"
+            android:src="@drawable/notification"
+            android:scaleType="centerCrop"
+            android:layout_width="30dp"
             android:layout_height="30dp"
             android:layout_marginStart="4dp"
-            android:backgroundTint="?attr/colorAccent"
             android:clickable="true" />
 
         <!-- Quit butonu (diğerlerinden biraz uzakta) -->
@@ -40,12 +42,13 @@
             android:layout_width="8dp"
             android:layout_height="match_parent" />
 
-        <Button
+        <ImageButton
             android:id="@+id/quit"
+            android:src="@drawable/quit"
+            android:scaleType="centerCrop"
             android:layout_width="30dp"
             android:layout_height="30dp"
             android:layout_marginStart="8dp"
-            android:backgroundTint="?attr/colorPrimary"
             android:clickable="true" />
 
     </LinearLayout>
