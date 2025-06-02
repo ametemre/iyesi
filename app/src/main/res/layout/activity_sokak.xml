@@ -1,0 +1,310 @@
+<!-- res/layout/activity_sokak.xml -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/container"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    tools:context=".sokak.SokakActivity">
+  <!-- 1) En tepede indikatör olacak -->
+  <ProgressBar
+      android:id="@+id/progress_bar"
+      style="?android:attr/progressBarStyleHorizontal"
+      android:layout_width="match_parent"
+      android:layout_height="14dp"
+      android:layout_gravity="top"
+      android:layout_marginTop="36dp"
+      android:indeterminate="false"
+      android:max="100"
+      android:visibility="gone"
+      android:progress="0"
+      android:progressTint="@color/blue_translucent"/>
+  <!-- Sağ üst köşede Spinner (dropdown) -->
+  <fragment
+      android:id="@+id/map"
+      android:name="com.google.android.gms.maps.SupportMapFragment"
+      android:layout_width="match_parent"
+      android:layout_height="match_parent" />
+  <!-- …setContentView(R.layout.activity_sokak) içinde yer alan container’a ekleyin… -->
+
+  <LinearLayout
+      android:id="@+id/spinner_container"
+      android:layout_width="wrap_content"
+      android:layout_height="wrap_content"
+      android:layout_gravity="top|end"
+      android:weightSum="5"
+      android:layout_marginTop="36dp"
+      android:orientation="vertical"
+      android:padding="8dp">
+
+    <!-- 1. Satır: Mevcut “Level” Spinner (ADM seviyeleri) -->
+    <LinearLayout
+        android:id="@+id/row_spinner_1"
+        android:layout_width="match_parent"
+        android:layout_height="16dp"
+        android:visibility="visible"
+        android:orientation="horizontal"
+        android:layout_weight="1"
+        android:gravity="center_vertical">
+
+      <!-- Sağdan haritayı temizleyecek silme ikonu -->
+      <ImageButton
+          android:id="@+id/btn_clear_1"
+          android:layout_width="18dp"
+          android:layout_height="18dp"
+          android:layout_marginRight="9dp"
+          android:layout_gravity="bottom"
+          android:scaleType="centerCrop"
+          android:background="?attr/selectableItemBackgroundBorderless"
+          android:src="@drawable/ic_delete_24dp"
+          android:contentDescription="Temizle" />
+
+      <!-- Görünür/Gizle toggler: başta ‘göz açık’ simgesi -->
+      <ImageButton
+          android:id="@+id/btn_toggle_1"
+          android:layout_width="18dp"
+          android:layout_height="18dp"
+          android:layout_marginRight="9dp"
+          android:layout_gravity="bottom"
+          android:scaleType="centerCrop"
+          android:layout_marginStart="8dp"
+          android:background="?attr/selectableItemBackgroundBorderless"
+          android:src="@drawable/ic_eye_open_24dp"
+          android:contentDescription="Görünür/Gizle" />
+
+      <!-- İlk Spinner: levelOptions (ADM5,…,OSM) -->
+      <Spinner
+          android:id="@+id/spinner_level_1"
+          android:layout_width="wrap_content"
+          android:layout_height="wrap_content"
+          android:spinnerMode="dropdown" android:layout_marginEnd="16dp"
+          android:layout_gravity="top|end"
+          android:backgroundTint="@android:color/white"
+          android:popupBackground="@android:color/white"  />
+    </LinearLayout>
+
+    <!-- 2. Satır: İleride içerik eklenecek ikinci Spinner -->
+    <LinearLayout
+        android:id="@+id/row_spinner_2"
+
+        android:layout_width="match_parent"
+        android:layout_height="16dp"
+        android:visibility="gone"
+        android:orientation="horizontal"
+        android:layout_weight="1"
+        android:gravity="center_vertical">
+
+      <ImageButton
+          android:id="@+id/btn_clear_2"
+          android:layout_width="18dp"
+          android:layout_height="18dp"
+          android:layout_marginRight="9dp"
+          android:layout_gravity="bottom"
+          android:scaleType="centerCrop"
+          android:background="?attr/selectableItemBackgroundBorderless"
+          android:src="@drawable/ic_delete_24dp"
+          android:contentDescription="Temizle" />
+
+      <ImageButton
+          android:id="@+id/btn_toggle_2"
+          android:layout_width="18dp"
+          android:layout_height="18dp"
+          android:layout_marginRight="9dp"
+          android:layout_gravity="bottom"
+          android:scaleType="centerCrop"
+          android:layout_marginStart="8dp"
+          android:background="?attr/selectableItemBackgroundBorderless"
+          android:src="@drawable/ic_eye_open_24dp"
+          android:contentDescription="Görünür/Gizle" />
+
+      <Spinner
+          android:id="@+id/spinner_level_2"
+          android:layout_width="wrap_content"
+          android:layout_height="wrap_content"
+          android:spinnerMode="dropdown"
+          android:layout_marginEnd="16dp"
+          android:layout_gravity="top|end"
+          android:backgroundTint="@android:color/white"
+          android:popupBackground="@android:color/white" />
+    </LinearLayout>
+
+    <!-- 3. Satır -->
+    <LinearLayout
+        android:id="@+id/row_spinner_3"
+        android:layout_width="match_parent"
+        android:layout_height="16dp"
+        android:visibility="gone"
+        android:orientation="horizontal"
+        android:layout_weight="1"
+        android:gravity="center_vertical">
+
+      <ImageButton
+          android:id="@+id/btn_clear_3"
+          android:layout_width="18dp"
+          android:layout_height="18dp"
+          android:layout_marginRight="9dp"
+          android:layout_gravity="bottom"
+          android:scaleType="centerCrop"
+          android:background="?attr/selectableItemBackgroundBorderless"
+          android:src="@drawable/ic_delete_24dp"
+          android:contentDescription="Temizle" />
+
+      <ImageButton
+          android:id="@+id/btn_toggle_3"
+          android:layout_width="18dp"
+          android:layout_height="18dp"
+          android:layout_marginRight="9dp"
+          android:layout_gravity="bottom"
+          android:scaleType="centerCrop"
+          android:layout_marginStart="8dp"
+          android:background="?attr/selectableItemBackgroundBorderless"
+          android:src="@drawable/ic_eye_open_24dp"
+          android:contentDescription="Görünür/Gizle" />
+
+      <Spinner
+          android:id="@+id/spinner_level_3"
+          android:layout_width="wrap_content"
+          android:layout_height="wrap_content"
+          android:spinnerMode="dropdown"
+          android:layout_marginEnd="16dp"
+          android:layout_gravity="top|end"
+          android:backgroundTint="@android:color/white"
+          android:popupBackground="@android:color/white" />
+    </LinearLayout>
+
+    <!-- 4. Satır -->
+    <LinearLayout
+        android:id="@+id/row_spinner_4"
+        android:layout_width="match_parent"
+        android:layout_height="16dp"
+        android:visibility="gone"
+        android:orientation="horizontal"
+        android:layout_weight="1"
+        android:gravity="center_vertical">
+
+      <ImageButton
+          android:id="@+id/btn_clear_4"
+          android:layout_width="18dp"
+          android:layout_height="18dp"
+          android:layout_marginRight="9dp"
+          android:layout_gravity="bottom"
+          android:scaleType="centerCrop"
+          android:background="?attr/selectableItemBackgroundBorderless"
+          android:src="@drawable/ic_delete_24dp"
+          android:contentDescription="Temizle" />
+
+      <ImageButton
+          android:id="@+id/btn_toggle_4"
+          android:layout_width="18dp"
+          android:layout_height="18dp"
+          android:layout_marginRight="9dp"
+          android:layout_gravity="bottom"
+          android:scaleType="centerCrop"
+          android:layout_marginStart="8dp"
+          android:background="?attr/selectableItemBackgroundBorderless"
+          android:src="@drawable/ic_eye_open_24dp"
+          android:contentDescription="Görünür/Gizle" />
+
+      <Spinner
+          android:id="@+id/spinner_level_4"
+          android:layout_width="wrap_content"
+          android:layout_height="wrap_content"
+          android:spinnerMode="dropdown"
+          android:layout_marginEnd="16dp"
+          android:layout_gravity="top|end"
+          android:backgroundTint="@android:color/white"
+          android:popupBackground="@android:color/white"  />
+    </LinearLayout>
+
+    <!-- 5. Satır -->
+    <LinearLayout
+        android:id="@+id/row_spinner_5"
+        android:layout_width="match_parent"
+        android:layout_height="16dp"
+        android:visibility="gone"
+        android:orientation="horizontal"
+        android:layout_weight="1"
+        android:layout_gravity="top|end"
+        android:gravity="center_vertical">
+
+      <ImageButton
+          android:id="@+id/btn_clear_5"
+          android:layout_width="18dp"
+          android:layout_height="18dp"
+          android:layout_marginRight="9dp"
+          android:layout_gravity="bottom"
+          android:scaleType="centerCrop"
+          android:background="?attr/selectableItemBackgroundBorderless"
+          android:src="@drawable/ic_delete_24dp"
+          android:contentDescription="Temizle" />
+
+      <ImageButton
+          android:id="@+id/btn_toggle_5"
+          android:layout_width="18dp"
+          android:layout_height="18dp"
+          android:layout_marginRight="9dp"
+          android:layout_gravity="bottom"
+          android:scaleType="centerCrop"
+          android:layout_marginStart="8dp"
+          android:background="?attr/selectableItemBackgroundBorderless"
+          android:src="@drawable/ic_eye_open_24dp"
+          android:contentDescription="Görünür/Gizle" />
+
+      <Spinner
+          android:id="@+id/spinner_level_5"
+          android:layout_width="wrap_content"
+          android:layout_height="wrap_content"
+          android:spinnerMode="dropdown"
+          android:layout_marginEnd="16dp"
+          android:layout_gravity="top|end"
+          android:backgroundTint="@android:color/white"
+          android:popupBackground="@android:color/white" />
+    </LinearLayout>
+
+  </LinearLayout>
+
+
+  <com.google.android.material.floatingactionbutton.FloatingActionButton
+      android:id="@+id/main_fab"
+      android:layout_width="wrap_content"
+      android:layout_height="wrap_content"
+      android:src="@drawable/pati"
+      android:layout_gravity="bottom|end"
+      android:layout_margin="24dp"
+      android:visibility="gone" />
+
+  <com.google.android.material.floatingactionbutton.FloatingActionButton
+      android:id="@+id/besleme_fab"
+      android:layout_width="wrap_content"
+      android:layout_height="wrap_content"
+      android:src="@drawable/pati"
+      android:layout_gravity="bottom|end"
+      android:layout_margin="100dp"
+      android:visibility="gone" />
+
+  <com.google.android.material.floatingactionbutton.FloatingActionButton
+      android:id="@+id/bolge_fab"
+      android:layout_width="wrap_content"
+      android:layout_height="wrap_content"
+      android:src="@drawable/pati"
+      android:layout_gravity="bottom|end"
+      android:layout_margin="100dp"
+      android:visibility="gone" />
+
+  <com.google.android.material.floatingactionbutton.FloatingActionButton
+      android:id="@+id/nakil_fab"
+      android:layout_width="wrap_content"
+      android:layout_height="wrap_content"
+      android:src="@drawable/pati"
+      android:layout_gravity="bottom|end"
+      android:layout_margin="100dp"
+      android:visibility="gone" />
+  <com.google.android.material.floatingactionbutton.FloatingActionButton
+      android:id="@+id/sound_fab"
+      android:layout_width="wrap_content"
+      android:layout_height="wrap_content"
+      android:src="@drawable/pati"
+      android:layout_gravity="bottom|end"
+      android:layout_margin="100dp"
+      android:visibility="gone" />
+
+</FrameLayout>

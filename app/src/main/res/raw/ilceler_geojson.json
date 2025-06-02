@@ -1,0 +1,13 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": { "name": "Kadıköy" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[[28.99, 41.0], [29.0, 41.0], [29.0, 40.99], [28.99, 40.99], [28.99, 41.0]]]
+      }
+    }
+  ]
+}

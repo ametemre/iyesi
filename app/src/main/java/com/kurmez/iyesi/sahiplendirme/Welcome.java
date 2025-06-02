@@ -252,7 +252,7 @@ public class Welcome extends AppCompatActivity {
     private void parsePriorityPets(String json) {
         try {
             JSONObject root   = new JSONObject(json);
-            JSONArray arr     = root.getJSONArray("pets");
+            JSONArray arr     = root.getJSONArray("petCompanions");
             companions.clear();
 
             for (int i = 0; i < arr.length(); i++) {

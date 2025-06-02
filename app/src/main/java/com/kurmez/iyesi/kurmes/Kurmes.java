@@ -76,6 +76,9 @@ import java.util.Collections;
 import java.util.HashMap;
 
 import com.kurmez.iyesi.kurmes.Ai.Ai;
+import com.kurmez.iyesi.social.Explore;
+import com.kurmez.iyesi.social.Profile;
+import com.kurmez.iyesi.sokak.SokakActivity;
 import com.kurmez.iyesi.utilities.MiniFabs;
 
 public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
@@ -228,7 +231,8 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
 
         // Sound FAB click (if needed)
         fabSound.setOnClickListener(v -> {
-            miniFabs.collapse();
+            Intent intent = new Intent(Kurmes.this, SokakActivity.class);
+            startActivity(intent);
             // ... your existing recording start/stop ...
         });
 
@@ -805,7 +809,7 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
     private void handleLongClick() {
         animateButtonPress();
         if (mAuth.getCurrentUser() != null) {
-            startActivity(new Intent(Kurmes.this, Welcome.class));
+                startActivity(new Intent(Kurmes.this, Welcome.class));
         } else {
             startActivity(new Intent(Kurmes.this, Login.class));
         }
