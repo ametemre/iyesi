@@ -1,4 +1,4 @@
-package com.kurmez.iyesi.utilities;
+package com.kurmez.iyesi.utilities.adapters;
 
 import android.content.Context;
 import android.view.LayoutInflater;

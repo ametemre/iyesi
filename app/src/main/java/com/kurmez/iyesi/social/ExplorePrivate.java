@@ -12,7 +12,7 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import com.kurmez.iyesi.MockData;
 import com.kurmez.iyesi.R;
-import com.kurmez.iyesi.utilities.ContentAdapter;
+import com.kurmez.iyesi.utilities.adapters.ContentAdapter;
 
 import java.util.List;
 

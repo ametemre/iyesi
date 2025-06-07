@@ -1,6 +1,4 @@
-package com.kurmez.iyesi.utilities;
-
-import android.util.Log;
+package com.kurmez.iyesi.utilities.clients;
 
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;

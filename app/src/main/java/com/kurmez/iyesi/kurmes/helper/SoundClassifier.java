@@ -23,7 +23,7 @@ import java.util.TimerTask;
 public class SoundClassifier extends Kurmes {
     private Context context;  // 📌 Context değişkeni eklei
     private Kurmes kurmesActivity;
-    protected String modelPath = "my_birds_model.tflite";
+    protected String modelPath = "ml_model/dump/my_birds_model.tflite";
     float probabilityThreshold = 0.3f;
     AudioClassifier classifier;
     private TensorAudio tensor;

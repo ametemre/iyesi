@@ -1,5 +1,6 @@
 package com.kurmez.iyesi.utilities;
 
+import android.animation.ValueAnimator;
 import android.app.Activity;
 import android.content.res.ColorStateList;
 import android.graphics.Color;
@@ -12,6 +13,8 @@ import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import android.animation.AnimatorListenerAdapter;
 import android.animation.AnimatorSet;
 import android.animation.ObjectAnimator;
+import android.view.animation.DecelerateInterpolator;
+import android.widget.FrameLayout;
 
 /**
  * Helper class to manage a set of mini FABs.
@@ -249,7 +252,57 @@ public class MiniFabs {
             fab.setImageDrawable(wIcon);
         }
     }
+    public void resetIconColor(FloatingActionButton fab) {
+        fab.setBackgroundTintList(ColorStateList.valueOf(Color.parseColor("#FF40C4FF"))); // Teal
+        Drawable drawable = fab.getDrawable();
+        if (drawable != null) {
+            drawable = drawable.mutate();
+            drawable.clearColorFilter(); // Remove any color filters
+            fab.setImageDrawable(drawable);
+        }
+    }
+    public void applyWhiteColorFilter(FloatingActionButton fab) {
+        Drawable drawable = fab.getDrawable();
+        if (drawable != null) {
+            drawable = drawable.mutate(); // Make sure we modify only this instance
+            drawable.setColorFilter(Color.WHITE, PorterDuff.Mode.SRC_ATOP); // Apply White Filter
+            fab.setImageDrawable(drawable);
+        }
+    }
+    public void animateMomentumGravity(View v, float velocityX, float velocityY, FrameLayout rootLayout) {
+        float screenHeight, screenWidth;
+        if (rootLayout != null) {
+            screenHeight = rootLayout.getHeight();
+            screenWidth  = rootLayout.getWidth();
+        } else {
+            // rootLayout null ise, ana view’in boyutlarını kullan
+            screenHeight = v.getHeight();
+            screenWidth  = v.getWidth();
+        }
+        // Calculate projected landing position based on velocity
+        float projectedX = v.getX() + (velocityX * 0.2f); // Multiply for "throw" effect
+        float projectedY = v.getY() + (velocityY * 0.2f);
 
+        // Ensure it doesn't go off-screen
+        projectedX = Math.max(0, Math.min(projectedX, screenWidth - v.getWidth()));
+        projectedY = Math.min(screenHeight - v.getHeight(), projectedY);
+
+        // Animate movement with bounce effect
+        ValueAnimator animatorX = ValueAnimator.ofFloat(v.getX(), projectedX);
+        ValueAnimator animatorY = ValueAnimator.ofFloat(v.getY(), projectedY);
+
+        animatorX.setInterpolator(new DecelerateInterpolator());
+        animatorY.setInterpolator(new DecelerateInterpolator());
+
+        animatorX.setDuration(500);
+        animatorY.setDuration(500);
+
+        animatorX.addUpdateListener(animation -> v.setX((float) animation.getAnimatedValue()));
+        animatorY.addUpdateListener(animation -> v.setY((float) animation.getAnimatedValue()));
+
+        animatorX.start();
+        animatorY.start();
+    }
     /**
      * Exposes miniFAB array.
      */

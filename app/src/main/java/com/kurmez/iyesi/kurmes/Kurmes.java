@@ -1,22 +1,15 @@
 package com.kurmez.iyesi.kurmes;
+import static com.kurmez.iyesi.kurmes.helper.TFLiteModelInspector.loadModelFile;
+
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.google.firebase.auth.FirebaseAuth;
 import com.kurmez.iyesi.sahiplendirme.Founded;
 import com.kurmez.iyesi.Login;
 import com.kurmez.iyesi.R;
 import com.kurmez.iyesi.sahiplendirme.Welcome;
-import com.kurmez.iyesi.kurmes.helper.SoundClassifier;
-import com.kurmez.iyesi.kurmes.helper.TFLiteModelInspector;
+
 import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
-import android.graphics.ImageFormat;
-import android.graphics.Rect;
-import android.graphics.YuvImage;
-import androidx.camera.core.ImageProxy;
 import android.Manifest;
-import android.animation.AnimatorSet;
-import android.animation.ObjectAnimator;
-import android.animation.ValueAnimator;
 import android.annotation.SuppressLint;
 import android.app.ProgressDialog;
 import android.content.Intent;
@@ -24,9 +17,6 @@ import android.content.pm.PackageManager;
 import android.content.res.ColorStateList;
 import android.content.res.Resources;
 import android.graphics.Color;
-import android.graphics.PorterDuff;
-import android.graphics.drawable.Drawable;
-import android.media.MediaRecorder;
 import android.os.AsyncTask;
 import android.os.Bundle;
 import android.os.Handler;
@@ -40,7 +30,6 @@ import android.view.View;
 import android.view.WindowManager;
 import android.view.animation.AlphaAnimation;
 import android.view.animation.Animation;
-import android.view.animation.DecelerateInterpolator;
 import android.view.animation.ScaleAnimation;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
@@ -56,30 +45,23 @@ import org.opencv.android.CameraBridgeViewBase.CvCameraViewListener2;
 import org.opencv.android.OpenCVLoader;
 import org.opencv.core.Mat;
 import org.opencv.core.MatOfRect;
-import org.opencv.objdetect.CascadeClassifier;
 import org.tensorflow.lite.Interpreter;
 import org.tensorflow.lite.support.label.Category;
 
-import java.io.ByteArrayOutputStream;
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.nio.ByteBuffer;
 import java.nio.MappedByteBuffer;
-import java.nio.channels.FileChannel;
 import java.util.ArrayList;
 
 import java.util.List;
 
 import java.util.Collections;
-import java.util.HashMap;
 
 import com.kurmez.iyesi.kurmes.Ai.Ai;
-import com.kurmez.iyesi.social.Explore;
-import com.kurmez.iyesi.social.Profile;
 import com.kurmez.iyesi.sokak.SokakActivity;
 import com.kurmez.iyesi.utilities.MiniFabs;
+
 
 public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
     private static final String TAG = "Kurmes";
@@ -87,7 +69,7 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
     private CameraBridgeViewBase mOpenCvCameraView;
     private Mat rgb, gray;
 
-    private Ai aiKedi, aiKopek, aiKurt, aiKarga;
+    private Ai aiKedi, aiKopek, aiKurt, aiKarga, aiContent;
 
     public enum State {
         KEDI, KOPEK, KURT, KARGA,
@@ -96,7 +78,7 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
     private State currentState = State.IDLE;
 
     private final List<float[]> soundBuffer = new ArrayList<>();
-    private final List<float[][]> videoBuffer = new ArrayList<>();
+    private final List<float[][][]> videoBuffer = new ArrayList<float[][][]>();
     private final int SOUND_THRESHOLD = 5;
     private final int VIDEO_THRESHOLD = 5;
 
@@ -110,8 +92,6 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
     private FloatingActionButton fabDraggable, fabSound;
     private float dX, dY;
     private boolean isDragging = false;
-    private boolean isPressed = false;
-    private boolean isRecording = false;
     private FirebaseAuth mAuth;
     private Handler handler = new Handler();
     private static final int CAMERA_PERMISSION_REQUEST_CODE = 100;
@@ -128,34 +108,19 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
     MatOfRect rects;
     //imported---------------------------------
     //private DetectorFunction activeDetectorFunction = () -> videoYapayZeka(getResources().openRawResource(R.raw.lbpcascade_frontalface), null);
-    private int lastAction;
     public CameraCalibrator mCalibrator;
-    private MediaRecorder mediaRecorder;
-    private SoundClassifier soundClassifier;
-
+    private FloatingActionButton selectedFab = null; // Track the selected FAB
     private OnCameraFrameRender mOnCameraFrameRender;
     private Menu mMenu;
     private int mWidth;
     private int mHeight;
-    //imported---------------------------------
-    private CascadeClassifier catFaceDetector,cascadeClassifier;
-    // TensorFlow Lite Interpreter
-    private Interpreter tflite;
     private FrameLayout rootLayout;
     private VelocityTracker velocityTracker = null;
     private long pressStartTime;
-    private boolean isLongPressTriggered = false;
     private final int LONG_PRESS_THRESHOLD = 2000; // 2 seconds
     private final int DRAG_THRESHOLD = 20; // Minimum movement to consider a drag
     //-------------------------------------------------------------------------------------------Fab
-    //private FloatingActionButton[] miniFabs = new FloatingActionButton[9];
-    private boolean isFabExpanded = false;
-    private float[][] fabPositions = new float[9][2]; // Stores positions of sub FABs
     private float mainFabX, mainFabY; // Stores main FAB's position
-    @FunctionalInterface
-    interface DetectorFunction {
-        void execute();
-    }
     //--------------------------Creation
     @SuppressLint("ClickableViewAccessibility")
     @Override
@@ -172,17 +137,18 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
         mOpenCvCameraView.setVisibility(SurfaceView.VISIBLE);
         mOpenCvCameraView.setCvCameraViewListener(this);
         mOpenCvCameraView.enableView();
-
+/*
         // Load TFLite models per species
         try {
             aiKedi  = new Ai(this, "kedi_sound.tflite",  "kedi_video.tflite");
             aiKopek = new Ai(this, "kopek_sound.tflite", "kopek_video.tflite");
             aiKurt  = new Ai(this, "kurt_sound.tflite",  "kurt_video.tflite");
             aiKarga = new Ai(this, "karga_sound.tflite", "karga_video.tflite");
+            aiContent = new Ai(this, "karga_sound.tflite", "karga_video.tflite");
         } catch (IOException e) {
             Log.e(TAG, "Failed to load TFLite models", e);
         }
-
+*/
         // Keep screen on
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 
@@ -242,31 +208,22 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
         checkAudioPermission();
         checkAndRequestPermissions();
     }
-
-/*
-    private void initializeFabs() {
-        for (FloatingActionButton subFab : miniFabs) {
-            subFab.setBackgroundTintList(ColorStateList.valueOf(Color.parseColor("#FF40C4FF"))); // Set all FABs to Teal initially
-            resetIconColor(subFab); // Reset icon colors
-            subFab.setOnClickListener(v -> onFabClick(v,(FloatingActionButton) v)); // Attach click listener
-        }
-    }*/
     public Action onFabClick(View view ,FloatingActionButton clickedFab) {
         if (selectedFab == clickedFab) {
             // If clicking the same FAB, deselect it and set it back to Teal
             clickedFab.setBackgroundTintList(ColorStateList.valueOf(Color.parseColor("#008080"))); // Teal
-            resetIconColor(clickedFab); // Restore icon color
+            miniFabs.resetIconColor(clickedFab); // Restore icon color
             selectedFab = null;
         } else {
             // Deselect previous FAB if there was one
             if (selectedFab != null) {
                 selectedFab.setBackgroundTintList(ColorStateList.valueOf(Color.parseColor("#008080"))); // Teal
-                resetIconColor(selectedFab);
+                miniFabs.resetIconColor(selectedFab);
             }
 
             // Select new FAB and set to Red
             clickedFab.setBackgroundTintList(ColorStateList.valueOf(Color.RED)); // Red
-            applyWhiteColorFilter(clickedFab); // Change icon to White
+            miniFabs.applyWhiteColorFilter(clickedFab); // Change icon to White
             selectedFab = clickedFab;
         }
         clickedFab.invalidate(); // Force UI refresh
@@ -304,44 +261,6 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
         return action;
     }
     //--------------------------Creation
-    //--------------------------Sound
-    private void stopRecording(View view) {
-        if (isRecording) {
-            try {
-                mediaRecorder.stop();
-                mediaRecorder.release();
-                mediaRecorder = null;
-                isRecording = false;
-            } catch (RuntimeException e) {
-                Log.e("Recording", "Error stopping recording", e);
-            }
-            soundClassifier.onStopRecording(view);
-        }
-        int availableProcessors = Runtime.getRuntime().availableProcessors();
-        Log.d("AvailableProcessors", "Number of available threads: " + availableProcessors);
-
-    }
-    private void startRecording(View view) {
-        try {
-            mediaRecorder = new MediaRecorder();
-            mediaRecorder.setAudioSource(MediaRecorder.AudioSource.MIC);
-            mediaRecorder.setOutputFormat(MediaRecorder.OutputFormat.THREE_GPP);
-            mediaRecorder.setOutputFile(getExternalFilesDir(null) + "/recording.3gp");
-            mediaRecorder.setAudioEncoder(MediaRecorder.AudioEncoder.AMR_NB);
-            mediaRecorder.prepare();
-            mediaRecorder.start();
-            isRecording = true;
-
-            // 📌 Ses sınıflandırıcıyı başlat
-            soundClassifier.onStartRecording(view);
-
-        } catch (IOException e) {
-            Log.e("Recording", "Error starting recording", e);
-        }
-        int availableProcessors = Runtime.getRuntime().availableProcessors();
-        Log.d("AvailableProcessors", "Number of available threads: " + availableProcessors);
-
-    }
     public void updateDetectedSounds(List<Category> detectedCategories) {
         LinearLayout detectedSoundsLayout = findViewById(R.id.detected_sounds_list);
 
@@ -371,27 +290,6 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
         }
     }
     //--------------------------Sound
-    //--------------------------Video
-    /*
-    private void startCameraStream() {
-        // set up CameraX or Camera2, then in your frame callback:
-        cameraAnalyzer = image -> {
-            float[][][][] frameTensor = preprocessImage(image);
-            ai.predictVideo(frameTensor, this::onVideoResult);
-            image.close();
-        };
-    }
-
-    private void onVideoResult(float[][] output) {
-        // This callback runs on a background thread.
-        runOnUiThread(() -> {
-            // e.g. draw bounding boxes or labels based on `output`
-            updateOverlay(output);
-        });
-    }
-    */
-    //--------------------------Video
-
     @Override
     public void onCameraViewStarted(int width, int height) {
         rgb = new Mat();
@@ -472,53 +370,11 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
                 break;
         }
 
-/*        if (activeDetectorFunction != null) {
-            activeDetectorFunction.execute();
-        }*/
         Log.d(TAG, "Processing camera frame...");
         updateCameraStatus(currentState.toString() + "birde" + photoList.size());
-/*        Imgproc.cvtColor(rgb, gray, Imgproc.COLOR_RGBA2GRAY);
 
-        if (catFaceDetector != null) {
-            MatOfRect catFaces = new MatOfRect();
-            catFaceDetector.detectMultiScale(grayscale, catFaces, 1.1, 2, 0,
-                    new Size(100, 100), new Size());
-
-            for (Rect rect : catFaces.toArray()) {
-                Imgproc.rectangle(mRgba, rect.tl(), rect.br(), new Scalar(0, 255, 0, 255), 2);
-                // Tahmin için kırpılmış yüz verisi hazırlanır
-                Mat faceROI = grayscale.submat(rect);
-                byte[][][][] input = preprocessFace(faceROI);
-                float[][] output = new float[1][3]; // Çıkış boyutunu modelinize göre ayarlayın
-                tflite.run(input, output);
-
-                String label = interpretPrediction(output[0]);
-                Imgproc.putText(mRgba, label, rect.tl(), Imgproc.FONT_HERSHEY_SIMPLEX, 1.0, new Scalar(255, 255, 255), 2);
-
-                //float[][] output = new float[1][3]; // Çıkış boyutunu modelinize göre ayarlayın
-                tflite.run(input, output);
-
-                //String label = interpretPrediction(output[0]);
-                Imgproc.putText(mRgba, label, rect.tl(), Imgproc.FONT_HERSHEY_SIMPLEX, 1.0, new Scalar(255, 255, 255), 2);
-                //byte[] output = new byte[1];
-                tflite.run(input, output);
-
-                //float[] normalizedOutput = convertOutput(output); // Eğer dönüşüm gerekiyorsa
-
-                tflite.run(input, output);
-
-                // Tahmini etikete çevir ve ekrana yazdır
-                //String label = interpretPrediction(normalizedOutput);
-                Imgproc.putText(mRgba, label, rect.tl(), Imgproc.FONT_HERSHEY_SIMPLEX, 1.0, new Scalar(255, 255, 255), 2);
-            }
-        }
-*/ //AI generated Code for image recognition (gives overload to gpu & crashes)
-        //return mOnCameraFrameRender.render(inputFrame);
         return rgb; // Return the raw RGBA frame
     } //Essential For Camera
-
-    private HashMap<State, String> state = new HashMap<>();
-
     @Override
     protected void onResume() {
         super.onResume();
@@ -571,7 +427,6 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
 
         super.onDestroy();
     }
-
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
         super.onCreateOptionsMenu(menu);
@@ -670,40 +525,6 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
         // Aksi takdirde normal akışı devam ettir
         return super.dispatchTouchEvent(ev);
     }
-    /*    @Override
-        public boolean dispatchTouchEvent(MotionEvent event) {
-            switch (event.getAction()) {
-                case MotionEvent.ACTION_DOWN:
-                    if (isFabExpanded){
-                        collapseFabMenu();
-                    }
-                    Log.d("TouchEvent", "Screen touched at: X=" + event.getRawX() + " Y=" + event.getRawY());
-                    break;
-                case MotionEvent.ACTION_MOVE:
-                    Log.d("TouchEvent", "Finger moved: X=" + event.getRawX() + " Y=" + event.getRawY());
-                    break;
-                case MotionEvent.ACTION_UP:
-                    Log.d("TouchEvent","Finger lifted");
-                    break;
-            }
-            return super.dispatchTouchEvent(event); // Allow other views to handle the touch
-        }*/                                                                                         //done collapses the fab menu anywhere on screen touch but overrides the other click events.
-    /*    @Override
-        protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
-            super.onActivityResult(requestCode, resultCode, data);
-
-            if (requestCode == REQUEST_IMAGE_CAPTURE && resultCode == RESULT_OK && data != null) {
-                // Retrieve the captured image
-                Bitmap imageBitmap = (Bitmap) data.getExtras().get("data");
-
-                if (imageBitmap != null) {
-                    photoList.add(imageBitmap); // Add photo to the list
-                    navigateToFoundedActivity(); // Navigate to the next screen
-                }
-            } else if (requestCode == REQUEST_IMAGE_CAPTURE) {
-                Toast.makeText(this, "Photo capture cancelled", Toast.LENGTH_SHORT).show();
-            }
-        }*/
     @Override
     protected List<? extends CameraBridgeViewBase> getCameraViewList() {
         return Collections.singletonList(mOpenCvCameraView);
@@ -796,7 +617,7 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
                         // Sürükleme sonrası momentumlu animasyon
                         float vx = velocityTracker.getXVelocity();
                         float vy = velocityTracker.getYVelocity();
-                        animateMomentumGravity(v, vx, vy);
+                        miniFabs.animateMomentumGravity(v, vx, vy,rootLayout);
                     }
                     return true;
 
@@ -805,7 +626,6 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
             }
         });
     }
-
     private void handleLongClick() {
         animateButtonPress();
         if (mAuth.getCurrentUser() != null) {
@@ -834,36 +654,7 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
         handler.postDelayed(() -> {
             fabDraggable.clearAnimation();
             fabDraggable.setEnabled(true);
-            isPressed = false;
         }, 2000);
-    }
-    private void animateMomentumGravity(View v, float velocityX, float velocityY) {
-        float screenHeight = rootLayout.getHeight();
-        float screenWidth = rootLayout.getWidth();
-
-        // Calculate projected landing position based on velocity
-        float projectedX = v.getX() + (velocityX * 0.2f); // Multiply for "throw" effect
-        float projectedY = v.getY() + (velocityY * 0.2f);
-
-        // Ensure it doesn't go off-screen
-        projectedX = Math.max(0, Math.min(projectedX, screenWidth - v.getWidth()));
-        projectedY = Math.min(screenHeight - v.getHeight(), projectedY);
-
-        // Animate movement with bounce effect
-        ValueAnimator animatorX = ValueAnimator.ofFloat(v.getX(), projectedX);
-        ValueAnimator animatorY = ValueAnimator.ofFloat(v.getY(), projectedY);
-
-        animatorX.setInterpolator(new DecelerateInterpolator());
-        animatorY.setInterpolator(new DecelerateInterpolator());
-
-        animatorX.setDuration(500);
-        animatorY.setDuration(500);
-
-        animatorX.addUpdateListener(animation -> v.setX((float) animation.getAnimatedValue()));
-        animatorY.addUpdateListener(animation -> v.setY((float) animation.getAnimatedValue()));
-
-        animatorX.start();
-        animatorY.start();
     }
     private void checkAndRequestPermissions() {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
@@ -934,128 +725,13 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
         intent.putParcelableArrayListExtra("photos", new ArrayList<>(photoList)); // Pass the photos
         startActivity(intent);
     }
-    /*private void createFabButton(String modelName, String modelUrl) {
-            FloatingActionButton fab = new FloatingActionButton(this);
-            fab.setImageResource(R.drawable.holder); // Set a default icon
-            fab.setOnClickListener(v -> downloadAndLoadModel(modelUrl));
-            rootLayout.addView(fab);
-        }*/                           //----------------------------------------------------------------createFab Button
-
-    /*
-    private void loadDetector(Mat gray,MatOfRect rects){
-        cascadeClassifier.detectMultiScale(gray,rects,1.1,2);
-        for (Rect rect : rects.toList()){
-
-            Mat submat = rgb.submat(rect);
-
-            Imgproc.blur(submat,submat,new Size(10,10));
-            Imgproc.rectangle(rgb,rect,new Scalar(0,255,0),10);
-        }
-    }                                        //videoYapayZeka
-        private void videoYapayZeka(InputStream inputStream, @Nullable File file){
-        if (file == null){
-            file = new File(getDir("cascade", MODE_PRIVATE), "lbpcascade_frontalface.xml");
-        }
-        activateDetector(file,inputStream);
-        loadDetector(gray, rects);
-    }
-    private void activateDetector(File file, InputStream inputStream){
-        try {
-            FileOutputStream fileOutputStream = new FileOutputStream(file);
-
-            byte[] data = new byte[4096];
-            int read_bytes;
-
-            while((read_bytes = inputStream.read(data)) != -1){
-                fileOutputStream.write(data,0,read_bytes);
-            }
-            cascadeClassifier = new CascadeClassifier(file.getAbsolutePath());
-            if (cascadeClassifier.empty()) cascadeClassifier=null;
-
-            inputStream.close();
-            fileOutputStream.close();
-            file.delete();
-        } catch (FileNotFoundException e) {
-            e.printStackTrace();
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-    }                          //videoYapayZeka
-    */                                                                                         //depritiated//--------------------------------------------------------------videoYapayZeka
-    /*    private void downloadAndLoadModel(String modelUrl) {
-            StorageReference modelRef = FirebaseStorage.getInstance().getReferenceFromUrl(modelUrl);
-
-            File localFile = new File(getFilesDir(), "model.tflite");
-
-            modelRef.getFile(localFile).addOnSuccessListener(taskSnapshot -> {
-                Log.d("Model", "Download complete");
-                loadTFLiteModel(localFile.getAbsolutePath());
-            }).addOnProgressListener(taskSnapshot -> {
-                long bytesTransferred = taskSnapshot.getBytesTransferred();
-                long totalBytes = taskSnapshot.getTotalByteCount();
-                updateDownloadProgress((int) ((bytesTransferred * 100) / totalBytes));
-            }).addOnFailureListener(e -> Log.e("Model", "Download failed", e));
-        }*/                                                                                         //waiting//----------------------------------------------------------------createFab Button
-    /*    private void loadTFLiteModel(String modelPath) {
-            try {
-                Interpreter.Options options = new Interpreter.Options();
-                tflite = new Interpreter(new File(modelPath), options);
-                Log.d("TFLite", "Model loaded successfully!");
-            } catch (Exception e) {
-                Log.e("TFLite", "Error loading model", e);
-            }
-        }*/                                                                                         //done//----------------------------------------------------------------createFab Button
-    private void updateDownloadProgress(int progress) {
-        //fabButton.setProgress(progress);  // Assume a custom FAB with progress tracking
-    }                                            //edit//----------------------------------------------------------------createFab Button
-
-    interface Action {
-        void execute();
-    }
-    private FloatingActionButton selectedFab = null; // Track the selected FAB
-
-    private void applyWhiteColorFilter(FloatingActionButton fab) {
-        Drawable drawable = fab.getDrawable();
-        if (drawable != null) {
-            drawable = drawable.mutate(); // Make sure we modify only this instance
-            drawable.setColorFilter(Color.WHITE, PorterDuff.Mode.SRC_ATOP); // Apply White Filter
-            fab.setImageDrawable(drawable);
-        }
-    }
-    private void resetIconColor(FloatingActionButton fab) {
-        fab.setBackgroundTintList(ColorStateList.valueOf(Color.parseColor("#FF40C4FF"))); // Teal
-        Drawable drawable = fab.getDrawable();
-        if (drawable != null) {
-            drawable = drawable.mutate();
-            drawable.clearColorFilter(); // Remove any color filters
-            fab.setImageDrawable(drawable);
-        }
-    }
-
-    /*    private void selectFabProgrammatically(FloatingActionButton fab) {
-            if (selectedFab != null) {
-                // Reset previously selected FAB to Teal
-                selectedFab.setBackgroundTintList(ColorStateList.valueOf(Color.parseColor("#008080"))); // Teal
-                resetIconColor(selectedFab);
-            }
-
-            // Select new FAB
-            fab.setBackgroundTintList(ColorStateList.valueOf(Color.RED)); // Change background to Red
-            applyWhiteColorFilter(fab); // Change icon to White
-            selectedFab = fab;
-        }*/
     private void actionOne() {
         cameraState(true);
         CatSpeciesRecognition();
         Log.d("Action", "Action One Executed!");
     }
     private void actionTwo() {
-        if (soundClassifier == null) {
-            Log.w(TAG, "SoundClassifier is null—skipping model inspection");
-            return;
-        }
         SetLabelText("denedik");
-        TFLiteModelInspection(soundClassifier.printModelDetails(0));
         DogSpeciesRecognition();
         Log.d("Action", "Action Two Executed!");
     }
@@ -1087,140 +763,24 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
         Log.d("Action", "Action Nine Executed!");
     }
     private void DogSpeciesRecognition(){
-        TFLiteModelInspector.main(null);
+        //TFLiteModelInspector.main(null);
     }
     private void CatSpeciesRecognition(){}
-    private void WolfSpeciesRecognition(){}
+    private void WolfSpeciesRecognition(){
+        Interpreter tflite;
+        try {
+            MappedByteBuffer modelBuffer = loadModelFile(getAssets(), "yolov8n.tflite");
+            tflite = new Interpreter(modelBuffer);
+        } catch (IOException e) {
+            Log.e(TAG, "Model yüklenirken hata", e);
+        }
+
+    }
     private void CrowSpeciesRecognition(){}
     private void HawkSpeciesRecognition(){}
     private void EagleSpeciesRecognition(){}
     private void KeklikSpeciesRecognition(){}
     private void PidgeonSpeciesRecognition(){}
-
-    private void TFLiteModelInspection(List<String> list){
-        LinearLayout tensors = findViewById(R.id.ModelClasses_list);
-        for (String string : list) {
-            TextView textView = new TextView(this);
-            textView.setText(string + "---" + "\n");
-            textView.setTextSize(16);
-            textView.setTextColor(Color.WHITE);
-            textView.setPadding(10, 10, 10, 10);
-            tensors.addView(textView);
-        }
-    }
-    private void TFLiteModelInspector (String modelPath){
-        try {
-            Interpreter tflite = new Interpreter(loadModelFile(modelPath));
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
-
-        int inputCount = tflite.getInputTensorCount();
-        int outputCount = tflite.getOutputTensorCount();
-
-        LinearLayout tensors = findViewById(R.id.ModelClasses_list);
-        TextView textView = new TextView(this);
-        textView.setText(inputCount + "---" + outputCount + " - " + "%");
-        textView.setTextSize(16);
-        textView.setTextColor(Color.WHITE);
-        textView.setPadding(10, 10, 10, 10);
-        tensors.addView(textView);
-    }
-    private static MappedByteBuffer loadModelFile(String modelPath) throws IOException {
-        FileInputStream fileInputStream = new FileInputStream(modelPath);
-        FileChannel fileChannel = fileInputStream.getChannel();
-        return fileChannel.map(FileChannel.MapMode.READ_ONLY, 0, fileChannel.size());
-    }
-
-    private void resetAppState(SoundClassifier soundClassifier) {
-        Log.d("Reset", "Resetting app state...");
-
-        // Stop TensorFlow Lite inference
-        if (tflite != null) {
-            tflite.close();  // Release TensorFlow Lite interpreter resources
-            tflite = null;
-            Log.d("Reset", "TensorFlow Lite interpreter closed.");
-        }
-
-        // Stop recording if it's running
-        if (isRecording) {
-            stopRecording(null);  // Assuming you have stopRecording(View view)
-            isRecording = false;
-            Log.d("Reset", "Recording stopped.");
-        }
-
-        // Stop any running sound classification (if applicable)
-        if (soundClassifier != null) {
-            soundClassifier.onStop();  // Assuming your classifier has a stop() method
-            Log.d("Reset", "Sound classifier stopped.");
-        }
-/*
-        // Reset all FABs to default state
-        for (FloatingActionButton subFab : miniFabs) {
-            subFab.setBackgroundTintList(ColorStateList.valueOf(Color.parseColor("#008080"))); // Teal
-            resetIconColor(subFab);
-        }
-*/
-        // Reset selected FAB tracker
-        selectedFab = null;
-
-        // Reset UI elements (labels, camera status, etc.)
-        labelText.setText("Idle");
-        cameraStatusText.setText("Camera Ready");
-
-        // Stop any animations or delayed tasks
-        handler.removeCallbacksAndMessages(null);
-
-        // Reset Camera State (if applicable)
-        cameraState(true);
-
-        Log.d("Reset", "App state reset completed.");
-    }
-
-    private static final int INPUT_W = 224;  // your model’s width
-    private static final int INPUT_H = 224;  // your model’s height
-
-    private float[][][][] preprocessImage(ImageProxy image) {
-        // 1) Extract YUV planes
-        ByteBuffer yBuf = image.getPlanes()[0].getBuffer();
-        ByteBuffer uBuf = image.getPlanes()[1].getBuffer();
-        ByteBuffer vBuf = image.getPlanes()[2].getBuffer();
-        byte[] y = new byte[yBuf.remaining()]; yBuf.get(y);
-        byte[] u = new byte[uBuf.remaining()]; uBuf.get(u);
-        byte[] v = new byte[vBuf.remaining()]; vBuf.get(v);
-
-        // 2) Build NV21 array (Y + VU)
-        byte[] nv21 = new byte[y.length + u.length + v.length];
-        System.arraycopy(y, 0,       nv21, 0,         y.length);
-        System.arraycopy(v, 0,       nv21, y.length,  v.length);
-        System.arraycopy(u, 0,       nv21, y.length+v.length, u.length);
-
-        // 3) YUV → JPEG → Bitmap
-        YuvImage yuv = new YuvImage(nv21, ImageFormat.NV21,
-                image.getWidth(), image.getHeight(), null);
-        ByteArrayOutputStream out = new ByteArrayOutputStream();
-        yuv.compressToJpeg(
-                new Rect(0,0,image.getWidth(),image.getHeight()), 100, out);
-        byte[] jpeg = out.toByteArray();
-        Bitmap bmp = BitmapFactory.decodeByteArray(jpeg, 0, jpeg.length);
-
-        // 4) Scale to model input size
-        Bitmap scaled = Bitmap.createScaledBitmap(bmp, INPUT_W, INPUT_H, false);
-
-        // 5) Copy pixels into [1][H][W][3], normalize to [0,1]
-        float[][][][] input = new float[1][INPUT_H][INPUT_W][3];
-        for (int y0=0; y0<INPUT_H; y0++) {
-            for (int x0=0; x0<INPUT_W; x0++) {
-                int p = scaled.getPixel(x0, y0);
-                input[0][y0][x0][0] = ((p>>16)&0xFF) / 255f;
-                input[0][y0][x0][1] = ((p>>8)&0xFF) / 255f;
-                input[0][y0][x0][2] = ( p     &0xFF) / 255f;
-            }
-        }
-
-        image.close();  // don’t forget
-        return input;
-    }
     private void handleSpecies(Mat frame, Ai ai) {
         if (ai == null) {
             Log.w(TAG, "AI model is null—skipping inference for state " + currentState);
@@ -1249,8 +809,7 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
             soundBuffer.clear();
         }
     }
-
-    private void matchPercepts(State state, List<float[][]> vidBuf, List<float[]> sndBuf) {
+    private void matchPercepts(State state, List<float[][][]> vidBuf, List<float[]> sndBuf) {
         switch (state) {
             case KEDI:
                 float[] catSound = sndBuf.get(sndBuf.size() - 1);
@@ -1280,9 +839,6 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
                 break;
         }
     }
-    // placeholders:
-    // Placeholders for preprocessing
-    // Utility to find the index of the highest-probability class
     private int argmax(float[] array) {
         int maxIdx = 0;
         float maxVal = array[0];
@@ -1301,5 +857,8 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
     private float[][] captureAudioFeatures() {
         // TODO: implement audio capture → feature vector
         return new float[1][40];
+    }
+    interface Action {
+        void execute();
     }
 }

@@ -32,7 +32,7 @@ import com.google.mlkit.vision.label.ImageLabel;
 import com.google.mlkit.vision.label.ImageLabeler;
 import com.google.mlkit.vision.label.ImageLabeling;
 import com.google.mlkit.vision.label.defaults.ImageLabelerOptions;
-import com.kurmez.iyesi.utilities.ImageSliderAdapter;
+import com.kurmez.iyesi.utilities.adapters.ImageSliderAdapter;
 import com.kurmez.iyesi.R;
 
 import java.io.File;

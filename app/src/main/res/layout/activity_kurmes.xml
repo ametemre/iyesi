@@ -5,7 +5,6 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:background="#000">
     <!-- Floating Action Button -->
-    <!-- Floating Action Button -->
     <com.google.android.material.floatingactionbutton.FloatingActionButton
         android:id="@+id/fab_main"
         android:layout_width="72dp"
@@ -86,7 +85,7 @@
     <org.opencv.android.JavaCamera2View
         android:id="@+id/kurmes_camera_view"
         android:layout_width="match_parent"
-        android:layout_height="match_parent" />
+        android:layout_height="match_parent"/>
     <!-- Camera Status Text -->
     <TextView
         android:id="@+id/camera_status_text"
@@ -129,6 +128,7 @@
         android:textColor="#FFFFFF"
         android:textSize="18sp"
         android:textStyle="bold" />
+
     <ScrollView
         android:layout_width="wrap_content"
         android:layout_height="300dp"
@@ -169,4 +169,26 @@
             android:background="@android:color/transparent">
         </LinearLayout>
     </ScrollView>
+    <LinearLayout
+        android:id="@+id/Sayac"
+        android:layout_width="wrap_content"
+        android:layout_marginTop="64dp"
+        android:layout_height="wrap_content">
+        <TextView
+            android:id="@+id/yazi"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:padding="12dp"
+            android:textSize="16sp"
+            android:textColor="@android:color/black"
+            android:gravity="start" />
+        <TextView
+            android:id="@+id/sayi"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:padding="12dp"
+            android:textSize="16sp"
+            android:textColor="@android:color/black"
+            android:gravity="start" />
+    </LinearLayout>
 </RelativeLayout>

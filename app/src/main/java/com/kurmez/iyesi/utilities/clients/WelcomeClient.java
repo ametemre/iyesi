@@ -1,4 +1,4 @@
-package com.kurmez.iyesi.utilities;
+package com.kurmez.iyesi.utilities.clients;
 
 import android.content.Context;
 import android.util.Log;
@@ -9,7 +9,6 @@ import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.auth.GetTokenResult;
 import com.kurmez.iyesi.sahiplendirme.PetCompanion;
 
-import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.io.IOException;

@@ -1,7 +1,9 @@
 package com.kurmez.iyesi.kurmes.helper;
 
+import android.content.res.AssetFileDescriptor;
+import android.content.res.AssetManager;
+
 import java.nio.MappedByteBuffer;
-import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -9,40 +11,39 @@ import org.tensorflow.lite.Interpreter;
 import org.tensorflow.lite.Tensor;
 
 public class TFLiteModelInspector {
-    public static void main(String[] args) {
-        try {
-            // Modeli yükle
-            Interpreter tflite = new Interpreter(loadModelFile("my_birds_model.tflite"));
+    public static void main(String[] args,Interpreter tflite) {
+        // Modeli yükle
+        //Interpreter tflite = new Interpreter(loadModelFile("dump/my_birds_model.tflite"));
 
-            // Giriş ve çıkış detaylarını al
-            int inputCount = tflite.getInputTensorCount();
-            int outputCount = tflite.getOutputTensorCount();
+        // Giriş ve çıkış detaylarını al
+        int inputCount = tflite.getInputTensorCount();
+        int outputCount = tflite.getOutputTensorCount();
 
-            System.out.println("Giriş Tensorları:");
-            for (int i = 0; i < inputCount; i++) {
-                Tensor inputTensor = tflite.getInputTensor(i);
-                System.out.println(i + ": " + inputTensor.name() + " - Şekil: " + arrayToString(inputTensor.shape()) + " - Tip: " + inputTensor.dataType());
-            }
-
-            System.out.println("\nÇıkış Tensorları:");
-            for (int i = 0; i < outputCount; i++) {
-                Tensor outputTensor = tflite.getOutputTensor(i);
-                System.out.println(i + ": " + outputTensor.name() + " - Şekil: " + arrayToString(outputTensor.shape()) + " - Tip: " + outputTensor.dataType());
-            }
-
-            // Modeli kapat
-            tflite.close();
-
-        } catch (IOException e) {
-            System.err.println("Model yüklenirken hata oluştu: " + e.getMessage());
+        System.out.println("Giriş Tensorları:");
+        for (int i = 0; i < inputCount; i++) {
+            Tensor inputTensor = tflite.getInputTensor(i);
+            System.out.println(i + ": " + inputTensor.name() + " - Şekil: " + arrayToString(inputTensor.shape()) + " - Tip: " + inputTensor.dataType());
         }
+
+        System.out.println("\nÇıkış Tensorları:");
+        for (int i = 0; i < outputCount; i++) {
+            Tensor outputTensor = tflite.getOutputTensor(i);
+            System.out.println(i + ": " + outputTensor.name() + " - Şekil: " + arrayToString(outputTensor.shape()) + " - Tip: " + outputTensor.dataType());
+        }
+
+        // Modeli kapat
+        tflite.close();
+
     }
 
     // .tflite modelini belleğe yükleme
-    private static MappedByteBuffer loadModelFile(String modelPath) throws IOException {
-        FileInputStream fileInputStream = new FileInputStream(modelPath);
-        FileChannel fileChannel = fileInputStream.getChannel();
-        return fileChannel.map(FileChannel.MapMode.READ_ONLY, 0, fileChannel.size());
+    public static MappedByteBuffer loadModelFile(AssetManager mgr, String modelPath) throws IOException {
+        AssetFileDescriptor fd = mgr.openFd(modelPath);
+        FileInputStream is = new FileInputStream(fd.getFileDescriptor());
+        FileChannel channel = is.getChannel();
+        long start = fd.getStartOffset();
+        long len   = fd.getDeclaredLength();
+        return channel.map(FileChannel.MapMode.READ_ONLY, start, len);
     }
 
     // Dizi şeklindeki tensor boyutlarını stringe çevir

@@ -31,6 +31,9 @@ android {
     buildFeatures {
         viewBinding true
     }
+    aaptOptions {
+        noCompress "tflite"
+    }
     kotlinOptions {
         jvmTarget = '17'
     }
