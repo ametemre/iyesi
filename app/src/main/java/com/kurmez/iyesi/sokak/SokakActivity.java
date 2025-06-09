@@ -199,6 +199,15 @@ public class SokakActivity extends FragmentActivity {
                 // İsterseniz miniFAB menüsünü kapatmak için:
                 miniFabs.collapse();
             });
+            Actions actions = new Actions(miniFabs, this, this /* or getApplicationContext() */ );
+            soundFab.setOnClickListener(v -> {
+                if (miniFabs.getSelectedFab() != null) {
+                    actions.performSelectedAction(miniFabs.getSelectedFab());
+                    animateFAB();
+                } else {
+                    Toast.makeText(this, "Önce bir miniFAB seçin", Toast.LENGTH_SHORT).show();
+                }
+            });
         }
         // Draggable MainFab
         mainFab.setOnTouchListener(new View.OnTouchListener() {
@@ -225,8 +234,9 @@ public class SokakActivity extends FragmentActivity {
                 }
             }
         });
-
+/*
         mainFab.setOnClickListener(v -> animateFAB());
+
         // 5) Alt-FAB’lara (örneğin) tıklanınca menünün kapanıp işlemi tetikleyecek kodu ekleyin
         beslemeFab.setOnClickListener(v -> {
             animateFAB();
@@ -245,6 +255,7 @@ public class SokakActivity extends FragmentActivity {
             animateFAB();
             // … burada “ses” işlemini başlatın …
         });
+        */
         miniFabs.applyDefaultColors();
         miniFabs.setupDraggableFAB(miniFabs,mainFab);
         Actions actions = new Actions(miniFabs, SokakActivity.this, this /* or getApplicationContext() */ );

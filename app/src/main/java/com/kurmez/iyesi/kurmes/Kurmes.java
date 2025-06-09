@@ -67,6 +67,7 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
 
     public Ai aiKedi, aiKopek, aiKurt, aiKarga, aiContent;
     private MiniFabs miniFabs;
+    private Actions actions;
     public enum State {
         KEDI, KOPEK, KURT, KARGA,
         IDLE, FACE_DETECTION, OBJECT_DETECTION, TRACKING, CAPTURE,TEST
@@ -86,8 +87,7 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
     private static final int REQUEST_IMAGE_CAPTURE = 1; // Request code for capturing a photo
     private List<Bitmap> photoList = new ArrayList<>(); // List to store captured images
     private FloatingActionButton fabDraggable, fabSound;
-    private float dX, dY;
-    private boolean isDragging = false;
+
     private FirebaseAuth mAuth;
     private Handler handler = new Handler();
     public static final int CAMERA_PERMISSION_REQUEST_CODE = 100;
@@ -110,12 +110,6 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
     private int mWidth;
     private int mHeight;
     private FrameLayout rootLayout;
-    private VelocityTracker velocityTracker = null;
-    private long pressStartTime;
-    private final int LONG_PRESS_THRESHOLD = 2000; // 2 seconds
-    private final int DRAG_THRESHOLD = 20; // Minimum movement to consider a drag
-    //-------------------------------------------------------------------------------------------Fab
-    private float mainFabX, mainFabY; // Stores main FAB's position
     //--------------------------Creation
     @SuppressLint("ClickableViewAccessibility")
     @Override
@@ -159,7 +153,6 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
                 fabSound,
                 miniFabIds
         );
-        Actions actions = new Actions(miniFabs, this, this /* or getApplicationContext() */ );
         // Apply initial teal/default colors
         miniFabs.applyDefaultColors();
 
@@ -172,22 +165,23 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
 
         // Set up draggable & expand/collapse behavior
         miniFabs.setupDraggableFAB(miniFabs, fabDraggable);
-
+        Actions actions = new Actions(miniFabs, this, this /* or getApplicationContext() */ );
         // Wire each miniFAB to call selectFab() + your onFabClick logic
         for (FloatingActionButton fab : miniFabs.getFabs()) {
             fab.setOnClickListener(v -> {
+
+                actions.onFabSelected(fab);
                 // Highlight selection
-                miniFabs.selectFab(fab);
-                // Your existing FAB-action logic:
-                actions.onFabClick(fab);
             });
         }
 
         // Sound FAB click (if needed)
         fabSound.setOnClickListener(v -> {
-            Intent intent = new Intent(Kurmes.this, SokakActivity.class);
-            startActivity(intent);
-            // ... your existing recording start/stop ...
+            if (miniFabs.getSelectedFab() != null) {
+                actions.performSelectedAction(miniFabs.getSelectedFab());
+            } else {
+                Toast.makeText(this, "Önce bir miniFAB seçin", Toast.LENGTH_SHORT).show();
+            }
         });
 
 
@@ -222,6 +216,9 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
         }
     }
     //--------------------------Sound
+
+
+
     @Override
     public void onCameraViewStarted(int width, int height) {
         rgb = new Mat();
@@ -302,7 +299,7 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
                 break;
             case CAPTURE:
                 //capturePhoto(rgb);// Perform ImgCapture
-                navigateToFoundedActivity();
+                //navigateToFoundedActivity();
                 // ...
                 break;
             case TRACKING:
@@ -325,11 +322,9 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
 
         return frame; // Return the raw RGBA frame
     }               //Essential For Camera
-    private void navigateToFoundedActivity() {
-        Intent intent = new Intent(this, Founded.class);
-        intent.putParcelableArrayListExtra("photos", new ArrayList<>(photoList)); // Pass the photos
-        startActivity(intent);
-    }
+
+
+
     @Override
     protected void onResume() {
         super.onResume();
@@ -383,95 +378,6 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
         super.onDestroy();
     }
     @Override
-    public boolean onCreateOptionsMenu(Menu menu) {
-        super.onCreateOptionsMenu(menu);
-        getMenuInflater().inflate(R.menu.calibration, menu);
-        mMenu = menu;
-        return true;
-    }
-    @Override
-    public boolean onPrepareOptionsMenu(Menu menu) {
-        super.onPrepareOptionsMenu(menu);
-        menu.findItem(R.id.preview_mode).setEnabled(true);
-        if (mCalibrator != null && !mCalibrator.isCalibrated()) {
-            menu.findItem(R.id.preview_mode).setEnabled(false);
-        }
-        return true;
-    }
-    @Override
-    public boolean onOptionsItemSelected(MenuItem item) {
-        if (item.getItemId() == R.id.calibration) {
-            mOnCameraFrameRender =
-                    new OnCameraFrameRender(new CalibrationFrameRender(mCalibrator));
-            item.setChecked(true);
-            return true;
-        }
-
-        else if (item.getItemId() == R.id.undistortion) {
-            mOnCameraFrameRender =
-                    new OnCameraFrameRender(new UndistortionFrameRender(mCalibrator));
-            item.setChecked(true);
-            return true;
-        }
-
-        else if (item.getItemId() == R.id.comparison) {
-            mOnCameraFrameRender =
-                    new OnCameraFrameRender(new ComparisonFrameRender(mCalibrator, mWidth, mHeight, getResources()));
-            item.setChecked(true);
-            return true;
-        }
-
-        else if (item.getItemId() == R.id.calibrate) {
-            final Resources res = getResources();
-            if (mCalibrator.getCornersBufferSize() < 2) {
-                (Toast.makeText(this, res.getString(R.string.more_samples), Toast.LENGTH_SHORT)).show();
-                return true;
-            }
-
-            mOnCameraFrameRender = new OnCameraFrameRender(new PreviewFrameRender());
-            new AsyncTask<Void, Void, Void>() {
-                private ProgressDialog calibrationProgress;
-
-                @SuppressLint("StaticFieldLeak")
-                @Override
-                protected void onPreExecute() {
-                    calibrationProgress = new ProgressDialog(Kurmes.this);
-                    calibrationProgress.setTitle(res.getString(R.string.calibrating));
-                    calibrationProgress.setMessage(res.getString(R.string.please_wait));
-                    calibrationProgress.setCancelable(false);
-                    calibrationProgress.setIndeterminate(true);
-                    calibrationProgress.show();
-                }
-
-                @Override
-                protected Void doInBackground(Void... arg0) {
-                    mCalibrator.calibrate();
-                    return null;
-                }
-
-                @Override
-                protected void onPostExecute(Void result) {
-                    calibrationProgress.dismiss();
-                    mCalibrator.clearCorners();
-                    mOnCameraFrameRender = new OnCameraFrameRender(new CalibrationFrameRender(mCalibrator));
-                    String resultMessage = (mCalibrator.isCalibrated()) ?
-                            res.getString(R.string.calibration_successful)  + " " + mCalibrator.getAvgReprojectionError() :
-                            res.getString(R.string.calibration_unsuccessful);
-                    (Toast.makeText(Kurmes.this, resultMessage, Toast.LENGTH_SHORT)).show();
-
-                    if (mCalibrator.isCalibrated()) {
-                        CalibrationResult.save(Kurmes.this,
-                                mCalibrator.getCameraMatrix(), mCalibrator.getDistortionCoefficients());
-                    }
-                }
-            }.execute();
-            return true;
-        }
-        else {
-            return super.onOptionsItemSelected(item);
-        }
-    }
-    @Override
     public boolean dispatchTouchEvent(MotionEvent ev) {
         // Eğer miniFabs boş değil ve dokunmayı işlediyse, burada false yerine true dönün:
         if (miniFabs != null && miniFabs.handleOutsideTouch(ev)) {
@@ -480,9 +386,19 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
         // Aksi takdirde normal akışı devam ettir
         return super.dispatchTouchEvent(ev);
     }
+
+
     @Override
     protected List<? extends CameraBridgeViewBase> getCameraViewList() {
         return Collections.singletonList(mOpenCvCameraView);
+    }//Essential For Camera
+    private void updateCameraStatus(String status) {
+        runOnUiThread(() -> {
+            if (cameraStatusText != null) {
+                cameraStatusText.setText("Camera Status: " + status);
+            }
+            Log.d(TAG, status);
+        });
     }//Essential For Camera
     public boolean cameraState(Boolean state){
         if (state){
@@ -506,14 +422,6 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
         }
         return state;
     }
-    private void updateCameraStatus(String status) {
-        runOnUiThread(() -> {
-            if (cameraStatusText != null) {
-                cameraStatusText.setText("Camera Status: " + status);
-            }
-            Log.d(TAG, status);
-        });
-    }//Essential For Camera
 
 
 }

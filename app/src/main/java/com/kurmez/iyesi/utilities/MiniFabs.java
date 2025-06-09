@@ -379,6 +379,13 @@ public class MiniFabs {
             startActivity(new Intent(Kurmes.this, Login.class));
         }*/
     }
+    /**
+     * @return Şu anda seçili olan FloatingActionButton,
+     *         eğer hiç seçim yapılmadıysa null döner.
+     */
+    public FloatingActionButton getSelectedFab() {
+        return selectedFab;
+    }
     private void animateButtonPress(FloatingActionButton fabDraggable) {
         fabDraggable.setEnabled(false);
 

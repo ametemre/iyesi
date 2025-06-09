@@ -4,10 +4,12 @@ import static com.kurmez.iyesi.utilities.helper.TFLiteModelInspector.loadModelFi
 
 import android.app.Activity;
 import android.content.Context;
+import android.content.Intent;
 import android.content.res.ColorStateList;
 import android.graphics.Color;
 import android.util.Log;
 import android.view.View;
+import android.widget.Toast;
 
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.kurmez.iyesi.R;
@@ -25,21 +27,23 @@ public class Actions {
     private static final String TAG = "Actions";
     private FloatingActionButton selectedFab = null; // Track the selected FAB
     private MiniFabs miniFabs;   // saha değişkeni
-    Activity activity;
+    Activity host;
     Context context;
-    public Actions(MiniFabs miniFabs, Activity activity, Context context) {
+    Intent intent;
+    public Actions(MiniFabs miniFabs, Activity host, Context context) {
         setMiniFabs(miniFabs);
         this.miniFabs = miniFabs;
-        this.activity   = activity;
+        this.host   = host;
         this.context  = context;
     }
+
     interface Action {
         void execute();
     }
     public Action onFabClick(FloatingActionButton clickedFab) {
         if (selectedFab == clickedFab) {
             // If clicking the same FAB, deselect it and set it back to Teal
-            clickedFab.setBackgroundTintList(ColorStateList.valueOf(Color.parseColor("0xFFFF0000"))); // Teal
+            clickedFab.setBackgroundTintList(ColorStateList.valueOf(Color.RED)); // Teal
             miniFabs.resetIconColor(clickedFab); // Restore icon color
             selectedFab = null;
         } else {
@@ -69,6 +73,46 @@ public class Actions {
             Log.w("FAB", "Unknown FAB clicked!");
         }
         return action;
+    }
+    public void onFabSelected(FloatingActionButton fab) {
+        // önceki seçimi temizle
+        if (selectedFab != null) {
+            miniFabs.selectFab(fab);
+            // Your existing FAB-action logic:
+            onFabClick(fab);
+        }
+        // yenisini seç
+        selectedFab = fab;
+
+        //miniFabs.highlightFab(fab);
+    }
+    public void performSelectedAction(FloatingActionButton selectedFab) {
+        if (selectedFab == null) return;
+        int id = selectedFab.getId();
+        if (id == R.id.fab_9) {
+            host.startActivity(new Intent(host, SokakActivity.class));
+            //host.startActivity(intent);
+        } else if (id == R.id.fab_2) {
+            //host.startActivity(new Intent(host, DogActivity.class));
+        } else if (id == R.id.fab_3) {
+        } else if (id == R.id.fab_4) {
+        } else if (id == R.id.fab_5) {
+        } else if (id == R.id.fab_6) {
+        } else if (id == R.id.fab_7) {
+        } else if (id == R.id.fab_8) {
+        } else if (id == R.id.fab_1) {
+        } else if (id == R.id.besleme_fab) {
+        } else if (id == R.id.bolge_fab) {
+        } else if (id == R.id.nakil_fab) {
+            host.finish();
+            //host.startActivity(new Intent(host, CatActivity.class));
+        }
+
+
+
+        // isteğe bağlı: seçimi sıfırla
+        //miniFabs.resetFabAppearance(selectedFab);
+        selectedFab = null;
     }
     public Action onFabClickActionKurmes(View view , FloatingActionButton clickedFab) {
         Action action = null;
