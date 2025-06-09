@@ -30,6 +30,7 @@ import com.google.maps.android.data.geojson.GeoJsonLayer;
 import com.kurmez.iyesi.R;
 import com.kurmez.iyesi.kurmes.Kurmes;
 import com.kurmez.iyesi.utilities.MiniFabs;
+import com.kurmez.iyesi.utilities.helper.Actions;
 
 public class SokakActivity extends FragmentActivity {
     private FloatingActionButton selectedFab = null; // Track the selected FAB
@@ -55,7 +56,15 @@ public class SokakActivity extends FragmentActivity {
     // SokakActivity içine, class-level’da:
     private boolean isFabOpen = false;
     private Animation fabOpenAnim, fabCloseAnim, rotateForwardAnim, rotateBackwardAnim;
-
+    @Override
+    public boolean dispatchTouchEvent(MotionEvent ev) {
+        // Eğer miniFabs boş değil ve dokunmayı işlediyse, burada false yerine true dönün:
+        if (miniFabs != null && miniFabs.handleOutsideTouch(ev)) {
+            return true;   // Event burada tüketildi
+        }
+        // Aksi takdirde normal akışı devam ettir
+        return super.dispatchTouchEvent(ev);
+    }
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -68,17 +77,9 @@ public class SokakActivity extends FragmentActivity {
         rotateBackwardAnim = AnimationUtils.loadAnimation(this, R.anim.rotate_backward);
         initializeSpinners();
         initializeFABs();
-        View.OnTouchListener outsideListener = (v, ev) -> {
-            return miniFabs.handleOutsideTouch(ev);
-        };
         // Yalnızca harita ile ilgili başlatmayı Harita sınıfına devret
         harita = new Harita(this);
     }
-
-    /**
-     * İkinci, üçüncü, dördüncü ve beşinci satırdaki spinner/ikonlar için setup.
-     * Birinci spinner artık Harita içinde initSpinner() ile ayarlanıyor.
-     */
     private void initializeSpinners() {
         // Satırları saran LinearLayout referansları
         LinearLayout[] rows = {
@@ -151,9 +152,16 @@ public class SokakActivity extends FragmentActivity {
             };
             spinners[i].setOnItemSelectedListener(listeners[i]);
         }
+        selectSpinnerValue(spinners[3], "ADM'");
     }
-
-
+    private void selectSpinnerValue(Spinner spinner, String value) {
+        @SuppressWarnings("unchecked")
+        ArrayAdapter<String> adapter = (ArrayAdapter<String>) spinner.getAdapter();
+        int position = adapter.getPosition(value);
+        if (position >= 0) {
+            spinner.setSelection(position);
+        }
+    }
     private void initializeFABs() {
 
         mainFab = findViewById(R.id.main_fab);
@@ -170,7 +178,6 @@ public class SokakActivity extends FragmentActivity {
 
         int[] miniFabIds = new int[]{R.id.besleme_fab, R.id.bolge_fab, R.id.nakil_fab};
         miniFabs = new MiniFabs(this, mainFab, soundFab, miniFabIds);
-
 
 
         mainFab.setVisibility(View.VISIBLE);
@@ -239,37 +246,18 @@ public class SokakActivity extends FragmentActivity {
             // … burada “ses” işlemini başlatın …
         });
         miniFabs.applyDefaultColors();
-        setupDraggableFAB(miniFabs);
+        miniFabs.setupDraggableFAB(miniFabs,mainFab);
+        Actions actions = new Actions(miniFabs, SokakActivity.this, this /* or getApplicationContext() */ );
         // Wire each miniFAB to call selectFab() + your onFabClick logic
         for (FloatingActionButton fab : miniFabs.getFabs()) {
             fab.setOnClickListener(v -> {
                 // Highlight selection
                 miniFabs.selectFab((FloatingActionButton) v);
                 // Your existing FAB-action logic:
-                onFabClick(v, (FloatingActionButton) v);
+                actions.onFabClick((FloatingActionButton) v);
             });
         }
-/*
-        beslemeFab.setOnClickListener(v -> {
-            miniFabs.collapse();
-            // Harita katmanından bağımsız olarak besleme modu başlatılır
-            harita.enableBeslemeMode();
-        });
-
-        bolgeFab.setOnClickListener(v -> {
-            miniFabs.collapse();
-            // Bölge seçme işlevi (yalnızca uygulamaya ait veri üretimi)
-            // (Buraya gerektiğinde kendi mantığınızı ekleyebilirsiniz)
-        });
-
-        nakilFab.setOnClickListener(v -> {
-            miniFabs.collapse();
-            // Nakil işlevi (yalnızca uygulamaya ait veri üretimi)
-            // (Buraya gerektiğinde kendi mantığınızı ekleyebilirsiniz)
-        });*/
     }
-
-    // 3.2. animateFAB() metodu: aç/kapa mantığı
     private void animateFAB() {
         if (isFabOpen) {
             // Menü zaten açıksa: kapatma animasyonları
@@ -315,107 +303,5 @@ public class SokakActivity extends FragmentActivity {
 
             isFabOpen = true;
         }
-    }
-
-    @SuppressLint("ClickableViewAccessibility")
-    private void setupDraggableFAB(MiniFabs miniFabs) {
-        mainFab.setOnTouchListener((v, event) -> {
-            switch (event.getActionMasked()) {
-                case MotionEvent.ACTION_DOWN:
-                    // Başlangıç pozisyonlarını ve zaman damgasını ayarla
-                    dX = v.getX() - event.getRawX();
-                    dY = v.getY() - event.getRawY();
-                    mainFabX = v.getX();
-                    mainFabY = v.getY();
-                    isDragging = false;
-                    pressStartTime = System.currentTimeMillis();
-                    // VelocityTracker hazırla
-                    if (velocityTracker == null) {
-                        velocityTracker = VelocityTracker.obtain();
-                    } else {
-                        velocityTracker.clear();
-                    }
-                    velocityTracker.addMovement(event);
-                    //SetLabelText("Ready !");
-                    return true;
-
-                case MotionEvent.ACTION_MOVE:
-                    // Yeni pozisyonu hesapla
-                    float newX = event.getRawX() + dX;
-                    float newY = event.getRawY() + dY;
-                    // Sürükleme eşiğini kontrol et
-                    if (Math.abs(newX - v.getX()) > DRAG_THRESHOLD ||
-                            Math.abs(newY - v.getY()) > DRAG_THRESHOLD) {
-                        isDragging = true;
-                    }
-                    // Hız takibi
-                    velocityTracker.addMovement(event);
-                    velocityTracker.computeCurrentVelocity(1000);
-                    // FAB ve miniFAB’ları taşı
-                    v.setX(newX);
-                    v.setY(newY);
-                    miniFabs.move(newX - mainFabX, newY - mainFabY);
-                    mainFabX = newX;
-                    mainFabY = newY;
-                    return true;
-
-                case MotionEvent.ACTION_UP:
-                    velocityTracker.addMovement(event);
-                    velocityTracker.computeCurrentVelocity(1000);
-                    if (!isDragging) {
-                        long pressDuration = System.currentTimeMillis() - pressStartTime;
-                        if (pressDuration < LONG_PRESS_THRESHOLD) {
-                            // Kısa tıklama: miniFAB menüsünü toggle et
-                            miniFabs.toggle();
-                        } else {
-                            // Uzun basış
-                            //handleLongClick();
-                        }
-                    } else {
-                        // Sürükleme sonrası momentumlu animasyon
-                        float vx = velocityTracker.getXVelocity();
-                        float vy = velocityTracker.getYVelocity();
-                        miniFabs.animateMomentumGravity(v, vx, vy,rootLayout);
-                    }
-                    return true;
-
-                default:
-                    return false;
-            }
-        });
-    }
-    public SokakActivity.Action onFabClick(View view, FloatingActionButton clickedFab) {
-        if (selectedFab == clickedFab) {
-            // If clicking the same FAB, deselect it and set it back to Teal
-            clickedFab.setBackgroundTintList(ColorStateList.valueOf(Color.parseColor("#008080"))); // Teal
-            miniFabs.resetIconColor(clickedFab); // Restore icon color
-            selectedFab = null;
-        } else {
-            // Deselect previous FAB if there was one
-            if (selectedFab != null) {
-                selectedFab.setBackgroundTintList(ColorStateList.valueOf(Color.parseColor("#008080"))); // Teal
-                miniFabs.resetIconColor(selectedFab);
-            }
-
-            // Select new FAB and set to Red
-            clickedFab.setBackgroundTintList(ColorStateList.valueOf(Color.RED)); // Red
-            miniFabs.applyWhiteColorFilter(clickedFab); // Change icon to White
-            selectedFab = clickedFab;
-        }
-        clickedFab.invalidate(); // Force UI refresh
-        clickedFab.requestLayout(); // Ensure layout updates
-        Log.d("FAB", "onFabClick called");
-        SokakActivity.Action action = null;
-        // Execute the function if not null
-        if (action != null) {
-            action.execute();
-        } else {
-            Log.w("FAB", "Unknown FAB clicked!");
-        }
-        return action;
-    }
-
-    interface Action {
-        void execute();
-    }
+    }    // 3.2. animateFAB() metodu: aç/kapa mantığı
 }

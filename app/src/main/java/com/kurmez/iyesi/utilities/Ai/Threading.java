@@ -1,5 +1,5 @@
 // Threading.java
-package com.kurmez.iyesi.kurmes.Ai;
+package com.kurmez.iyesi.utilities.Ai;
 
 import android.os.Handler;
 import android.os.Looper;

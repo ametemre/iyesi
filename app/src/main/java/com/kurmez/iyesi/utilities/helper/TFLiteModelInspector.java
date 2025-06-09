@@ -1,4 +1,4 @@
-package com.kurmez.iyesi.kurmes.helper;
+package com.kurmez.iyesi.utilities.helper;
 
 import android.content.res.AssetFileDescriptor;
 import android.content.res.AssetManager;

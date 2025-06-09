@@ -1,20 +1,22 @@
 package com.kurmez.iyesi.kurmes;
-import static com.kurmez.iyesi.kurmes.helper.TFLiteModelInspector.loadModelFile;
 
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.google.firebase.auth.FirebaseAuth;
+import com.kurmez.iyesi.utilities.helper.Actions;
+import com.kurmez.iyesi.utilities.helper.Permissions;
 import com.kurmez.iyesi.sahiplendirme.Founded;
 import com.kurmez.iyesi.Login;
 import com.kurmez.iyesi.R;
 import com.kurmez.iyesi.sahiplendirme.Welcome;
-
+import org.opencv.android.CameraBridgeViewBase;
+import org.opencv.core.Mat;
+import org.opencv.imgproc.Imgproc;
 import android.graphics.Bitmap;
-import android.Manifest;
+// ve kendi Detection/Ai class’ınızın import’ları
+
 import android.annotation.SuppressLint;
 import android.app.ProgressDialog;
 import android.content.Intent;
-import android.content.pm.PackageManager;
-import android.content.res.ColorStateList;
 import android.content.res.Resources;
 import android.graphics.Color;
 import android.os.AsyncTask;
@@ -36,46 +38,40 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import androidx.core.app.ActivityCompat;
-import androidx.core.content.ContextCompat;
-
 import org.opencv.android.CameraActivity;
-import org.opencv.android.CameraBridgeViewBase;
 import org.opencv.android.CameraBridgeViewBase.CvCameraViewListener2;
 import org.opencv.android.OpenCVLoader;
-import org.opencv.core.Mat;
 import org.opencv.core.MatOfRect;
-import org.tensorflow.lite.Interpreter;
 import org.tensorflow.lite.support.label.Category;
 
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.nio.MappedByteBuffer;
+import java.nio.BufferUnderflowException;
 import java.util.ArrayList;
 
 import java.util.List;
 
 import java.util.Collections;
 
-import com.kurmez.iyesi.kurmes.Ai.Ai;
+import com.kurmez.iyesi.utilities.Ai.Ai;
 import com.kurmez.iyesi.sokak.SokakActivity;
 import com.kurmez.iyesi.utilities.MiniFabs;
 
 
 public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
     private static final String TAG = "Kurmes";
-    private MiniFabs miniFabs;   // saha değişkeni
     private CameraBridgeViewBase mOpenCvCameraView;
     private Mat rgb, gray;
+    // Kurmes.java içinde class başında
+    public static final int DETECTION_INPUT_SIZE = 640;  // 640→320
+    private static final int SKIP_FRAMES = 5;             // her 2. frame’de bir çalıştır
+    private int frameCount = 0;
 
-    private Ai aiKedi, aiKopek, aiKurt, aiKarga, aiContent;
-
+    public Ai aiKedi, aiKopek, aiKurt, aiKarga, aiContent;
+    private MiniFabs miniFabs;
     public enum State {
         KEDI, KOPEK, KURT, KARGA,
-        IDLE, FACE_DETECTION, OBJECT_DETECTION, TRACKING, CAPTURE
+        IDLE, FACE_DETECTION, OBJECT_DETECTION, TRACKING, CAPTURE,TEST
     }
-    private State currentState = State.IDLE;
+    public State currentState = State.IDLE;
 
     private final List<float[]> soundBuffer = new ArrayList<>();
     private final List<float[][][]> videoBuffer = new ArrayList<float[][][]>();
@@ -94,7 +90,7 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
     private boolean isDragging = false;
     private FirebaseAuth mAuth;
     private Handler handler = new Handler();
-    private static final int CAMERA_PERMISSION_REQUEST_CODE = 100;
+    public static final int CAMERA_PERMISSION_REQUEST_CODE = 100;
     //private JavaCamera2View cameraView; // Using JavaCamera2View
     protected TextView labelText;
     public void SetLabelText(String s){
@@ -109,7 +105,6 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
     //imported---------------------------------
     //private DetectorFunction activeDetectorFunction = () -> videoYapayZeka(getResources().openRawResource(R.raw.lbpcascade_frontalface), null);
     public CameraCalibrator mCalibrator;
-    private FloatingActionButton selectedFab = null; // Track the selected FAB
     private OnCameraFrameRender mOnCameraFrameRender;
     private Menu mMenu;
     private int mWidth;
@@ -128,6 +123,8 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
         Log.i(TAG, "called Kurmes onCreate");
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_kurmes);
+        Permissions permissions = new Permissions();
+
 
         // Firebase Auth
         mAuth = FirebaseAuth.getInstance();
@@ -137,18 +134,7 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
         mOpenCvCameraView.setVisibility(SurfaceView.VISIBLE);
         mOpenCvCameraView.setCvCameraViewListener(this);
         mOpenCvCameraView.enableView();
-/*
-        // Load TFLite models per species
-        try {
-            aiKedi  = new Ai(this, "kedi_sound.tflite",  "kedi_video.tflite");
-            aiKopek = new Ai(this, "kopek_sound.tflite", "kopek_video.tflite");
-            aiKurt  = new Ai(this, "kurt_sound.tflite",  "kurt_video.tflite");
-            aiKarga = new Ai(this, "karga_sound.tflite", "karga_video.tflite");
-            aiContent = new Ai(this, "karga_sound.tflite", "karga_video.tflite");
-        } catch (IOException e) {
-            Log.e(TAG, "Failed to load TFLite models", e);
-        }
-*/
+
         // Keep screen on
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 
@@ -165,13 +151,15 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
                 R.id.fab_4, R.id.fab_5, R.id.fab_6,
                 R.id.fab_7, R.id.fab_8, R.id.fab_9
         };
-        miniFabs = new MiniFabs(
+
+
+        MiniFabs miniFabs = new MiniFabs(
                 this,
                 fabDraggable,
                 fabSound,
                 miniFabIds
         );
-
+        Actions actions = new Actions(miniFabs, this, this /* or getApplicationContext() */ );
         // Apply initial teal/default colors
         miniFabs.applyDefaultColors();
 
@@ -183,15 +171,15 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
         rootLayout.setOnTouchListener(outsideListener);
 
         // Set up draggable & expand/collapse behavior
-        setupDraggableFAB(miniFabs);
+        miniFabs.setupDraggableFAB(miniFabs, fabDraggable);
 
         // Wire each miniFAB to call selectFab() + your onFabClick logic
         for (FloatingActionButton fab : miniFabs.getFabs()) {
             fab.setOnClickListener(v -> {
                 // Highlight selection
-                miniFabs.selectFab((FloatingActionButton)v);
+                miniFabs.selectFab(fab);
                 // Your existing FAB-action logic:
-                onFabClick(v, (FloatingActionButton)v);
+                actions.onFabClick(fab);
             });
         }
 
@@ -202,63 +190,7 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
             // ... your existing recording start/stop ...
         });
 
-        // Permissions
-        requestAudioPermissions();
-        requestStoragePermission();
-        checkAudioPermission();
-        checkAndRequestPermissions();
-    }
-    public Action onFabClick(View view ,FloatingActionButton clickedFab) {
-        if (selectedFab == clickedFab) {
-            // If clicking the same FAB, deselect it and set it back to Teal
-            clickedFab.setBackgroundTintList(ColorStateList.valueOf(Color.parseColor("#008080"))); // Teal
-            miniFabs.resetIconColor(clickedFab); // Restore icon color
-            selectedFab = null;
-        } else {
-            // Deselect previous FAB if there was one
-            if (selectedFab != null) {
-                selectedFab.setBackgroundTintList(ColorStateList.valueOf(Color.parseColor("#008080"))); // Teal
-                miniFabs.resetIconColor(selectedFab);
-            }
 
-            // Select new FAB and set to Red
-            clickedFab.setBackgroundTintList(ColorStateList.valueOf(Color.RED)); // Red
-            miniFabs.applyWhiteColorFilter(clickedFab); // Change icon to White
-            selectedFab = clickedFab;
-        }
-        clickedFab.invalidate(); // Force UI refresh
-        clickedFab.requestLayout(); // Ensure layout updates
-        Log.d("FAB", "onFabClick called");
-        Action action = null;
-        if (view.getId() == R.id.fab_1) {
-            action = this::actionOne;
-            currentState = State.KEDI;
-        } else if (view.getId() == R.id.fab_2) {
-            action = this::actionTwo;
-            currentState = State.KOPEK;
-        } else if (view.getId() == R.id.fab_3) {
-            action = this::actionThree;
-            currentState = State.KURT;
-        } else if (view.getId() == R.id.fab_4) {
-            action = this::actionFour;
-        } else if (view.getId() == R.id.fab_5) {
-            action = this::actionFive;
-        } else if (view.getId() == R.id.fab_6) {
-            action = this::actionSix;
-        } else if (view.getId() == R.id.fab_7) {
-            action = this::actionSeven;
-        } else if (view.getId() == R.id.fab_8) {
-            action = this::actionEight;
-        } else if (view.getId() == R.id.fab_9) {
-            action = this::actionNine;
-        }
-        // Execute the function if not null
-        if (action != null) {
-            action.execute();
-        } else {
-            Log.w("FAB", "Unknown FAB clicked!");
-        }
-        return action;
     }
     //--------------------------Creation
     public void updateDetectedSounds(List<Category> detectedCategories) {
@@ -329,37 +261,55 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
     }                                                         //done
     @Override
     public Mat onCameraFrame(CameraBridgeViewBase.CvCameraViewFrame inputFrame) {
-
+        //Mat rgba = inputFrame.rgba();
         rgb = inputFrame.rgba();
         gray =inputFrame.gray();
-
+        Mat frame;
+        try {
+            // Normal yol: doğrudan RGBA al
+            frame = inputFrame.rgba();
+        } catch (BufferUnderflowException e) {
+            Log.w(TAG, "rgba() buffer underflow, gray→RGBA dönüşümü yapılıyor", e);
+            // Fallback: gray’dan alın ve RGBA’ya çevir
+            Mat gray = inputFrame.gray();
+            frame = new Mat();
+            Imgproc.cvtColor(gray, frame, Imgproc.COLOR_GRAY2RGBA);
+        }
         switch (currentState) {
             case KEDI:
-                handleSpecies(rgb, aiKedi);
+                //handleSpecies(rgb, aiKedi);
                 break;
             case KOPEK:
-                handleSpecies(rgb, aiKopek);
+                //handleSpecies(rgb, aiKopek);
                 break;
             case KURT:
-                handleSpecies(rgb, aiKurt);
+                //handleSpecies(rgb, aiKurt);
                 break;
             case KARGA:
-                handleSpecies(rgb, aiKarga);
+                //handleSpecies(rgb, aiKarga);
                 break;
             case FACE_DETECTION:
                 // Perform face detection
                 //videoYapayZeka(getResources().openRawResource(R.raw.lbpcascade_frontalface), null);
                 break;
             case OBJECT_DETECTION:
+                if (aiContent != null) {
+                    //handleObjectDetection(frame);
+                }
+                //handleObjectDetection(rgba);
                 // Perform object detection
                 // ...
                 break;
             case CAPTURE:
-                capturePhoto(rgb);// Perform ImgCapture
+                //capturePhoto(rgb);// Perform ImgCapture
                 navigateToFoundedActivity();
                 // ...
                 break;
             case TRACKING:
+                // Perform tracking
+                // ...
+                break;
+            case TEST:
                 // Perform tracking
                 // ...
                 break;
@@ -370,11 +320,16 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
                 break;
         }
 
-        Log.d(TAG, "Processing camera frame...");
-        updateCameraStatus(currentState.toString() + "birde" + photoList.size());
+        //Log.d(TAG, "Processing camera frame...");
+        //updateCameraStatus(currentState.toString() + "birde" + photoList.size());
 
-        return rgb; // Return the raw RGBA frame
-    } //Essential For Camera
+        return frame; // Return the raw RGBA frame
+    }               //Essential For Camera
+    private void navigateToFoundedActivity() {
+        Intent intent = new Intent(this, Founded.class);
+        intent.putParcelableArrayListExtra("photos", new ArrayList<>(photoList)); // Pass the photos
+        startActivity(intent);
+    }
     @Override
     protected void onResume() {
         super.onResume();
@@ -529,7 +484,7 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
     protected List<? extends CameraBridgeViewBase> getCameraViewList() {
         return Collections.singletonList(mOpenCvCameraView);
     }//Essential For Camera
-    private boolean cameraState(Boolean state){
+    public boolean cameraState(Boolean state){
         if (state){
             if (mOpenCvCameraView != null) {
                 mOpenCvCameraView.enableView();
@@ -559,306 +514,6 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
             Log.d(TAG, status);
         });
     }//Essential For Camera
-    @SuppressLint("ClickableViewAccessibility")
-    private void setupDraggableFAB(MiniFabs miniFabs) {
-        fabDraggable.setOnTouchListener((v, event) -> {
-            switch (event.getActionMasked()) {
-                case MotionEvent.ACTION_DOWN:
-                    // Başlangıç pozisyonlarını ve zaman damgasını ayarla
-                    dX = v.getX() - event.getRawX();
-                    dY = v.getY() - event.getRawY();
-                    mainFabX = v.getX();
-                    mainFabY = v.getY();
-                    isDragging = false;
-                    pressStartTime = System.currentTimeMillis();
-                    // VelocityTracker hazırla
-                    if (velocityTracker == null) {
-                        velocityTracker = VelocityTracker.obtain();
-                    } else {
-                        velocityTracker.clear();
-                    }
-                    velocityTracker.addMovement(event);
-                    SetLabelText("Ready !");
-                    return true;
 
-                case MotionEvent.ACTION_MOVE:
-                    // Yeni pozisyonu hesapla
-                    float newX = event.getRawX() + dX;
-                    float newY = event.getRawY() + dY;
-                    // Sürükleme eşiğini kontrol et
-                    if (Math.abs(newX - v.getX()) > DRAG_THRESHOLD ||
-                            Math.abs(newY - v.getY()) > DRAG_THRESHOLD) {
-                        isDragging = true;
-                    }
-                    // Hız takibi
-                    velocityTracker.addMovement(event);
-                    velocityTracker.computeCurrentVelocity(1000);
-                    // FAB ve miniFAB’ları taşı
-                    v.setX(newX);
-                    v.setY(newY);
-                    miniFabs.move(newX - mainFabX, newY - mainFabY);
-                    mainFabX = newX;
-                    mainFabY = newY;
-                    return true;
 
-                case MotionEvent.ACTION_UP:
-                    velocityTracker.addMovement(event);
-                    velocityTracker.computeCurrentVelocity(1000);
-                    if (!isDragging) {
-                        long pressDuration = System.currentTimeMillis() - pressStartTime;
-                        if (pressDuration < LONG_PRESS_THRESHOLD) {
-                            // Kısa tıklama: miniFAB menüsünü toggle et
-                            miniFabs.toggle();
-                        } else {
-                            // Uzun basış
-                            handleLongClick();
-                        }
-                    } else {
-                        // Sürükleme sonrası momentumlu animasyon
-                        float vx = velocityTracker.getXVelocity();
-                        float vy = velocityTracker.getYVelocity();
-                        miniFabs.animateMomentumGravity(v, vx, vy,rootLayout);
-                    }
-                    return true;
-
-                default:
-                    return false;
-            }
-        });
-    }
-    private void handleLongClick() {
-        animateButtonPress();
-        if (mAuth.getCurrentUser() != null) {
-                startActivity(new Intent(Kurmes.this, Welcome.class));
-        } else {
-            startActivity(new Intent(Kurmes.this, Login.class));
-        }
-    }
-    private void animateButtonPress() {
-        fabDraggable.setEnabled(false);
-
-        // Create shadow effect
-        Animation scaleDown = new ScaleAnimation(
-                1f, 0.9f, 1f, 0.9f,
-                Animation.RELATIVE_TO_SELF, 0.5f,
-                Animation.RELATIVE_TO_SELF, 0.5f);
-        scaleDown.setDuration(500);
-        scaleDown.setFillAfter(true);
-
-        Animation fadeOut = new AlphaAnimation(1f, 0.6f);
-        fadeOut.setDuration(2000);
-
-        fabDraggable.startAnimation(scaleDown);
-        fabDraggable.startAnimation(fadeOut);
-
-        handler.postDelayed(() -> {
-            fabDraggable.clearAnimation();
-            fabDraggable.setEnabled(true);
-        }, 2000);
-    }
-    private void checkAndRequestPermissions() {
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.CAMERA}, CAMERA_PERMISSION_REQUEST_CODE);
-        } else {
-            cameraState(true);
-        }
-    }//Essential For Camera
-    private void requestStoragePermission() {
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE}, 200);
-        }
-    }
-    private void requestAudioPermissions() {
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED ||
-                ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
-
-            ActivityCompat.requestPermissions(this,
-                    new String[]{Manifest.permission.RECORD_AUDIO, Manifest.permission.WRITE_EXTERNAL_STORAGE}, 200);
-        }
-    }
-    private void checkAudioPermission() {
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.RECORD_AUDIO}, 101);
-        }
-    }
-    public static Bitmap resizeBitmap(Bitmap bitmap, int maxSize) {
-        int width = bitmap.getWidth();
-        int height = bitmap.getHeight();
-        float scale = (float) maxSize / Math.max(width, height);
-
-        return Bitmap.createScaledBitmap(bitmap, (int) (width * scale), (int) (height * scale), true);
-    }
-    private void capturePhoto(Mat rgb) {
-        if (rgb == null) {
-            Log.e(TAG, "Error: rgb is null!");
-        } else {
-            Log.e(TAG, "rgb.cols(): " + rgb.cols() + ", rgb.rows(): " + rgb.rows());
-        }
-
-        if (rgb != null && !rgb.empty() && rgb.cols() > 0 && rgb.rows() > 0) {
-            // Convert Mat to Bitmap
-            requestStoragePermission();
-            Bitmap bitmap = Bitmap.createBitmap(rgb.cols(), rgb.rows(), Bitmap.Config.ARGB_8888);
-            org.opencv.android.Utils.matToBitmap(rgb, bitmap);
-
-            Bitmap resizedBitmap = resizeBitmap(bitmap, 225);
-            photoList.add(resizedBitmap);
-
-            // Save the image to storage
-            String filename = "Kurmes_Capture_" + System.currentTimeMillis() + ".jpg";
-            File file = new File(getExternalFilesDir(null), filename);
-
-            try (FileOutputStream out = new FileOutputStream(file)) {
-                resizedBitmap.compress(Bitmap.CompressFormat.JPEG, 100, out);
-                out.flush();
-                Toast.makeText(this, "Photo saved: " + file.getAbsolutePath(), Toast.LENGTH_SHORT).show();
-            } catch (IOException e) {
-                Log.e(TAG, "Failed to save photo", e);
-                Toast.makeText(this, "Failed to save photo", Toast.LENGTH_SHORT).show();
-            }
-        } else {
-            Toast.makeText(this, "No valid image to capture", Toast.LENGTH_SHORT).show();
-        }
-    }
-    private void navigateToFoundedActivity() {
-        Intent intent = new Intent(this, Founded.class);
-        intent.putParcelableArrayListExtra("photos", new ArrayList<>(photoList)); // Pass the photos
-        startActivity(intent);
-    }
-    private void actionOne() {
-        cameraState(true);
-        CatSpeciesRecognition();
-        Log.d("Action", "Action One Executed!");
-    }
-    private void actionTwo() {
-        SetLabelText("denedik");
-        DogSpeciesRecognition();
-        Log.d("Action", "Action Two Executed!");
-    }
-    private void actionThree() {
-        WolfSpeciesRecognition();
-        Log.d("Action", "Action Three Executed!");
-    }
-    private void actionFour() {
-        CrowSpeciesRecognition();
-        Log.d("Action", "Action Four Executed!");
-    }
-    private void actionFive() {
-        HawkSpeciesRecognition();
-        Log.d("Action", "Action Five Executed!");
-    }
-    private void actionSix() {
-        EagleSpeciesRecognition();
-        Log.d("Action", "Action Six Executed!");
-    }
-    private void actionSeven() {
-        KeklikSpeciesRecognition();
-        Log.d("Action", "Action Seven Executed!");
-    }
-    private void actionEight() {
-        PidgeonSpeciesRecognition();
-        Log.d("Action", "Action Eight Executed!");
-    }
-    private void actionNine() {
-        Log.d("Action", "Action Nine Executed!");
-    }
-    private void DogSpeciesRecognition(){
-        //TFLiteModelInspector.main(null);
-    }
-    private void CatSpeciesRecognition(){}
-    private void WolfSpeciesRecognition(){
-        Interpreter tflite;
-        try {
-            MappedByteBuffer modelBuffer = loadModelFile(getAssets(), "yolov8n.tflite");
-            tflite = new Interpreter(modelBuffer);
-        } catch (IOException e) {
-            Log.e(TAG, "Model yüklenirken hata", e);
-        }
-
-    }
-    private void CrowSpeciesRecognition(){}
-    private void HawkSpeciesRecognition(){}
-    private void EagleSpeciesRecognition(){}
-    private void KeklikSpeciesRecognition(){}
-    private void PidgeonSpeciesRecognition(){}
-    private void handleSpecies(Mat frame, Ai ai) {
-        if (ai == null) {
-            Log.w(TAG, "AI model is null—skipping inference for state " + currentState);
-            return;
-        }
-        // video inference
-        float[][][][] imgTensor = preprocessImage(frame);
-        ai.predictVideo(imgTensor, videoOut -> {
-            synchronized (videoBuffer) {
-                videoBuffer.add(videoOut);
-            }
-        });
-
-        // sound inference
-        float[][] audioTensor = captureAudioFeatures();
-        ai.predictSound(audioTensor, soundOut -> {
-            synchronized (soundBuffer) {
-                soundBuffer.add(soundOut);
-            }
-        });
-
-        // combine when thresholds reached
-        if (videoBuffer.size() >= VIDEO_THRESHOLD && soundBuffer.size() >= SOUND_THRESHOLD) {
-            runOnUiThread(() -> matchPercepts(currentState, videoBuffer, soundBuffer));
-            videoBuffer.clear();
-            soundBuffer.clear();
-        }
-    }
-    private void matchPercepts(State state, List<float[][][]> vidBuf, List<float[]> sndBuf) {
-        switch (state) {
-            case KEDI:
-                float[] catSound = sndBuf.get(sndBuf.size() - 1);
-                int idxCat = argmax(catSound);
-                String catLabel = KEDI_SOUNDS[idxCat];
-                Log.i(TAG, "Detected cat sound: " + catLabel);
-                break;
-            case KOPEK:
-                float[] dogSound = sndBuf.get(sndBuf.size() - 1);
-                int idxDog = argmax(dogSound);
-                String dogLabel = KOPEK_SOUNDS[idxDog];
-                Log.i(TAG, "Detected dog sound: " + dogLabel);
-                break;
-            case KURT:
-                float[] wolfSound = sndBuf.get(sndBuf.size() - 1);
-                int idxWolf = argmax(wolfSound);
-                String wolfLabel = KURT_SOUNDS[idxWolf];
-                Log.i(TAG, "Detected wolf sound: " + wolfLabel);
-                break;
-            case KARGA:
-                float[] crowSound = sndBuf.get(sndBuf.size() - 1);
-                int idxCrow = argmax(crowSound);
-                String crowLabel = KARGA_SOUNDS[idxCrow];
-                Log.i(TAG, "Detected crow sound: " + crowLabel);
-                break;
-            default:
-                break;
-        }
-    }
-    private int argmax(float[] array) {
-        int maxIdx = 0;
-        float maxVal = array[0];
-        for (int i = 1; i < array.length; i++) {
-            if (array[i] > maxVal) {
-                maxVal = array[i];
-                maxIdx = i;
-            }
-        }
-        return maxIdx;
-    }
-    private float[][][][] preprocessImage(Mat frame) {
-        // TODO: implement frame → tensor conversion
-        return new float[1][224][224][3];
-    }
-    private float[][] captureAudioFeatures() {
-        // TODO: implement audio capture → feature vector
-        return new float[1][40];
-    }
-    interface Action {
-        void execute();
-    }
 }

@@ -46,6 +46,8 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
@@ -69,105 +71,12 @@ import okhttp3.ResponseBody;
 public class Harita implements OnMapReadyCallback {
 
     private static final String TAG = "Harita";
+    private String currentCountryCode2,currentCountryCode3;
+    private final List<String> levelOptions = Arrays.asList("ADM5", "ADM4", "ADM3", "ADM2", "ADM1", "ADM0", "OSM");
+    private static final String GITHUB_BASE =""; //"https://github.com/wmgeolab/geoBoundaries/raw/refs/heads/main/releaseData/gbOpen/";// “main” branch altındaki releaseData klasörü (raw GitHub URL)
 
-    // “main” branch altındaki releaseData klasörü (raw GitHub URL)
-    private static final String GITHUB_BASE =
-            "https://github.com/wmgeolab/geoBoundaries/raw/refs/heads/main/releaseData/gbOpen/";
-
-    private final FragmentActivity activity;
     private GoogleMap mMap;
-    private boolean ready = false;
-    // Harita sınıfı içinde, field olarak:
-    private GeoJsonLayer layerCountry;
-    private GeoJsonLayer layerProvince;
-    private GeoJsonLayer layerDistrict;
-
-    private final FusedLocationProviderClient locationClient;
-    private final ActivityResultLauncher<String[]> permissionLauncher;
-
-    // Kullanıcının bulunduğu ülkenin ISO kodları
-    private String currentCountryCode2; // Örn: “TR”
-    private String currentCountryCode3; // Örn: “TUR”
-
-    // Spinner ve doldurduğu seçenekler
-    private Spinner spinnerLevels;
-    private final List<String> levelOptions = Arrays.asList(
-            "ADM5", "ADM4", "ADM3", "ADM2", "ADM1", "ADM0", "OSM"
-    );
-
-    // Harita ve konum alınıp hazır olduğunda spinner seçimlerini işleyebilmek için:
-    private boolean mapReady = false;
-    private boolean countryResolved = false;
-
-    // Kullanıcının konumu ve yarıçap (metre)
-    private LatLng centerPoint;
-    private final double radiusMeters = 50000; // Örneğin 50 km
-
-    public Harita(FragmentActivity activity) {
-        this.activity = activity;
-
-        // 1. Harita fragment’i başlat
-        SupportMapFragment mapFragment = (SupportMapFragment)
-                activity.getSupportFragmentManager().findFragmentById(R.id.map);
-        if (mapFragment != null) {
-            mapFragment.getMapAsync(this);
-        }
-
-        // 2. Konum istemcisi
-        locationClient = LocationServices.getFusedLocationProviderClient(activity);
-
-        // 3. İzin launcher’ı
-        permissionLauncher = activity.registerForActivityResult(
-                new ActivityResultContracts.RequestMultiplePermissions(),
-                result -> {
-                    Boolean fine = result.getOrDefault(Manifest.permission.ACCESS_FINE_LOCATION, false);
-                    Boolean coarse = result.getOrDefault(Manifest.permission.ACCESS_COARSE_LOCATION, false);
-                    if ((fine != null && fine) || (coarse != null && coarse)) {
-                        getUserLocationAndLoadInitial();
-                    } else {
-                        Toast.makeText(activity, "Konum izni verilmedi.", Toast.LENGTH_LONG).show();
-                    }
-                }
-        );
-
-        // 4. Spinner’ı bul ve adapter’ı ayarla
-        initSpinner();
-    }
-
-    /**
-     * Spinner’ı (dropdown) kullanıcı arayüzünden bulur, seçenekleri atar ve seçim olayını dinler.
-     */
-    private void initSpinner() {
-        spinnerLevels = activity.findViewById(R.id.spinner_level_1);
-        ArrayAdapter<String> adapter = new ArrayAdapter<>(
-                activity,
-                android.R.layout.simple_spinner_dropdown_item,
-                levelOptions
-        );
-        spinnerLevels.setAdapter(adapter);
-
-        spinnerLevels.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
-            @Override
-            public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
-                String selected = levelOptions.get(position);
-
-                // Sadece harita ve ülke kodu hazırsa yükleme yap
-                if (mapReady && countryResolved) {
-                    if (!"OSM".equals(selected)) {
-                        loadFromGitHub(currentCountryCode3, selected);
-                    } else {
-                        loadFromOSM(currentCountryCode2);
-                    }
-                }
-            }
-
-            @Override
-            public void onNothingSelected(AdapterView<?> parent) {
-                // Boş duruma gerek yok
-            }
-        });
-    }
-
+    private GeoJsonLayer layerCountry,layerProvince,layerDistrict;
     @Override
     public void onMapReady(@NonNull GoogleMap googleMap) {
         mMap = googleMap;
@@ -199,12 +108,118 @@ public class Harita implements OnMapReadyCallback {
             getUserLocationAndLoadInitial();
         }
     }
-    public boolean isReady() { return ready && countryResolved; }
+    private final FragmentActivity activity;
+    // Harita sınıfı içinde, field olarak:
+    private final FusedLocationProviderClient locationClient;
+    private final ActivityResultLauncher<String[]> permissionLauncher;
+    private Spinner spinnerLevels;
+    private boolean mapReady,countryResolved,ready = false;
+    private LatLng centerPoint;
+    private final double radiusMeters = 50000; // Örneğin 50 km
+    public Harita(FragmentActivity activity) {
+        this.activity = activity;
 
-    /**
-     * Kullanıcının konumunu alır, ülke kodlarını çözer ve spinner’daki seçime göre
-     * GeoBoundaries → OSM yüklemesini tetikler.
+        // 1. Harita fragment’i başlat
+        SupportMapFragment mapFragment = (SupportMapFragment)
+                activity.getSupportFragmentManager().findFragmentById(R.id.map);
+        if (mapFragment != null) {
+            mapFragment.getMapAsync(this);
+        }
+
+        // 2. Konum istemcisi
+        locationClient = LocationServices.getFusedLocationProviderClient(activity);
+
+        // 3. İzin launcher’ı
+        permissionLauncher = activity.registerForActivityResult(
+                new ActivityResultContracts.RequestMultiplePermissions(),
+                result -> {
+                    Boolean fine = result.getOrDefault(Manifest.permission.ACCESS_FINE_LOCATION, false);
+                    Boolean coarse = result.getOrDefault(Manifest.permission.ACCESS_COARSE_LOCATION, false);
+                    if ((fine != null && fine) || (coarse != null && coarse)) {
+                        getUserLocationAndLoadInitial();
+                    } else {
+                        Toast.makeText(activity, "Konum izni verilmedi.", Toast.LENGTH_LONG).show();
+                    }
+                }
+        );
+
+        // 4. Spinner’ı bul ve adapter’ı ayarla
+        initSpinner();
+    }
+    // 1) Harita sınıfına şu yardımcı metodları ekleyin:
+
+    private boolean hasLocalGeoJson(String fileName) {
+        try {
+            // assets/maps klasöründeki dosyaları listeliyoruz
+            String[] list = activity.getAssets().list("maps");
+            if (list != null) {
+                for (String asset : list) {
+                    if (asset.equals(fileName)) return true;
+                }
+            }
+        } catch (IOException e) {
+            Log.e(TAG, "Asset listelenirken hata: " + e.getMessage());
+        }
+        return false;
+    }
+    private void loadLocalOrFallback(String iso3, String admLevel) {
+        if ("OSM".equals(admLevel)) {
+            loadFromOSM(currentCountryCode2);
+            return;
+        }
+        String fileName = String.format("geoBoundaries-%s-%s.geojson", iso3, admLevel);
+        if (hasLocalGeoJson(fileName)) {
+            // Yerelde varsa yükle ve çiz
+            try (InputStream is = activity.getAssets().open("maps/" + fileName)) {
+                byte[] buf = new byte[is.available()];
+                is.read(buf);
+                String json = new String(buf, StandardCharsets.UTF_8);
+                activity.runOnUiThread(() -> {
+                    // Spinner’ı da güncelleyelim
+                    int idx = levelOptions.indexOf(admLevel);
+                    if (idx >= 0) spinnerLevels.setSelection(idx);
+                    GeoSon.filterAndDraw(activity, mMap, json, centerPoint, radiusMeters);
+                });
+            } catch (IOException e) {
+                Log.e(TAG, "Yerel GeoJSON okunamadı, fallback: " + e.getMessage());
+                //loadFromGitHub(iso3, admLevel);
+            }
+        } else {
+            // Yerelde yoksa GitHub’a sor
+            //loadFromGitHub(iso3, admLevel);
+        }
+    }
+
+    private void initSpinner() {
+        spinnerLevels = activity.findViewById(R.id.spinner_level_1);
+        ArrayAdapter<String> adapter = new ArrayAdapter<>(
+                activity,
+                android.R.layout.simple_spinner_dropdown_item,
+                levelOptions
+        );
+        spinnerLevels.setAdapter(adapter);
+
+        spinnerLevels.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+                String selected = levelOptions.get(position);
+
+                // Sadece harita ve ülke kodu hazırsa yükleme yap
+                if (mapReady && countryResolved) {
+                    if (!"OSM".equals(selected)) {
+                        loadLocalOrFallback(currentCountryCode3, selected);
+                        //loadFromGitHub(currentCountryCode3, selected);
+                    } else {
+                        //loadFromOSM(currentCountryCode2);
+                    }
+                }
+            }
+            @Override public void onNothingSelected(AdapterView<?> parent) { }
+        });
+    }    /**
+     * Spinner’ı (dropdown) kullanıcı arayüzünden bulur, seçenekleri atar ve seçim olayını dinler.
      */
+    public boolean isReady() { return ready && countryResolved; }
     private void getUserLocationAndLoadInitial() {
         if (ActivityCompat.checkSelfPermission(activity, Manifest.permission.ACCESS_FINE_LOCATION)
                 != PackageManager.PERMISSION_GRANTED
@@ -235,13 +250,18 @@ public class Harita implements OnMapReadyCallback {
 
                         // Spinner’daki o anki seçim (default “ADM5” vb.) alınır:
                         String defaultSelection = (String) spinnerLevels.getSelectedItem();
+                        if (defaultSelection != null && countryResolved && mapReady) {
+                            loadLocalOrFallback(currentCountryCode3, defaultSelection);
+                        }
+                        /*
                         if (defaultSelection != null) {
                             if (!"OSM".equals(defaultSelection)) {
-                                loadFromGitHub(currentCountryCode3, defaultSelection);
+                                //loadFromGitHub(currentCountryCode3, defaultSelection);
                             } else {
-                                loadFromOSM(currentCountryCode2);
+                                //loadFromOSM(currentCountryCode2);
                             }
                         }
+                        */
                     }
                 } catch (IOException e) {
                     Toast.makeText(activity, "Geocoder hatası.", Toast.LENGTH_SHORT).show();
@@ -250,14 +270,10 @@ public class Harita implements OnMapReadyCallback {
                 Toast.makeText(activity, "Konum alınamadı.", Toast.LENGTH_SHORT).show();
             }
         });
-    }
-
-    /**
-     * GitHub raw üzerinden GeoBoundaries “admLevel” dosyasını çeker.
-     * Eğer 404 veya ağ hatası/düzgün JSON dönmezse fallbackToNext ile bir sonraki adıma geçer.
+    }    /**
+     * Kullanıcının konumunu alır, ülke kodlarını çözer ve spinner’daki seçime göre
+     * GeoBoundaries → OSM yüklemesini tetikler.
      */
-// Harita.java içinde, loadFromGitHub(...) metodu:
-
     private void loadFromGitHub(String iso3, String admLevel) {
         String fileName = String.format("geoBoundaries-%s-%s.geojson", iso3, admLevel);
         String url = GITHUB_BASE + iso3 + "/" + admLevel + "/" + fileName;
@@ -300,11 +316,9 @@ public class Harita implements OnMapReadyCallback {
                 }
             }
         });
-    }
-
-
-    /**
-     * GeoBoundaries sıralaması: ADM5 → ADM4 → ADM3 → ADM2 → ADM1 → ADM0 → OSM
+    }    /**
+     * GitHub raw üzerinden GeoBoundaries “admLevel” dosyasını çeker.
+     * Eğer 404 veya ağ hatası/düzgün JSON dönmezse fallbackToNext ile bir sonraki adıma geçer.
      */
     private void fallbackToNext(String iso3, String currentAdm) {
         switch (currentAdm) {
@@ -329,10 +343,8 @@ public class Harita implements OnMapReadyCallback {
             default:
                 Toast.makeText(activity, "Sınır verisi bulunamadı.", Toast.LENGTH_SHORT).show();
         }
-    }
-
-    /**
-     * OSM fallback: Ülke ISO2 koduna göre polygon verisini alır.
+    }    /**
+     * GeoBoundaries sıralaması: ADM5 → ADM4 → ADM3 → ADM2 → ADM1 → ADM0 → OSM
      */
     private void loadFromOSM(String countryIso2) {
         String url = "https://polygons.openstreetmap.fr/get_geojson.py?id="
@@ -375,9 +387,9 @@ public class Harita implements OnMapReadyCallback {
                 }
             }
         });
-    }
-// Harita.java içinde
-
+    }    /**
+     * OSM fallback: Ülke ISO2 koduna göre polygon verisini alır.
+     */
     public void loadLayer(int levelIndex, String admLevel) {
         SokakActivity act = (SokakActivity) activity;
         act.runOnUiThread(() -> {
@@ -513,7 +525,6 @@ public class Harita implements OnMapReadyCallback {
 
         });
     }
-
     /**
      * Haritaya tıklayınca besleme noktası eklemek için kullanılan metot.
      */
