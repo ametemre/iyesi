@@ -4,6 +4,8 @@ import android.Manifest;
 import android.app.Activity;
 import android.content.Context;
 import android.graphics.Bitmap;
+import android.graphics.Canvas;
+import android.graphics.Color;
 import android.graphics.RectF;
 import android.util.Log;
 import android.widget.Toast;
@@ -24,10 +26,12 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Objects;
 
 public class Detection {
     // ————————————————
@@ -36,6 +40,8 @@ public class Detection {
     public final String label;
     public final int classId;
     public final float x1, y1, x2, y2, score;
+    // DetectionActivity.java
+    private static final float SCORE_THRESHOLD = 0.9f;  // 50% üzeri kesin kabul
 
     // ————————————————————————
     // ❷ Inference ve yardımcı alanlar
@@ -174,32 +180,91 @@ public class Detection {
             ));
         }
     }
-
-    /**
-     * Video ve ses verisiyle tür tespiti akışı
-     */
-    public void handleSpecies(Mat frame) {
-        if (aiContent == null) {
-            Log.w(TAG, "AI modeli yok, inference atlanıyor");
-            return;
+    public void handleRT(Mat frame,Ai ai){
+        Mat rgba = new Mat();
+        if (frame.channels() == 3) {
+            Imgproc.cvtColor(frame, rgba, Imgproc.COLOR_RGB2RGBA);
+        } else {
+            rgba = frame;
         }
-        float[][][][] imgTensor = preprocessImage(frame);
-        aiContent.predictVideo(imgTensor, videoOut -> {
-            synchronized (videoBuffer) { videoBuffer.add(videoOut); }
-        });
-
-        float[][] audioTensor = captureAudioFeatures();
-        aiContent.predictSound(audioTensor, soundOut -> {
-            synchronized (soundBuffer) { soundBuffer.add(soundOut); }
-        });
-
-        if (videoBuffer.size() >= VIDEO_THRESHOLD &&
-                soundBuffer.size() >= SOUND_THRESHOLD) {
-            runOnUiThread(() -> matchPercepts(currentState, videoBuffer, soundBuffer));
-            videoBuffer.clear();
-            soundBuffer.clear();
+        Bitmap frameBitmap = Bitmap.createBitmap(rgba.cols(), rgba.rows(), Bitmap.Config.ARGB_8888);
+        Utils.matToBitmap(rgba, frameBitmap);
+// 1. Mapper’ı oluştur
+// 1. Mapper’ı oluştur
+        int srcW = frame.cols();
+        int srcH = frame.rows();
+        TFLiteInputMapper mapper = null;
+        if (frame.width()>0 && frame.height()>0) {
+            mapper = new TFLiteInputMapper(frame.width(), frame.height(), ai.getInputWidth(), ai.getInputHeight());
+        }else {
+            mapper = new TFLiteInputMapper(srcW, srcH, ai.getInputWidth(), ai.getInputHeight());
         }
+// 2. Frame’i ölçekle
+        Bitmap scaled = Bitmap.createScaledBitmap(
+                frameBitmap,
+                mapper.getScaledWidth(),
+                mapper.getScaledHeight(),
+                true
+        );
+
+
+// 3. Siyah (veya istediğiniz renk) bir input Bitmap yarat
+        Bitmap inputBmp = Bitmap.createBitmap(
+                ai.getInputWidth(), ai.getInputHeight(), Objects.requireNonNull(frameBitmap.getConfig())
+        );
+        Canvas c = new Canvas(inputBmp);
+        c.drawColor(Color.BLACK);
+        c.drawBitmap(scaled, mapper.getOffsetX(), mapper.getOffsetY(), null);
+
+// 4. ByteBuffer’a dönüştürme (örnek)
+        ByteBuffer inputBuffer = ByteBuffer.allocateDirect(4 * ai.getInputWidth() * ai.getInputHeight() * 3)
+                .order(ByteOrder.nativeOrder());
+        for (int y = 0; y < ai.getInputHeight(); y++) {
+            for (int x = 0; x < ai.getInputWidth(); x++) {
+                int pixel = inputBmp.getPixel(x, y);
+                inputBuffer.putFloat(((pixel >> 16) & 0xFF) / 255f);
+                inputBuffer.putFloat(((pixel >> 8)  & 0xFF) / 255f);
+                inputBuffer.putFloat(((pixel)       & 0xFF) / 255f);
+            }
+        }
+        inputBuffer.rewind();
+        ai.predictVideo(bitmapToInputTensor(inputBmp),rawOutput -> {
+            // 1) Ham çıktıyı Detection objelerine dönüştür
+            //    parseDetections metodu Detection.java içinde tanımlı
+            List<Detection> dets = parseDetections(rawOutput);  // :contentReference[oaicite:0]{index=0}
+
+            // 2) UI thread’ine geç ve tespitleri çiz
+            runOnUiThread(() -> {
+                for (Detection d : dets) {
+                    // Üst-sol ve alt-sağ köşe noktaları
+                    Point tl = new Point(d.x1, d.y1);
+                    Point br = new Point(d.x2, d.y2);
+                    // Yeşil çerçeve
+                    if (d.score > SCORE_THRESHOLD) {
+                    Imgproc.rectangle(frame, tl, br, new Scalar(0, 255, 0), 2);
+                    // Beyaz etiket yazısı
+                    Imgproc.putText(
+                            frame,
+                            d.label + String.format(" %.2f", d.score),
+                            new Point(d.x1, d.y1 - 8),
+                            Imgproc.FONT_HERSHEY_SIMPLEX,
+                            0.6,
+                            new Scalar(255, 255, 255),
+                            2
+                    );
+
+                        Log.w(TAG, "AI modeli yüklendi ve çalışıyor..." + d.label + d.score);
+                    }
+
+                }
+            });
+        });
     }
+    /**
+     * detections listesinden, score'u threshold'dan yüksek olanların
+     * etiketlerini döner.
+     */
+
 
     private void matchPercepts(Kurmes.State state,
                                List<float[][][]> vidBuf,
@@ -289,11 +354,10 @@ public class Detection {
         if (classId >= 0 && classId < labels.length) return labels[classId];
         return "cls" + classId;
     }
-
     /**
      * OpenCV ile object detection görselleştirmesi
      */
-    public void handleObjectDetection(Mat frame) {
+    public void handleObjectDetection(Mat frame, Ai ai) {
         if (++frameCount % SKIP_FRAMES != 0) return;
 
         Bitmap bmp = Bitmap.createBitmap(frame.cols(), frame.rows(),
@@ -301,7 +365,7 @@ public class Detection {
         Utils.matToBitmap(frame, bmp);
 
         float[][][][] input = bitmapToInputTensor(bmp);
-        aiContent.predictVideo(input, output -> {
+        ai.predictVideo(input, output -> {
             runOnUiThread(() -> {
                 List<Detection> dets = parseDetections(output);
                 for (Detection d : dets) {
@@ -315,7 +379,31 @@ public class Detection {
             });
         });
     }
+    /**
+     * Video ve ses verisiyle tür tespiti akışı
+     */
+    public void handleSpecies(Mat frame,Ai ai) {
+        if (ai == null) {
+            Log.w(TAG, "AI modeli yok, inference atlanıyor");
+            return;
+        }
+        float[][][][] imgTensor = preprocessImage(frame);
+        ai.predictVideo(imgTensor, videoOut -> {
+            synchronized (videoBuffer) { videoBuffer.add(videoOut); }
+        });
 
+        float[][] audioTensor = captureAudioFeatures();
+        ai.predictSound(audioTensor, soundOut -> {
+            synchronized (soundBuffer) { soundBuffer.add(soundOut); }
+        });
+
+        if (videoBuffer.size() >= VIDEO_THRESHOLD &&
+                soundBuffer.size() >= SOUND_THRESHOLD) {
+            runOnUiThread(() -> matchPercepts(currentState, videoBuffer, soundBuffer));
+            videoBuffer.clear();
+            soundBuffer.clear();
+        }
+    }
     /**
      * Ekran görüntüsü yakala ve disk kaydet
      */

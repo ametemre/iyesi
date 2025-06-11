@@ -34,7 +34,7 @@ import com.kurmez.iyesi.utilities.helper.Actions;
 
 public class SokakActivity extends FragmentActivity {
     private FloatingActionButton selectedFab = null; // Track the selected FAB
-
+    public Kurmes kurmes;
     private VelocityTracker velocityTracker = null;
     private FloatingActionButton fabDraggable, fabSound;
     private float dX, dY;
@@ -70,11 +70,6 @@ public class SokakActivity extends FragmentActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_sokak);
         // 1) Animasyonları yükle
-        rootLayout       = findViewById(android.R.id.content);
-        fabOpenAnim = AnimationUtils.loadAnimation(this, R.anim.fab_open);
-        fabCloseAnim = AnimationUtils.loadAnimation(this, R.anim.fab_close);
-        rotateForwardAnim = AnimationUtils.loadAnimation(this, R.anim.rotate_forward);
-        rotateBackwardAnim = AnimationUtils.loadAnimation(this, R.anim.rotate_backward);
         initializeSpinners();
         initializeFABs();
         // Yalnızca harita ile ilgili başlatmayı Harita sınıfına devret
@@ -163,7 +158,10 @@ public class SokakActivity extends FragmentActivity {
         }
     }
     private void initializeFABs() {
-
+        fabOpenAnim = AnimationUtils.loadAnimation(this, R.anim.fab_open);
+        fabCloseAnim = AnimationUtils.loadAnimation(this, R.anim.fab_close);
+        rotateForwardAnim = AnimationUtils.loadAnimation(this, R.anim.rotate_forward);
+        rotateBackwardAnim = AnimationUtils.loadAnimation(this, R.anim.rotate_backward);
         mainFab = findViewById(R.id.main_fab);
         beslemeFab = findViewById(R.id.besleme_fab);
         bolgeFab = findViewById(R.id.bolge_fab);
@@ -182,83 +180,17 @@ public class SokakActivity extends FragmentActivity {
 
         mainFab.setVisibility(View.VISIBLE);
         // 3) Alt-FAB’lara tıklayınca seçili hâle getir + kendi işlevinizi çağırın
-        for (FloatingActionButton fab : miniFabs.getFabs()) {
-            fab.setOnClickListener(v -> {
-                // Renkleri güncelle (kırmızı-beyaz)
-                miniFabs.selectFab((FloatingActionButton) v);
-
-                // İşleminizi burada yapın
-                int id = v.getId();
-                if (id == R.id.besleme_fab) {
-                    // Örneğin: harita.enableBeslemeMode();
-                } else if (id == R.id.bolge_fab) {
-                    // Bölge işlemi
-                } else if (id == R.id.nakil_fab) {
-                    // Nakil işlemi
-                }
-                // İsterseniz miniFAB menüsünü kapatmak için:
-                miniFabs.collapse();
-            });
-            Actions actions = new Actions(miniFabs, this, this /* or getApplicationContext() */ );
-            soundFab.setOnClickListener(v -> {
-                if (miniFabs.getSelectedFab() != null) {
-                    actions.performSelectedAction(miniFabs.getSelectedFab());
-                    animateFAB();
-                } else {
-                    Toast.makeText(this, "Önce bir miniFAB seçin", Toast.LENGTH_SHORT).show();
-                }
-            });
-        }
-        // Draggable MainFab
-        mainFab.setOnTouchListener(new View.OnTouchListener() {
-            private float dX, dY;
-            private int lastAction;
-
-            @Override
-            public boolean onTouch(View view, MotionEvent event) {
-                switch (event.getActionMasked()) {
-                    case MotionEvent.ACTION_DOWN:
-                        dX = view.getX() - event.getRawX();
-                        dY = view.getY() - event.getRawY();
-                        lastAction = MotionEvent.ACTION_DOWN;
-                        return true;
-                    case MotionEvent.ACTION_MOVE:
-                        view.setX(event.getRawX() + dX);
-                        view.setY(event.getRawY() + dY);
-                        lastAction = MotionEvent.ACTION_MOVE;
-                        return true;
-                    case MotionEvent.ACTION_UP:
-                        return lastAction == MotionEvent.ACTION_MOVE;
-                    default:
-                        return false;
-                }
+        Actions actions = new Actions(miniFabs, this, this /* or getApplicationContext() */ );
+        soundFab.setOnClickListener(v -> {
+            if (miniFabs.getSelectedFab() != null) {
+                actions.performSelectedAction(miniFabs.getSelectedFab());
+                animateFAB();
+            } else {
+                Toast.makeText(this, "Önce bir miniFAB seçin", Toast.LENGTH_SHORT).show();
             }
         });
-/*
-        mainFab.setOnClickListener(v -> animateFAB());
-
-        // 5) Alt-FAB’lara (örneğin) tıklanınca menünün kapanıp işlemi tetikleyecek kodu ekleyin
-        beslemeFab.setOnClickListener(v -> {
-            animateFAB();
-            // … burada “besleme” işlemini başlatın …
-        });
-        bolgeFab.setOnClickListener(v -> {
-            animateFAB();
-            // … burada “bölge” işlemini başlatın …
-        });
-        nakilFab.setOnClickListener(v -> {
-            animateFAB();
-            // … burada “nakil” işlemini başlatın …
-        });
-
-        soundFab.setOnClickListener(v -> {
-            animateFAB();
-            // … burada “ses” işlemini başlatın …
-        });
-        */
         miniFabs.applyDefaultColors();
         miniFabs.setupDraggableFAB(miniFabs,mainFab);
-        Actions actions = new Actions(miniFabs, SokakActivity.this, this /* or getApplicationContext() */ );
         // Wire each miniFAB to call selectFab() + your onFabClick logic
         for (FloatingActionButton fab : miniFabs.getFabs()) {
             fab.setOnClickListener(v -> {

@@ -39,7 +39,7 @@ public class AnimalCounter {
 
     public AnimalCounter(Context context) throws Exception {
         // Ai: (context, soundModel, videoModel)
-        ai = new Ai(context, null, "yolov8n.tflite");
+        ai = new Ai(context, null, "yolov8n.tflite","coco_labels.txt");
     }
 
     /**

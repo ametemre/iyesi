@@ -1,7 +1,5 @@
 package com.kurmez.iyesi.utilities.helper;
 
-import static com.kurmez.iyesi.utilities.helper.TFLiteModelInspector.loadModelFile;
-
 import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
@@ -9,23 +7,21 @@ import android.content.res.ColorStateList;
 import android.graphics.Color;
 import android.util.Log;
 import android.view.View;
-import android.widget.Toast;
 
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.kurmez.iyesi.R;
 import com.kurmez.iyesi.sokak.SokakActivity;
 import com.kurmez.iyesi.utilities.Ai.Ai;
-import com.kurmez.iyesi.kurmes.Kurmes;
+import com.kurmez.iyesi.utilities.Ai.AnimalCounter;
+import com.kurmez.iyesi.utilities.Ai.Threading;
 import com.kurmez.iyesi.utilities.MiniFabs;
 
-import org.tensorflow.lite.Interpreter;
-
 import java.io.IOException;
-import java.nio.MappedByteBuffer;
 
 public class Actions {
     private static final String TAG = "Actions";
     private FloatingActionButton selectedFab = null; // Track the selected FAB
+    private Ai ai = null;
     private MiniFabs miniFabs;   // saha değişkeni
     Activity host;
     Context context;
@@ -86,24 +82,70 @@ public class Actions {
 
         //miniFabs.highlightFab(fab);
     }
-    public void performSelectedAction(FloatingActionButton selectedFab) {
-        if (selectedFab == null) return;
+    public Ai performSelectedAction(FloatingActionButton selectedFab) {
+
+        if (selectedFab == null) return null;
+        Threading threading = new Threading();
         int id = selectedFab.getId();
         if (id == R.id.fab_9) {
             host.startActivity(new Intent(host, SokakActivity.class));
             //host.startActivity(intent);
         } else if (id == R.id.fab_2) {
-            //host.startActivity(new Intent(host, DogActivity.class));
+            try {
+                ai = new Ai(host,null,"ml_model/dog/DogBreed.tflite","ml_model/dog/label.txt");
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
         } else if (id == R.id.fab_3) {
+            try {
+                ai = new Ai(host,null,"ml_model/animal_ml_model.tflite","ml_model/animal_ml_model_labels.txt");
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+
         } else if (id == R.id.fab_4) {
+            try {
+                ai = new Ai(host,null,"ml_model/dump/yamnet_classification.tflite","ml_model/dump/labelmap.txt");
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
         } else if (id == R.id.fab_5) {
+            try {
+                ai = new Ai(host,null,"ml_model/dump/mobilenet_v2.tflite","ml_model/dump/labels.txt");
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
         } else if (id == R.id.fab_6) {
+            try {
+                ai = new Ai(host,null,"yolov8n.tflite","coco_labels.txt");}
+            catch (IOException e) {
+                throw new RuntimeException(e);
+            }
         } else if (id == R.id.fab_7) {
+            threading.availableCPU();
         } else if (id == R.id.fab_8) {
+            threading.availableGPUThreads();
         } else if (id == R.id.fab_1) {
+            threading.availableGPU();
         } else if (id == R.id.besleme_fab) {
         } else if (id == R.id.bolge_fab) {
+            try {
+                ai = new Ai(host,null,"ml_model/animal_ml_model.tflite","ml_model/animal_ml_model_labels.txt");
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
         } else if (id == R.id.nakil_fab) {
+
+            try {
+                ai = new Ai(host,null,"yolov8n.tflite","coco_labels.txt");
+                try {
+                    AnimalCounter counter = new AnimalCounter(host);
+                } catch (Exception e) {
+                    throw new RuntimeException(e);
+                }
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
             host.finish();
             //host.startActivity(new Intent(host, CatActivity.class));
         }
@@ -113,6 +155,7 @@ public class Actions {
         // isteğe bağlı: seçimi sıfırla
         //miniFabs.resetFabAppearance(selectedFab);
         selectedFab = null;
+        return ai;
     }
     public Action onFabClickActionKurmes(View view , FloatingActionButton clickedFab) {
         Action action = null;

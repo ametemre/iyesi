@@ -2,46 +2,45 @@ package com.kurmez.iyesi.kurmes;
 
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.google.firebase.auth.FirebaseAuth;
+import com.kurmez.iyesi.utilities.Ai.Detection;
+import com.kurmez.iyesi.utilities.Ai.Threading;
+import com.kurmez.iyesi.utilities.Terminator;
 import com.kurmez.iyesi.utilities.helper.Actions;
 import com.kurmez.iyesi.utilities.helper.Permissions;
-import com.kurmez.iyesi.sahiplendirme.Founded;
-import com.kurmez.iyesi.Login;
 import com.kurmez.iyesi.R;
-import com.kurmez.iyesi.sahiplendirme.Welcome;
+
 import org.opencv.android.CameraBridgeViewBase;
 import org.opencv.core.Mat;
 import org.opencv.imgproc.Imgproc;
+
+import android.Manifest;
+import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 // ve kendi Detection/Ai class’ınızın import’ları
 
 import android.annotation.SuppressLint;
-import android.app.ProgressDialog;
-import android.content.Intent;
-import android.content.res.Resources;
 import android.graphics.Color;
-import android.os.AsyncTask;
 import android.os.Bundle;
 import android.os.Handler;
 import android.util.Log;
 import android.view.Menu;
-import android.view.MenuItem;
 import android.view.MotionEvent;
 import android.view.SurfaceView;
-import android.view.VelocityTracker;
 import android.view.View;
 import android.view.WindowManager;
-import android.view.animation.AlphaAnimation;
-import android.view.animation.Animation;
-import android.view.animation.ScaleAnimation;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
+
 import org.opencv.android.CameraActivity;
 import org.opencv.android.CameraBridgeViewBase.CvCameraViewListener2;
 import org.opencv.android.OpenCVLoader;
 import org.opencv.core.MatOfRect;
+import org.tensorflow.lite.Interpreter;
 import org.tensorflow.lite.support.label.Category;
 
 import java.nio.BufferUnderflowException;
@@ -50,9 +49,9 @@ import java.util.ArrayList;
 import java.util.List;
 
 import java.util.Collections;
+import java.util.concurrent.RejectedExecutionException;
 
 import com.kurmez.iyesi.utilities.Ai.Ai;
-import com.kurmez.iyesi.sokak.SokakActivity;
 import com.kurmez.iyesi.utilities.MiniFabs;
 
 
@@ -64,8 +63,8 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
     public static final int DETECTION_INPUT_SIZE = 640;  // 640→320
     private static final int SKIP_FRAMES = 5;             // her 2. frame’de bir çalıştır
     private int frameCount = 0;
-
-    public Ai aiKedi, aiKopek, aiKurt, aiKarga, aiContent;
+    private Interpreter interpreter;
+    public Ai aiKedi, aiKopek, aiKurt, aiKarga, aiContent, ai;
     private MiniFabs miniFabs;
     private Actions actions;
     public enum State {
@@ -73,12 +72,12 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
         IDLE, FACE_DETECTION, OBJECT_DETECTION, TRACKING, CAPTURE,TEST
     }
     public State currentState = State.IDLE;
-
+    Threading threading = new Threading();
     private final List<float[]> soundBuffer = new ArrayList<>();
     private final List<float[][][]> videoBuffer = new ArrayList<float[][][]>();
     private final int SOUND_THRESHOLD = 5;
     private final int VIDEO_THRESHOLD = 5;
-
+    private Detection detectionRunner;
     // Sound labels for each species model (fill in actual labels)
     private static final String[] KEDI_SOUNDS  = {"meow", "purr"};
     private static final String[] KOPEK_SOUNDS = {"bark", "growl"};
@@ -87,7 +86,7 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
     private static final int REQUEST_IMAGE_CAPTURE = 1; // Request code for capturing a photo
     private List<Bitmap> photoList = new ArrayList<>(); // List to store captured images
     private FloatingActionButton fabDraggable, fabSound;
-
+    private Terminator terminator = null;
     private FirebaseAuth mAuth;
     private Handler handler = new Handler();
     public static final int CAMERA_PERMISSION_REQUEST_CODE = 100;
@@ -100,6 +99,8 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
             Log.e("Kurmes", "labelText is not initialized yet.");
         }
     }
+    //private boolean cleanUp = false;
+    public boolean isPredicting = false;
     private TextView cameraStatusText;
     MatOfRect rects;
     //imported---------------------------------
@@ -119,6 +120,11 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
         setContentView(R.layout.activity_kurmes);
         Permissions permissions = new Permissions();
 
+        // Permissions
+        requestAudioPermissions();
+        requestStoragePermission();
+        checkAudioPermission();
+        checkAndRequestPermissions();
 
         // Firebase Auth
         mAuth = FirebaseAuth.getInstance();
@@ -177,14 +183,37 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
 
         // Sound FAB click (if needed)
         fabSound.setOnClickListener(v -> {
-            if (miniFabs.getSelectedFab() != null) {
-                actions.performSelectedAction(miniFabs.getSelectedFab());
-            } else {
-                Toast.makeText(this, "Önce bir miniFAB seçin", Toast.LENGTH_SHORT).show();
+            if (!isPredicting) {
+                if (miniFabs.getSelectedFab() != null) {
+                    ai = actions.performSelectedAction(miniFabs.getSelectedFab());
+                    if (ai != null) {
+                        interpreter = ai.getVideoInterpreter();
+                        detectionRunner = new Detection(
+                                ai, interpreter, this,
+                                0, 0f, 0f, 0f, 0f, 0f, miniFabs.getSelectedFab().toString()
+                        );
+                        terminator =new Terminator(ai.getExecutor(),ai.getVideoInterpreter(),ai.getSoundInterpreter(),ai.getGpuDelegate(),videoBuffer,soundBuffer,this);
+                        isPredicting = true;
+                    }
+                } else {
+                    Toast.makeText(this, "Önce bir miniFAB seçin", Toast.LENGTH_SHORT).show();
+                }
+                try {
+
+                } catch (Exception e) {
+                    Log.w("FAB", "Terminator is not created");
+                    isPredicting = true;
+                    throw new RuntimeException(e);
+                }
+                startPrediction();
+            }
+            else if (terminator != null){
+                terminator.onStopButtonClicked(v);
+                isPredicting = false;
+                ai = null;
+                Toast.makeText(this, "Operasyonlar durduruldu", Toast.LENGTH_SHORT).show();
             }
         });
-
-
     }
     //--------------------------Creation
     public void updateDetectedSounds(List<Category> detectedCategories) {
@@ -216,7 +245,9 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
         }
     }
     //--------------------------Sound
+    public void startPrediction(){
 
+    }
 
 
     @Override
@@ -225,7 +256,7 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
         gray = new Mat();
         rects = new MatOfRect();
         //mRgba = new Mat(height, width, CvType.CV_8UC4);
-        Log.d(TAG, "Camera view started: " + width + "x" + height);
+        Log.i(TAG, "Camera view started: " + width + "x" + height);
         updateCameraStatus("Camera Started.");
         if (mWidth != width || mHeight != height) {
             mWidth = width;
@@ -240,8 +271,8 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
             }
             mOnCameraFrameRender = new OnCameraFrameRender(new CalibrationFrameRender(mCalibrator));
         }
-        int availableProcessors = Runtime.getRuntime().availableProcessors();
-        Log.d("AvailableProcessors", "Number of available threads: " + availableProcessors);
+
+        threading.availableCPU();
 
     }
     @Override
@@ -252,8 +283,7 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
             rects.release();
             updateCameraStatus("Camera Stopped.");
         }
-        int availableProcessors = Runtime.getRuntime().availableProcessors();
-        Log.d("AvailableProcessors", "Number of available threads: " + availableProcessors);
+        threading.availableCPU();
 
     }                                                         //done
     @Override
@@ -261,7 +291,7 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
         //Mat rgba = inputFrame.rgba();
         rgb = inputFrame.rgba();
         gray =inputFrame.gray();
-        Mat frame;
+        Mat frame = new Mat();;
         try {
             // Normal yol: doğrudan RGBA al
             frame = inputFrame.rgba();
@@ -269,9 +299,73 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
             Log.w(TAG, "rgba() buffer underflow, gray→RGBA dönüşümü yapılıyor", e);
             // Fallback: gray’dan alın ve RGBA’ya çevir
             Mat gray = inputFrame.gray();
-            frame = new Mat();
             Imgproc.cvtColor(gray, frame, Imgproc.COLOR_GRAY2RGBA);
         }
+        // —— YAKLAŞIM A: Asenkron çizim (Detection.java içindeki handleObjectDetection)
+        // Bu metot kendi içinde SKIP_FRAMES kontrolü yapar, predictVideo çağırır
+        // ve runOnUiThread içinde çizimi gerçekleştirir.
+        try {
+            // Önce null kontrolleriyle atlamayı sağlıyoruz
+            if (rgb == null || ai == null) {
+                Log.w(TAG, "Detection atlandı: rgb veya ai null");
+            } else {
+                detectionRunner.handleRT(rgb, ai);
+            }
+        } catch (RejectedExecutionException e) {
+            // ThreadPool kapanıyorsa veya queue dolduysa atla
+            Log.w(TAG, "Detection görevi reddedildi, atlanıyor", e);
+        } catch (BufferUnderflowException e) {
+            // Fallback dönüşümünde problem olduysa atla
+            Log.w(TAG, "Buffer underflow oluştu, atlanıyor", e);
+        } catch (NullPointerException e) {
+            // Başka bir null durumunu güvenli atlamak için
+            Log.w(TAG, "Beklenmeyen NPE, atlanıyor", e);
+        } catch (Exception e) {
+            // Diğer tüm hatalar burada yakalanır ve atlanır
+            Log.e(TAG, "Detection sırasında beklenmedik hata, atlanıyor", e);
+        }
+
+        /* —— YAKLAŞIM B: Tam senkron parse + çizim
+        // 1) Bitmap’e çevir
+        Bitmap bmp = Bitmap.createBitmap(frame.cols(), frame.rows(),
+                                         Bitmap.Config.ARGB_8888);
+        Utils.matToBitmap(frame, bmp);
+
+        // 2) Ölçekle
+        Bitmap resized = Detection.resizeBitmap(bmp, INPUT_SIZE);
+
+        // 3) ByteBuffer’a yaz
+        int pixelCount = INPUT_SIZE * INPUT_SIZE;
+        ByteBuffer bb = ByteBuffer.allocateDirect(4 * pixelCount * 3)
+                                  .order(ByteOrder.nativeOrder());
+        int[] pixels = new int[pixelCount];
+        resized.getPixels(pixels, 0, INPUT_SIZE, 0, 0, INPUT_SIZE, INPUT_SIZE);
+        for (int i = 0; i < pixelCount; i++) {
+            int p = pixels[i];
+            bb.putFloat(((p >> 16) & 0xFF) / 255f);
+            bb.putFloat(((p >>  8) & 0xFF) / 255f);
+            bb.putFloat(( p        & 0xFF) / 255f);
+        }
+        bb.rewind();
+
+        // 4) Ham çıktıyı al
+        float[][][] rawOut = new float[1][84][8400];
+        interpreter.run(bb, rawOut);
+
+        // 5) Detection listesi oluştur
+        List<Detection> dets = detectionRunner.parseDetections(rawOut);
+
+        // 6) Mat üzeri çizim
+        for (Detection d : dets) {
+            Point tl = new Point(d.x1, d.y1);
+            Point br = new Point(d.x2, d.y2);
+            Imgproc.rectangle(frame, tl, br, new Scalar(0,255,0), 2);
+            Imgproc.putText(frame, d.label, new Point(d.x1, d.y1 - 10),
+                            Imgproc.FONT_HERSHEY_SIMPLEX, 0.5,
+                            new Scalar(255,255,255), 2);
+        }
+        */
+
         switch (currentState) {
             case KEDI:
                 //handleSpecies(rgb, aiKedi);
@@ -423,5 +517,29 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
         return state;
     }
 
+    private void checkAndRequestPermissions() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.CAMERA}, CAMERA_PERMISSION_REQUEST_CODE);
+        } else {
+            cameraState(true);
+        }
+    }//Essential For Camera
+    private void requestStoragePermission() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE}, 200);
+        }
+    }
+    private void requestAudioPermissions() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED ||
+                ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
 
+            ActivityCompat.requestPermissions(this,
+                    new String[]{Manifest.permission.RECORD_AUDIO, Manifest.permission.WRITE_EXTERNAL_STORAGE}, 200);
+        }
+    }
+    private void checkAudioPermission() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.RECORD_AUDIO}, 101);
+        }
+    }
 }

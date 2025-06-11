@@ -27,11 +27,7 @@ import androidx.viewpager2.widget.ViewPager2;
 
 import com.google.android.gms.tasks.OnFailureListener;
 import com.google.android.gms.tasks.OnSuccessListener;
-import com.google.mlkit.vision.common.InputImage;
-import com.google.mlkit.vision.label.ImageLabel;
-import com.google.mlkit.vision.label.ImageLabeler;
-import com.google.mlkit.vision.label.ImageLabeling;
-import com.google.mlkit.vision.label.defaults.ImageLabelerOptions;
+
 import com.kurmez.iyesi.utilities.adapters.ImageSliderAdapter;
 import com.kurmez.iyesi.R;
 
@@ -50,7 +46,7 @@ public class Founded extends AppCompatActivity {
     public final static int REQUEST_READ_EXTERNAL_STORAGE = 2031;
     File photoFile;
     private List<Bitmap> photoList;
-    private ImageLabeler imageLabeler;
+    //private ImageLabeler imageLabeler;
     private ImageView inputImageView;
     private EditText outputTextView;
 
@@ -82,9 +78,9 @@ public class Founded extends AppCompatActivity {
         findViewById(R.id.take_anotherphoto_button).setOnClickListener(v -> finish()); // Return to capture screen
         findViewById(R.id.save_companion_button).setOnClickListener(v -> saveCompanion());
 
-        imageLabeler = ImageLabeling.getClient(new ImageLabelerOptions.Builder()
-                                                                .setConfidenceThreshold(0.7f)
-                                                                .build());
+        //imageLabeler = ImageLabeling.getClient(new ImageLabelerOptions.Builder()
+         //                                                       .setConfidenceThreshold(0.7f)
+         //                                                       .build());
     }
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
@@ -127,7 +123,7 @@ public class Founded extends AppCompatActivity {
         return "https://example.com/photo.jpg"; // Replace with the real uploaded URL
     }
     private void runClassification(Bitmap bitmap){
-        InputImage inputImage = InputImage.fromBitmap(bitmap,0);
+        /*InputImage inputImage = InputImage.fromBitmap(bitmap,0);
         imageLabeler.process(inputImage).addOnSuccessListener(new OnSuccessListener<List<ImageLabel>>() {
             @Override
             public void onSuccess(List<ImageLabel> imageLabels) {
@@ -148,7 +144,7 @@ public class Founded extends AppCompatActivity {
             public void onFailure(@NonNull Exception e) {
                 e.printStackTrace();
             }
-        });
+        });*/
     }
     public void onGotoImageActivity(View view){
         Intent intent = new Intent();

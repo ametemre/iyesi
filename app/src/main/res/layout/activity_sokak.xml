@@ -483,5 +483,4 @@
       android:src="@drawable/hush"
       app:maxImageSize="50dp"
       app:rippleColor="@color/teal" />
-
 </FrameLayout>
