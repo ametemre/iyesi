@@ -26,7 +26,7 @@ import androidx.annotation.NonNull;
 import androidx.fragment.app.FragmentActivity;
 
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
-import com.google.maps.android.data.geojson.GeoJsonLayer;
+//import com.google.maps.android.data.geojson.GeoJsonLayer;
 import com.kurmez.iyesi.R;
 import com.kurmez.iyesi.kurmes.Kurmes;
 import com.kurmez.iyesi.utilities.MiniFabs;
@@ -49,7 +49,7 @@ public class SokakActivity extends FragmentActivity {
     private Spinner spinner1, spinner2, spinner3, spinner4, spinner5;
     private ImageButton clear1, clear2, clear3, clear4, clear5;
     private ImageButton toggle1, toggle2, toggle3, toggle4, toggle5;
-    private GeoJsonLayer layerCountry, layerProvince, layerDistrict;
+    //private GeoJsonLayer layerCountry, layerProvince, layerDistrict;
     private final String[] levels = {"ADM5", "ADM4", "ADM3", "ADM2", "ADM1", "ADM0", "OSM"};
     // Harita işlemlerini devredecek Harita nesnesi
     private Harita harita;

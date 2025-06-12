@@ -67,6 +67,7 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
     public Ai aiKedi, aiKopek, aiKurt, aiKarga, aiContent, ai;
     private MiniFabs miniFabs;
     private Actions actions;
+    private boolean Lambada;
     public enum State {
         KEDI, KOPEK, KURT, KARGA,
         IDLE, FACE_DETECTION, OBJECT_DETECTION, TRACKING, CAPTURE,TEST
@@ -119,7 +120,6 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_kurmes);
         Permissions permissions = new Permissions();
-
         // Permissions
         requestAudioPermissions();
         requestStoragePermission();
@@ -180,9 +180,13 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
                 // Highlight selection
             });
         }
+        Lambada = actions.getLambada();
 
         // Sound FAB click (if needed)
         fabSound.setOnClickListener(v -> {
+            if (Lambada) {
+                Toast.makeText(this, "Lambada !", Toast.LENGTH_SHORT).show();
+            }
             if (!isPredicting) {
                 if (miniFabs.getSelectedFab() != null) {
                     ai = actions.performSelectedAction(miniFabs.getSelectedFab());
@@ -205,7 +209,7 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
                     isPredicting = true;
                     throw new RuntimeException(e);
                 }
-                startPrediction();
+                //startPrediction();
             }
             else if (terminator != null){
                 terminator.onStopButtonClicked(v);
@@ -215,41 +219,69 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
             }
         });
     }
-    //--------------------------Creation
-    public void updateDetectedSounds(List<Category> detectedCategories) {
-        LinearLayout detectedSoundsLayout = findViewById(R.id.detected_sounds_list);
-
-        //detectedSoundsLayout.removeAllViews(); // Clear previous results
-
-        for (Category category : detectedCategories) {
-            float confidence = category.getScore();
-            if (confidence > 0.79) { // Only show confidence > 79%
-                TextView textView = new TextView(this);
-                textView.setText(category.getDisplayName() + "---" + category.getLabel() + " - " + String.format("%.2f", confidence * 100) + "%");
-                textView.setTextSize(16);
-                textView.setTextColor(Color.WHITE);
-                textView.setPadding(10, 10, 10, 10);
-
-                detectedSoundsLayout.addView(textView);
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (OpenCVLoader.initDebug()) {
+            Log.d(TAG, "OpenCV loaded successfully.");
+            if (mOpenCvCameraView != null) {
+                updateCameraStatus("Camera View Resumed.");
+                cameraState(true);
             }
-        }
-
-        // If no high-confidence results, show "No strong detection"
-        if (detectedSoundsLayout.getChildCount() == 0) {
-            TextView noResultView = new TextView(this);
-            noResultView.setText("No strong detections");
-            noResultView.setTextSize(16);
-            noResultView.setTextColor(Color.GRAY);
-            noResultView.setPadding(10, 10, 10, 10);
-            detectedSoundsLayout.addView(noResultView);
+        } else {
+            Log.e(TAG, "OpenCV loading failed on resume.");
+            updateCameraStatus("OpenCV Initialization Failed.");
         }
     }
-    //--------------------------Sound
-    public void startPrediction(){
+    @Override
+    protected void onPause() {
+        super.onPause();
+        if (mOpenCvCameraView != null) {
+            cameraState(false);
+        }
 
     }
+    @Override
+    protected void onDestroy() {
+        // TFLite ve OpenCV kaynaklarını güvenle kapat
+        if (aiKedi != null) {
+            aiKedi.close();
+            aiKedi = null;
+        }
 
+        if (aiKopek != null) {
+            aiKopek.close();
+            aiKopek = null;
+        }
 
+        if (aiKurt != null) {
+            aiKurt.close();
+            aiKurt = null;
+        }
+
+        if (aiKarga != null) {
+            aiKarga.close();
+            aiKarga = null;
+        }
+
+        if (mOpenCvCameraView != null) {
+            mOpenCvCameraView.disableView();
+            mOpenCvCameraView = null;
+        }
+
+        super.onDestroy();
+    }
+    @Override
+    public boolean dispatchTouchEvent(MotionEvent ev) {
+        // Eğer miniFabs boş değil ve dokunmayı işlediyse, burada false yerine true dönün:
+        if (miniFabs != null && miniFabs.handleOutsideTouch(ev)) {
+            return true;   // Event burada tüketildi
+        }
+        // Aksi takdirde normal akışı devam ettir
+        return super.dispatchTouchEvent(ev);
+    }
+
+    //--------------------------Creation
     @Override
     public void onCameraViewStarted(int width, int height) {
         rgb = new Mat();
@@ -286,6 +318,7 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
         threading.availableCPU();
 
     }                                                         //done
+
     @Override
     public Mat onCameraFrame(CameraBridgeViewBase.CvCameraViewFrame inputFrame) {
         //Mat rgba = inputFrame.rgba();
@@ -309,7 +342,9 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
             if (rgb == null || ai == null) {
                 Log.w(TAG, "Detection atlandı: rgb veya ai null");
             } else {
-                detectionRunner.handleRT(rgb, ai);
+                new Thread(() -> {
+                    detectionRunner.handleRT(rgb, ai, findViewById(R.id.detected_sounds_list));
+                }).start();
             }
         } catch (RejectedExecutionException e) {
             // ThreadPool kapanıyorsa veya queue dolduysa atla
@@ -416,71 +451,6 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
 
         return frame; // Return the raw RGBA frame
     }               //Essential For Camera
-
-
-
-    @Override
-    protected void onResume() {
-        super.onResume();
-        if (OpenCVLoader.initDebug()) {
-            Log.d(TAG, "OpenCV loaded successfully.");
-            if (mOpenCvCameraView != null) {
-                updateCameraStatus("Camera View Resumed.");
-                cameraState(true);
-            }
-        } else {
-            Log.e(TAG, "OpenCV loading failed on resume.");
-            updateCameraStatus("OpenCV Initialization Failed.");
-        }
-    }
-    @Override
-    protected void onPause() {
-        super.onPause();
-        if (mOpenCvCameraView != null) {
-            cameraState(false);
-        }
-
-    }
-    @Override
-    protected void onDestroy() {
-        // TFLite ve OpenCV kaynaklarını güvenle kapat
-        if (aiKedi != null) {
-            aiKedi.close();
-            aiKedi = null;
-        }
-
-        if (aiKopek != null) {
-            aiKopek.close();
-            aiKopek = null;
-        }
-
-        if (aiKurt != null) {
-            aiKurt.close();
-            aiKurt = null;
-        }
-
-        if (aiKarga != null) {
-            aiKarga.close();
-            aiKarga = null;
-        }
-
-        if (mOpenCvCameraView != null) {
-            mOpenCvCameraView.disableView();
-            mOpenCvCameraView = null;
-        }
-
-        super.onDestroy();
-    }
-    @Override
-    public boolean dispatchTouchEvent(MotionEvent ev) {
-        // Eğer miniFabs boş değil ve dokunmayı işlediyse, burada false yerine true dönün:
-        if (miniFabs != null && miniFabs.handleOutsideTouch(ev)) {
-            return true;   // Event burada tüketildi
-        }
-        // Aksi takdirde normal akışı devam ettir
-        return super.dispatchTouchEvent(ev);
-    }
-
 
     @Override
     protected List<? extends CameraBridgeViewBase> getCameraViewList() {

@@ -20,12 +20,14 @@ import org.tensorflow.lite.support.common.FileUtil;
 import java.io.IOException;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.nio.ByteBuffer;
 import java.nio.MappedByteBuffer;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -54,7 +56,12 @@ public class Ai implements AutoCloseable {
     // + Yeni eklenenler →
     private final List<String> labels;
     private final float       scoreThreshold;
+    // COCO’da: 15=cat, 16=dog, 17=horse, 18=sheep, 19=cow, 20=elephant, 21=bear, 22=zebra, 23=giraffe
+    private static final Set<Integer> ANIMAL_CLASSES = Set.of(15,16,17,18,19,20,21,22,23);
 
+    public boolean isAnimal(int classId) {
+        return ANIMAL_CLASSES.contains(classId);
+    }
     // Statik konfigürasyon (isterseniz JSON’dan da yükleyebilirsiniz)
     private static final Map<String, String> MODEL_LABEL_FILES = Map.of(
             "yolov8n.tflite",      "coco_labels.txt",
@@ -79,7 +86,6 @@ public class Ai implements AutoCloseable {
             t.setPriority(Thread.NORM_PRIORITY - 1); // Slightly lower priority
             return t;
         });
-
         // Configure GPU delegate
         this.gpuDelegate = initGpuDelegate(context);
         Interpreter.Options options = createInterpreterOptions(gpuDelegate);
@@ -100,8 +106,8 @@ public class Ai implements AutoCloseable {
         String labelFile = labelsPath != null
                 ? labelsPath
                 : MODEL_LABEL_FILES.getOrDefault(videoModelPath, "coco_labels.txt");
-// Eğer labelFile assets altında ise:
-// Ya da InputStream versiyonu:
+        // Eğer labelFile assets altında ise:
+        // Ya da InputStream versiyonu:
         this.labels = FileUtil.loadLabels(
                 context.getAssets().open(labelFile),
                 Charset.forName("UTF-8")
@@ -208,9 +214,7 @@ public class Ai implements AutoCloseable {
         return options;
     }
 
-    private Interpreter initModel(AssetManager assets, String modelPath,
-                                  Interpreter.Options options, Context context)
-            throws IOException {
+    private Interpreter initModel(AssetManager assets, String modelPath, Interpreter.Options options, Context context) throws IOException {
         if (modelPath == null || modelPath.isEmpty()) {
             return null;
         }
@@ -223,7 +227,8 @@ public class Ai implements AutoCloseable {
         GpuDelegate gpuDelegate = initGpuDelegate(context);
         if (gpuDelegate != null) {
             try {
-                Interpreter.Options gpuOptions = new Interpreter.Options(options);
+                Interpreter.Options gpuOptions = new Interpreter.Options();
+                //Interpreter.Options gpuOptions = new Interpreter.Options(options);
                 gpuOptions.addDelegate(gpuDelegate);
                 interpreter = new Interpreter(modelBuffer, gpuOptions);
                 Log.i(TAG, "Model loaded with GPU acceleration");
@@ -234,9 +239,11 @@ public class Ai implements AutoCloseable {
             }
         }
 
+
         // Stage 2: Try with NNAPI
         try {
-            Interpreter.Options nnapiOptions = new Interpreter.Options(options);
+            Interpreter.Options nnapiOptions = new Interpreter.Options();
+            //Interpreter.Options nnapiOptions = new Interpreter.Options(options);
             nnapiOptions.setUseNNAPI(true);
             interpreter = new Interpreter(modelBuffer, nnapiOptions);
             Log.i(TAG, "Model loaded with NNAPI");
@@ -249,12 +256,22 @@ public class Ai implements AutoCloseable {
         try {
             interpreter = new Interpreter(modelBuffer, options);
             interpreter.allocateTensors();
+            //------------------------------------------------------------------------------OutPutTensor
+            for (int i = 0; i < interpreter.getOutputTensorCount(); i++) {
+                Tensor tensor = interpreter.getOutputTensor(i);
+                Log.i("TFLITE_DEBUG", "Output["+i+"]: name=" + tensor.name()
+                        + ", shape=" + Arrays.toString(tensor.shape())
+                        + ", dtype=" + tensor.dataType());
+            }
+            //------------------------------------------------------------------------------OutPutTensor
+
             Log.i(TAG, "Model loaded with CPU");
             return interpreter;
         } catch (Exception e) {
             Log.e(TAG, "Failed to initialize model", e);
             throw new RuntimeException("Model initialization failed", e);
         }
+
     }
     private int calculateOutputLength(Tensor tensor) {
         int[] shape = tensor.shape();
@@ -266,30 +283,19 @@ public class Ai implements AutoCloseable {
     }
 
     // --- Public API ---
-    public void predictVideo(
-            @NonNull float[][][][] input,
-            @NonNull Consumer<float[][][]> callback
-    ) {
-        try {
-            executor.execute(() -> {
-                try {
-                    float[][][] output = processVideoInput(input);
-                    mainHandler.post(() -> callback.accept(output));
-                } catch (Exception e) {
-                    Log.e(TAG, "Video prediction failed", e);
-                    mainHandler.post(() -> callback.accept(EMPTY_VIDEO_OUTPUT));
-                }
-            });
-        } catch (RejectedExecutionException e) {
-            Log.w(TAG, "predictVideo: executor shut down, skipping task", e);
-            // İstersen callback’e boş bir çıktı dönebilirsin:
-            mainHandler.post(() -> callback.accept(EMPTY_VIDEO_OUTPUT));
-        } catch (Exception e) {
-            Log.w(TAG, "predictVideo: executor crashed, skipping task", e);
-            throw new RuntimeException(e);
-        }
+// Ai.java'ya bu metod eklenmeli
+    public void predictVideo(ByteBuffer input, int[] outputShape, Consumer<float[][][]> callback) {
+        executor.execute(() -> {
+            try {
+                float[][][] output = new float[outputShape[0]][outputShape[1]][outputShape[2]];
+                videoInterpreter.run(input, output);
+                mainHandler.post(() -> callback.accept(output));
+            } catch (Exception e) {
+                Log.e(TAG, "Video prediction failed", e);
+                mainHandler.post(() -> callback.accept(new float[0][0][0]));
+            }
+        });
     }
-
     public float[][][] predictVideoSync(float[][][][] input) {
         if (videoInterpreter == null || !validateVideoInput(input)) {
             return EMPTY_VIDEO_OUTPUT;
@@ -305,10 +311,7 @@ public class Ai implements AutoCloseable {
         }
     }
 
-    public void predictSound(
-            @NonNull float[][] input,
-            @NonNull Consumer<float[]> callback
-    ) {
+    public void predictSound(@NonNull float[][] input, @NonNull Consumer<float[]> callback) {
         executor.execute(() -> {
             try {
                 float[] output = new float[soundOutputLength];

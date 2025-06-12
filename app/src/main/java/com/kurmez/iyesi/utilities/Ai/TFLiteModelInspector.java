@@ -2,40 +2,48 @@ package com.kurmez.iyesi.utilities.Ai;
 
 import android.content.res.AssetFileDescriptor;
 import android.content.res.AssetManager;
+import android.util.Log;
 
-import java.nio.MappedByteBuffer;
-import java.nio.channels.FileChannel;
-import java.io.FileInputStream;
-import java.io.IOException;
+import androidx.annotation.NonNull;
+
 import org.tensorflow.lite.Interpreter;
 import org.tensorflow.lite.Tensor;
 
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.nio.MappedByteBuffer;
+import java.nio.channels.FileChannel;
+import java.util.Arrays;
+
+/**
+ * TensorFlow Lite model detaylarını konsola veya log'a yazdırır.
+ */
 public class TFLiteModelInspector {
-    public static void main(String[] args,Interpreter tflite) {
-        // Modeli yükle
-        //Interpreter tflite = new Interpreter(loadModelFile("dump/my_birds_model.tflite"));
+    private static final String TAG = "TFLiteModelInspector";
 
-        // Giriş ve çıkış detaylarını al
-        int inputCount = tflite.getInputTensorCount();
-        int outputCount = tflite.getOutputTensorCount();
+    /**
+     * Modelin giriş ve çıkış tensor detaylarını loglar.
+     *
+     * @param interpreter Hazır interpreter nesnesi
+     */
+    public static void inspect(@NonNull Interpreter interpreter) {
+        int inputCount = interpreter.getInputTensorCount();
+        int outputCount = interpreter.getOutputTensorCount();
 
-        System.out.println("Giriş Tensorları:");
+        Log.i(TAG, "Giriş Tensorları:");
         for (int i = 0; i < inputCount; i++) {
-            Tensor inputTensor = tflite.getInputTensor(i);
-            System.out.println(i + ": " + inputTensor.name() + " - Şekil: " + arrayToString(inputTensor.shape()) + " - Tip: " + inputTensor.dataType());
+            Tensor tensor = interpreter.getInputTensor(i);
+            Log.i(TAG, String.format("IN[%d]: %s, Şekil: %s, Tip: %s",
+                    i, tensor.name(), Arrays.toString(tensor.shape()), tensor.dataType()));
         }
 
-        System.out.println("\nÇıkış Tensorları:");
+        Log.i(TAG, "Çıkış Tensorları:");
         for (int i = 0; i < outputCount; i++) {
-            Tensor outputTensor = tflite.getOutputTensor(i);
-            System.out.println(i + ": " + outputTensor.name() + " - Şekil: " + arrayToString(outputTensor.shape()) + " - Tip: " + outputTensor.dataType());
+            Tensor tensor = interpreter.getOutputTensor(i);
+            Log.i(TAG, String.format("OUT[%d]: %s, Şekil: %s, Tip: %s",
+                    i, tensor.name(), Arrays.toString(tensor.shape()), tensor.dataType()));
         }
-
-        // Modeli kapat
-        tflite.close();
-
     }
-
     // .tflite modelini belleğe yükleme
     public static MappedByteBuffer loadModelFile(AssetManager mgr, String modelPath) throws IOException {
         AssetFileDescriptor fd = mgr.openFd(modelPath);
@@ -45,16 +53,4 @@ public class TFLiteModelInspector {
         long len   = fd.getDeclaredLength();
         return channel.map(FileChannel.MapMode.READ_ONLY, start, len);
     }
-
-    // Dizi şeklindeki tensor boyutlarını stringe çevir
-    private static String arrayToString(int[] array) {
-        StringBuilder sb = new StringBuilder("[");
-        for (int i = 0; i < array.length; i++) {
-            sb.append(array[i]);
-            if (i < array.length - 1) sb.append(", ");
-        }
-        sb.append("]");
-        return sb.toString();
-    }
 }
-

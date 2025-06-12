@@ -44,7 +44,7 @@ public class AnimalCounter {
 
     /**
      * Her kare için çağrılır. callback içinde işlenmiş <Mat> döner.
-     */
+
     public void processFrame(Mat frame, Consumer<Mat> callback) {
         // 1) Ön işleme: BGR->RGB resize normalize
         Mat rgb = new Mat();
@@ -66,7 +66,7 @@ public class AnimalCounter {
             callback.accept(annotated);
         });
     }
-
+     */
     private float[][][][] preprocess(Mat img) {
         ByteBuffer bb = ByteBuffer.allocateDirect(INPUT_SIZE*INPUT_SIZE*3*4)
                 .order(ByteOrder.nativeOrder());

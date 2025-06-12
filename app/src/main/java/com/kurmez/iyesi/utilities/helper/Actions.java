@@ -17,12 +17,17 @@ import com.kurmez.iyesi.utilities.Ai.Threading;
 import com.kurmez.iyesi.utilities.MiniFabs;
 
 import java.io.IOException;
+import java.util.concurrent.ExecutorService;
+
+import kotlin.jvm.internal.Lambda;
 
 public class Actions {
     private static final String TAG = "Actions";
     private FloatingActionButton selectedFab = null; // Track the selected FAB
     private Ai ai = null;
+    private final ExecutorService executor = null;
     private MiniFabs miniFabs;   // saha değişkeni
+    public boolean Lambada = false;
     Activity host;
     Context context;
     Intent intent;
@@ -69,6 +74,9 @@ public class Actions {
             Log.w("FAB", "Unknown FAB clicked!");
         }
         return action;
+    }
+    public boolean getLambada(){
+        return this.Lambada;
     }
     public void onFabSelected(FloatingActionButton fab) {
         // önceki seçimi temizle
@@ -131,6 +139,7 @@ public class Actions {
         } else if (id == R.id.bolge_fab) {
             try {
                 ai = new Ai(host,null,"ml_model/animal_ml_model.tflite","ml_model/animal_ml_model_labels.txt");
+                Lambada = !Lambada;
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }

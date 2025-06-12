@@ -120,7 +120,7 @@ public class SoundClassifier extends Kurmes {
                             } else {
                                 for (Category category : finalOutput2) {
                                     outputStr.append(category.getLabel()).append(": ").append(category.getScore()).append("\n");
-                                    kurmesActivity.updateDetectedSounds(finalOutput2);
+                                    //kurmesActivity.updateDetectedSounds(finalOutput2);
                                 }
                                 kurmesActivity.SetLabelText(outputStr.toString());
                                 //labelText.setText(outputStr.toString());  // Use the TextView reference
