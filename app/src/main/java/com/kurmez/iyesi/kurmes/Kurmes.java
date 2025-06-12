@@ -284,6 +284,8 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
             updateCameraStatus("Camera Stopped.");
         }
         threading.availableCPU();
+        threading.availableGPU();
+        threading.availableGPUThreads();
 
     }                                                         //done
     @Override
@@ -309,7 +311,9 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
             if (rgb == null || ai == null) {
                 Log.w(TAG, "Detection atlandı: rgb veya ai null");
             } else {
-                detectionRunner.handleRT(rgb, ai);
+                new Thread(() -> {
+                    detectionRunner.handleRT(rgb, ai);
+                }).start();
             }
         } catch (RejectedExecutionException e) {
             // ThreadPool kapanıyorsa veya queue dolduysa atla

@@ -60,7 +60,9 @@ public class Detection {
     private final List<float[]> soundBuffer = new ArrayList<>();
     private static final int VIDEO_THRESHOLD = 3;
     private static final int SOUND_THRESHOLD = 3;
-
+    private Bitmap reusableFrameBitmap = null;
+    private Bitmap reusableScaledBitmap = null;
+    private final Object lock = new Object(); // thread-safe olması için
     private Kurmes.State currentState;
     private static final String TAG = "Detection";
 
@@ -180,86 +182,112 @@ public class Detection {
             ));
         }
     }
-    public void handleRT(Mat frame,Ai ai){
-        Mat rgba = new Mat();
-        if (frame.channels() == 3) {
-            Imgproc.cvtColor(frame, rgba, Imgproc.COLOR_RGB2RGBA);
-        } else {
-            rgba = frame;
-        }
-        Bitmap frameBitmap = Bitmap.createBitmap(rgba.cols(), rgba.rows(), Bitmap.Config.ARGB_8888);
-        Utils.matToBitmap(rgba, frameBitmap);
-// 1. Mapper’ı oluştur
-// 1. Mapper’ı oluştur
-        int srcW = frame.cols();
-        int srcH = frame.rows();
-        TFLiteInputMapper mapper = null;
-        if (frame.width()>0 && frame.height()>0) {
-            mapper = new TFLiteInputMapper(frame.width(), frame.height(), ai.getInputWidth(), ai.getInputHeight());
-        }else {
-            mapper = new TFLiteInputMapper(srcW, srcH, ai.getInputWidth(), ai.getInputHeight());
-        }
-// 2. Frame’i ölçekle
-        Bitmap scaled = Bitmap.createScaledBitmap(
-                frameBitmap,
-                mapper.getScaledWidth(),
-                mapper.getScaledHeight(),
-                true
-        );
-
-
-// 3. Siyah (veya istediğiniz renk) bir input Bitmap yarat
-        Bitmap inputBmp = Bitmap.createBitmap(
-                ai.getInputWidth(), ai.getInputHeight(), Objects.requireNonNull(frameBitmap.getConfig())
-        );
-        Canvas c = new Canvas(inputBmp);
-        c.drawColor(Color.BLACK);
-        c.drawBitmap(scaled, mapper.getOffsetX(), mapper.getOffsetY(), null);
-
-// 4. ByteBuffer’a dönüştürme (örnek)
-        ByteBuffer inputBuffer = ByteBuffer.allocateDirect(4 * ai.getInputWidth() * ai.getInputHeight() * 3)
-                .order(ByteOrder.nativeOrder());
-        for (int y = 0; y < ai.getInputHeight(); y++) {
-            for (int x = 0; x < ai.getInputWidth(); x++) {
-                int pixel = inputBmp.getPixel(x, y);
-                inputBuffer.putFloat(((pixel >> 16) & 0xFF) / 255f);
-                inputBuffer.putFloat(((pixel >> 8)  & 0xFF) / 255f);
-                inputBuffer.putFloat(((pixel)       & 0xFF) / 255f);
+    public void handleRT(Mat frame, Ai ai) {
+        synchronized (lock) {
+            if (frame == null || frame.empty()) {
+                Log.e("handleRT", "Giriş frame boş.");
+                return;
             }
-        }
-        inputBuffer.rewind();
-        ai.predictVideo(bitmapToInputTensor(inputBmp),rawOutput -> {
-            // 1) Ham çıktıyı Detection objelerine dönüştür
-            //    parseDetections metodu Detection.java içinde tanımlı
-            List<Detection> dets = parseDetections(rawOutput);  // :contentReference[oaicite:0]{index=0}
 
-            // 2) UI thread’ine geç ve tespitleri çiz
-            runOnUiThread(() -> {
-                for (Detection d : dets) {
-                    // Üst-sol ve alt-sağ köşe noktaları
-                    Point tl = new Point(d.x1, d.y1);
-                    Point br = new Point(d.x2, d.y2);
-                    // Yeşil çerçeve
-                    if (d.score > SCORE_THRESHOLD) {
-                    Imgproc.rectangle(frame, tl, br, new Scalar(0, 255, 0), 2);
-                    // Beyaz etiket yazısı
-                    Imgproc.putText(
-                            frame,
-                            d.label + String.format(" %.2f", d.score),
-                            new Point(d.x1, d.y1 - 8),
-                            Imgproc.FONT_HERSHEY_SIMPLEX,
-                            0.6,
-                            new Scalar(255, 255, 255),
-                            2
-                    );
+            // 1. RGB to RGBA
+            Mat rgba = new Mat();
+            if (frame.channels() == 3) {
+                Imgproc.cvtColor(frame, rgba, Imgproc.COLOR_RGB2RGBA);
+            } else {
+                rgba = frame.clone();
+            }
 
-                        Log.w(TAG, "AI modeli yüklendi ve çalışıyor..." + d.label + d.score);
-                    }
+            int w = rgba.cols();
+            int h = rgba.rows();
+            if (w <= 0 || h <= 0) {
+                Log.e("handleRT", "RGBA boyutu geçersiz: " + w + "x" + h);
+                rgba.release();
+                return;
+            }
 
+            if (reusableFrameBitmap == null || reusableFrameBitmap.getWidth() != w || reusableFrameBitmap.getHeight() != h || reusableFrameBitmap.isRecycled()) {
+                if (reusableFrameBitmap != null && !reusableFrameBitmap.isRecycled()) {
+                    reusableFrameBitmap.recycle();
                 }
+                reusableFrameBitmap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
+            }
+
+            try {
+                Utils.matToBitmap(rgba, reusableFrameBitmap);
+            } catch (Exception e) {
+                Log.e("handleRT", "matToBitmap hatası: " + e.getMessage());
+                rgba.release();
+                return;
+            }
+            rgba.release();
+
+            // 2. Scale + Padding için mapper
+            TFLiteInputMapper mapper = new TFLiteInputMapper(w, h, ai.getInputWidth(), ai.getInputHeight());
+
+            if (reusableScaledBitmap == null ||
+                    reusableScaledBitmap.getWidth() != ai.getInputWidth() ||
+                    reusableScaledBitmap.getHeight() != ai.getInputHeight() ||
+                    reusableScaledBitmap.isRecycled()) {
+
+                if (reusableScaledBitmap != null && !reusableScaledBitmap.isRecycled()) {
+                    reusableScaledBitmap.recycle();
+                }
+
+                reusableScaledBitmap = Bitmap.createBitmap(
+                        ai.getInputWidth(),
+                        ai.getInputHeight(),
+                        Bitmap.Config.ARGB_8888
+                );
+            }
+
+            Bitmap tempScaled = Bitmap.createScaledBitmap(reusableFrameBitmap, mapper.getScaledWidth(), mapper.getScaledHeight(), true);
+            Canvas canvas = new Canvas(reusableScaledBitmap);
+            canvas.drawColor(Color.BLACK);
+            canvas.drawBitmap(tempScaled, mapper.getOffsetX(), mapper.getOffsetY(), null);
+            tempScaled.recycle();
+
+            // 3. Bitmap'i modelin istediği ByteBuffer formatına dönüştür
+            ByteBuffer inputBuffer = ByteBuffer.allocateDirect(4 * ai.getInputWidth() * ai.getInputHeight() * 3)
+                    .order(ByteOrder.nativeOrder());
+
+            for (int y = 0; y < ai.getInputHeight(); y++) {
+                for (int x = 0; x < ai.getInputWidth(); x++) {
+                    int pixel = reusableScaledBitmap.getPixel(x, y);
+                    inputBuffer.putFloat(((pixel >> 16) & 0xFF) / 255f); // R
+                    inputBuffer.putFloat(((pixel >> 8) & 0xFF) / 255f);  // G
+                    inputBuffer.putFloat((pixel & 0xFF) / 255f);         // B
+                }
+            }
+            inputBuffer.rewind();
+
+            // 4. GPU'da arka planda çalıştır
+            Threading.runOnBackground(() -> {
+                ai.predictVideo(bitmapToInputTensor(reusableScaledBitmap), rawOutput -> {
+                    List<Detection> dets = parseDetections(rawOutput);
+                    Threading.runOnUi(() -> {
+                        for (Detection d : dets) {
+                            if (d.score > SCORE_THRESHOLD) {
+                                Point tl = new Point(d.x1, d.y1);
+                                Point br = new Point(d.x2, d.y2);
+                                Imgproc.rectangle(frame, tl, br, new Scalar(0, 255, 0), 2);
+                                Imgproc.putText(
+                                        frame,
+                                        d.label + String.format(" %.2f", d.score),
+                                        new Point(d.x1, d.y1 - 8),
+                                        Imgproc.FONT_HERSHEY_SIMPLEX,
+                                        0.6,
+                                        new Scalar(255, 255, 255),
+                                        2
+                                );
+                                Log.w(TAG, "AI GPU tespiti: " + d.label + " " + d.score);
+                            }
+                        }
+                    });
+                });
             });
-        });
+        }
     }
+
     /**
      * detections listesinden, score'u threshold'dan yüksek olanların
      * etiketlerini döner.
