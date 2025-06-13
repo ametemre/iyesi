@@ -1,5 +1,7 @@
 package com.kurmez.iyesi.utilities.Ai;
 
+import static com.kurmez.iyesi.utilities.Ai.Ai.sliceModelOutput;
+
 import android.Manifest;
 import android.app.Activity;
 import android.content.Context;
@@ -29,8 +31,11 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Semaphore;
 
@@ -52,7 +57,7 @@ public class Detection {
     private final Ai aiContent;
     private ByteBuffer inputData;
     private Bitmap bitmap;
-
+    private final ExecutorService decodeExecutor = Executors.newSingleThreadExecutor();
     private int frameCount = 0;
     private static final int SKIP_FRAMES = 5;
     private static final int DETECTION_INPUT_SIZE = 640;
@@ -184,12 +189,13 @@ public class Detection {
         }
     }
     public void handleRT(Mat frame, Ai ai) {
+        Log.i(TAG, "Inference başlıyor...");
         synchronized (lock) {
             if (frame == null || frame.empty()) {
                 Log.e("handleRT", "Giriş frame boş.");
                 return;
             }
-
+            Log.i(TAG, "Inference başladı");
             // 1. RGB to RGBA
             Mat rgba = new Mat();
             if (frame.channels() == 3) {
@@ -260,36 +266,73 @@ public class Detection {
                 }
             }
             inputBuffer.rewind();
-            ai.run(() -> {
+
+            //ai.run(() -> {
             // 4. GPU'da arka planda çalıştır
             //Threading.runOnBackground(() -> {
+                // 4. GPU'da arka planda çalıştır
+                //Threading.runOnBackground(() -> {
                 ai.predictVideo(bitmapToInputTensor(reusableScaledBitmap), rawOutput -> {
-                    List<Detection> dets = parseDetections(rawOutput);
-                    processDetectionsAndCrop(frame, dets);
-                    runOnUiThread(() ->
-                            ai.drawDetections(frame, dets)
-                    );
-                    Threading.runOnUi(() -> {
-                        for (Detection d : dets) {
-                            if (d.score > SCORE_THRESHOLD) {
-                                Point tl = new Point(d.x1, d.y1);
-                                Point br = new Point(d.x2, d.y2);
-                                Imgproc.rectangle(frame, tl, br, new Scalar(0, 255, 0), 2);
-                                Imgproc.putText(
-                                        frame,
-                                        d.label + String.format(" %.2f", d.score),
-                                        new Point(d.x1, d.y1 - 8),
-                                        Imgproc.FONT_HERSHEY_SIMPLEX,
-                                        0.6,
-                                        new Scalar(255, 255, 255),
-                                        2
-                                );
-                                Log.w(TAG, "AI GPU tespiti: " + d.label + " " + d.score);
+                    if (rawOutput == null || rawOutput.length < 1) {
+                        Log.e(TAG, "Inference çıktısı beklenenden kısa: batch boyutu " +
+                                (rawOutput==null? "null" : rawOutput.length));
+                        return;
+                    }
+                    decodeExecutor.execute(() -> {
+                    // rawOutput: float[1][C][N]
+                    float[][][] modelOut = rawOutput;
+                    // 1) Batch boyutunu at
+                    //float[][] raw = modelOut[0];
+                    float[][] raw = rawOutput[0];  // <— burası çok önemli
+                    int C = raw.length;       // kanal sayısı
+                    int N = raw[0].length;    // hücre sayısı
+
+                    // 2) Sabit kanallar
+                    float[] boxCx      = raw[0];
+                    float[] boxCy      = raw[1];
+                    float[] boxW       = raw[2];
+                    float[] boxH       = raw[3];
+                    float[] objectness = raw[4];
+
+                    // 3) Dinamik sınıf kanalları
+                    List<String> labels = ai.getLabels();      // modelin etiket listesi
+                    int numClasses = C - 5;                     // = labels.size()
+                    Map<String, float[]> classScores = new HashMap<>();
+                    for (int i = 0; i < numClasses; i++) {
+                        // Kanal raw[5 + i] → labels.get(i)
+                        classScores.put(labels.get(i), raw[5 + i]);
+                    }
+
+                    // Örnek: “dog” sınıfı üzerinden skorlar:
+                    float[] dogScores = classScores.get("dog");
+                    if (dogScores != null) {
+                        Log.i(TAG, "Dog skorları[0] = " + dogScores[0]);
+                    }
+
+                    // 4) İsterseniz Non-Max Suppression’dan önce her hücreyi kendi sınıfı ile eşleyin
+                    List<Detection> dets = new ArrayList<>();
+                    for (int c = 0; c < N; c++) {
+                        if (objectness[c] < 0.5f) continue;
+                        // en yüksek sınıfı bul
+                        int bestCls = 0;
+                        float bestScore = 0f;
+                        for (int i = 0; i < numClasses; i++) {
+                            float s = raw[5 + i][c];
+                            if (s > bestScore) {
+                                bestScore = s;
+                                bestCls   = i;
                             }
                         }
+                        float cx = boxCx[c], cy = boxCy[c];
+                        float wb  = boxW[c],  hb  = boxH[c];
+                        // … burdan Detected box hesaplaması vs.
+                        //   dets.add(new Detection(..., bestCls, bestScore, ...));
+                    }
                     });
+                    // 5) Çizim
+                    //runOnUiThread(() -> ai.drawDetections(frame, dets));
                 });
-            });
+            //});
         }
     }
 

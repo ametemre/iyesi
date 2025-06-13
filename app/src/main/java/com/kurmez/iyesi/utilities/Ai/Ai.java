@@ -2,6 +2,7 @@ package com.kurmez.iyesi.utilities.Ai;
 
 import android.content.Context;
 import android.content.res.AssetManager;
+import android.graphics.Bitmap;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
@@ -15,6 +16,7 @@ import org.opencv.core.Mat;
 import org.opencv.core.Point;
 import org.opencv.core.Scalar;
 import org.opencv.imgproc.Imgproc;
+import org.tensorflow.lite.DataType;
 import org.tensorflow.lite.Interpreter;
 import org.tensorflow.lite.Tensor;
 import org.tensorflow.lite.gpu.CompatibilityList;
@@ -28,6 +30,7 @@ import java.nio.MappedByteBuffer;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Executor;
@@ -65,12 +68,20 @@ public class Ai implements AutoCloseable {
     private static final Map<String, String> MODEL_LABEL_FILES = Map.of(
             "yolov8n.tflite",      "coco_labels.txt",
             "DogBreed.tflite",     "dogbreed_labels.txt",
-            "MyCustom.tflite",     "custom_labels.txt"
+            "MyCustom.tflite",     "custom_labels.txt",
+            "ml_model/dog/dog/DogBreedLabels.tflite","ml_model/dog/dog/DogBreedLabels.txt",
+            "ml_model/animal_ml_model.tflite","ml_model/animal_ml_model_labels.txt",
+            "ml_model/dump/yamnet_classification.tflite","ml_model/dump/labelmap.txt",
+            "ml_model/dump/mobilenet_v2.tflite","ml_model/dump/labels.txt"
     );
     private static final Map<String, Float> MODEL_THRESHOLDS = Map.of(
             "yolov8n.tflite",      0.5f,
             "DogBreed.tflite",     0.3f,
-            "MyCustom.tflite",     0.4f
+            "MyCustom.tflite",     0.4f,
+            "ml_model/dump/mobilenet_v2.tflite", 0.5f,
+            "ml_model/dump/yamnet_classification.tflite", 0.6f,
+            "ml_model/animal_ml_model.tflite", 0.7f,
+            "ml_model/dog/dog/DogBreedLabels.tflite",0.8f
     );
     public Ai(
             @NonNull Context context,
@@ -86,7 +97,7 @@ public class Ai implements AutoCloseable {
             t.setPriority(Thread.NORM_PRIORITY - 1); // Slightly lower priority
             return t;
         });
-
+        inspectModel(videoModelPath);
         // Configure GPU delegate
         this.gpuDelegate = initGpuDelegate(context);
         Interpreter.Options options = createInterpreterOptions(gpuDelegate);
@@ -115,7 +126,7 @@ public class Ai implements AutoCloseable {
         );
         // + Eşik değerini al
         this.scoreThreshold = MODEL_THRESHOLDS.getOrDefault(videoModelPath, 0.5f);
-        logModelDetails();
+        logModelTensorInfo();
     }
     public List<String> getLabelsAboveThreshold(List<Detection> detections, float threshold) {
         List<String> labels = new ArrayList<>();
@@ -215,22 +226,22 @@ public class Ai implements AutoCloseable {
         }
     }
     // OpenCV ile Mat üzerine çizim:
-        private void drawDetectionsOnMat(Mat frame, List<Detection> dets) {
-            for (Detection d : dets) {
-                Point tl = new Point(d.x1, d.y1);
-                Point br = new Point(d.x2, d.y2);
-                Imgproc.rectangle(frame, tl, br, new Scalar(0,255,0), 2);
-                Imgproc.putText(
-                        frame,
-                        d.label + String.format(" %.2f", d.score),
-                        new Point(d.x1, d.y1 - 8),
-                        Imgproc.FONT_HERSHEY_SIMPLEX,
-                        0.6,
-                        new Scalar(255,255,255),
-                        2
-                );
-            }
+    private void drawDetectionsOnMat(Mat frame, List<Detection> dets) {
+        for (Detection d : dets) {
+            Point tl = new Point(d.x1, d.y1);
+            Point br = new Point(d.x2, d.y2);
+            Imgproc.rectangle(frame, tl, br, new Scalar(0,255,0), 2);
+            Imgproc.putText(
+                    frame,
+                    d.label + String.format(" %.2f", d.score),
+                    new Point(d.x1, d.y1 - 8),
+                    Imgproc.FONT_HERSHEY_SIMPLEX,
+                    0.6,
+                    new Scalar(255,255,255),
+                    2
+            );
         }
+    }
     // + Yardımcı getter’lar
     public List<String> getLabels() {
         return labels;
@@ -472,6 +483,67 @@ public class Ai implements AutoCloseable {
         }
         return output;
     }
+    // Ai.java içinde (örneğin bir debug metodu):
+    public void inspectModel(String videoModelPath) {
+        try {
+            MappedByteBuffer modelBuf =
+                    TFLiteModelInspector.loadModelFile(context.getAssets(), videoModelPath);
+            Interpreter tflite = new Interpreter(modelBuf);
+            Log.i(TAG, "Output tensor count: " + tflite.getOutputTensorCount());
+            for (int i = 0; i < tflite.getOutputTensorCount(); i++) {
+                Tensor t = tflite.getOutputTensor(i);
+                Log.i(TAG,
+                        String.format("[%d] name=%s shape=%s type=%s",
+                                i,
+                                t.name(),
+                                Arrays.toString(t.shape()),
+                                t.dataType().name()
+                        )
+                );
+            }
+            tflite.close();
+        } catch (IOException e) {
+            Log.e(TAG, "Model inspection failed", e);
+        }
+    }
+    public int[] getVideoOutputShape() {
+        return videoOutputShape.clone();
+    }
+    /**
+     *  rawOutput: float[1][C][N]
+     *  döndürür: Map ile
+     *    "cx","cy","w","h","obj" → float[N]
+     *    "class_0", "class_1", ... → float[N] (C-5 adet)
+     */
+    public static Map<String, float[]> sliceModelOutput(float[][][] rawOutput) {
+        // 1) Batch boyutunu at
+        float[][] raw = rawOutput[0];
+        int C = raw.length;     // kanal sayısı
+        int N = raw[0].length;  // hücre sayısı
+
+        // 2) Box ve obje skorlarını al
+        float[] cx      = raw[0];
+        float[] cy      = raw[1];
+        float[] w       = raw[2];
+        float[] h       = raw[3];
+        float[] objness = raw[4];
+
+        // 3) Sınıf skorlarını al
+        int numClasses = C - 5;
+        Map<String, float[]> outMap = new HashMap<>();
+        outMap.put("cx", cx);
+        outMap.put("cy", cy);
+        outMap.put("w",  w);
+        outMap.put("h",  h);
+        outMap.put("obj", objness);
+
+        for (int i = 0; i < numClasses; i++) {
+            // raw[5+i] her sınıf kanalı
+            outMap.put("class_" + i, raw[5 + i]);
+        }
+
+        return outMap;
+    }
 
     private boolean validateVideoInput(float[][][][] input) {
         if (videoInterpreter == null) return false;
@@ -490,18 +562,63 @@ public class Ai implements AutoCloseable {
         return output;
     }
 
-    private void logModelDetails() {
+    private void logModelTensorInfo() {
+        // Video modeli tensor bilgileri
         if (videoInterpreter != null) {
-            Log.i(TAG, String.format(
-                    "Video Model: Input=%s, Output=%s",
-                    Arrays.toString(videoInputShape),
-                    Arrays.toString(videoOutputShape)
-            ));
+            int inCount = videoInterpreter.getInputTensorCount();
+            int outCount = videoInterpreter.getOutputTensorCount();
+            Log.i(TAG, String.format("Video Model Loaded → InputTensorCount=%d, OutputTensorCount=%d", inCount, outCount));
+
+            // Input tensor’leri
+            for (int i = 0; i < inCount; i++) {
+                Tensor t = videoInterpreter.getInputTensor(i);
+                Log.i(TAG, String.format(
+                        "  [In %d] name=%s shape=%s type=%s",
+                        i, t.name(),
+                        Arrays.toString(t.shape()),
+                        t.dataType()
+                ));
+            }
+            // Output tensor’leri
+            for (int i = 0; i < outCount; i++) {
+                Tensor t = videoInterpreter.getOutputTensor(i);
+                Log.i(TAG, String.format(
+                        "  [Out %d] name=%s shape=%s type=%s",
+                        i, t.name(),
+                        Arrays.toString(t.shape()),
+                        t.dataType()
+                ));
+            }
         }
+
+        // Ses modeli tensor bilgileri
         if (soundInterpreter != null) {
-            Log.i(TAG, "Sound Model Output Length: " + soundOutputLength);
+            int inCount = soundInterpreter.getInputTensorCount();
+            int outCount = soundInterpreter.getOutputTensorCount();
+            Log.i(TAG, String.format("Sound Model Loaded → InputTensorCount=%d, OutputTensorCount=%d", inCount, outCount));
+
+            for (int i = 0; i < inCount; i++) {
+                Tensor t = soundInterpreter.getInputTensor(i);
+                Log.i(TAG, String.format(
+                        "  [In %d] name=%s shape=%s type=%s",
+                        i, t.name(),
+                        Arrays.toString(t.shape()),
+                        t.dataType()
+                ));
+            }
+            for (int i = 0; i < outCount; i++) {
+                Tensor t = soundInterpreter.getOutputTensor(i);
+                Log.i(TAG, String.format(
+                        "  [Out %d] name=%s shape=%s type=%s",
+                        i, t.name(),
+                        Arrays.toString(t.shape()),
+                        t.dataType()
+                ));
+            }
         }
     }
+
+
 
     // --- Resource Management ---
     @Override
@@ -556,4 +673,30 @@ public class Ai implements AutoCloseable {
         }
         return gpuDelegate;
     }
+    // Ai.java içinde:
+    public String getInputShapeInfo(Interpreter interpreter) {
+        if (interpreter == null) return "interpreter=null";
+        StringBuilder sb = new StringBuilder();
+        int inputCount = interpreter.getInputTensorCount();
+        for (int i = 0; i < inputCount; i++) {
+            sb.append("Input[").append(i).append("] shape=")
+                    .append(java.util.Arrays.toString(interpreter.getInputTensor(i).shape()))
+                    .append(" type=").append(interpreter.getInputTensor(i).dataType().name())
+                    .append("; ");
+        }
+        return sb.toString();
+    }
+    public String getOutputShapeInfo(Interpreter interpreter) {
+        if (interpreter == null) return "interpreter=null";
+        StringBuilder sb = new StringBuilder();
+        int outputCount = interpreter.getOutputTensorCount();
+        for (int i = 0; i < outputCount; i++) {
+            sb.append("Output[").append(i).append("] shape=")
+                    .append(java.util.Arrays.toString(interpreter.getOutputTensor(i).shape()))
+                    .append(" type=").append(interpreter.getOutputTensor(i).dataType().name())
+                    .append("; ");
+        }
+        return sb.toString();
+    }
+
 }

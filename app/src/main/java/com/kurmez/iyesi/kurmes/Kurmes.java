@@ -154,6 +154,7 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
         mOpenCvCameraView= findViewById(R.id.kurmes_camera_view);
         mOpenCvCameraView.setVisibility(SurfaceView.VISIBLE);
         mOpenCvCameraView.setCvCameraViewListener(this);
+        mOpenCvCameraView.enableView();
         // Instantiate MiniFabs helper and keep as field
         int[] miniFabIds = {
                 R.id.fab_1, R.id.fab_2, R.id.fab_3,
@@ -186,75 +187,36 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
         }
         // fabAction: başlat/durdur
         fabAction.setOnClickListener(v-> {
+            new Thread(()->{
             if (!isRunning) {
                 if (miniFabs.getSelectedFab()==null) {
                     Toast.makeText(this,"Önce bir seçenek seçin",Toast.LENGTH_SHORT).show();
                     return;
                 }
-                mOpenCvCameraView.enableView();
-                ai = actions.performSelectedAction(miniFabs.getSelectedFab());
-                if (ai!=null) {
-                    interpreter = ai.getVideoInterpreter();
-
-                mapper = new TFLiteInputMapper(mWidth, mHeight, ai.getInputWidth(), ai.getInputHeight());
-                preprocessor = new TFLiteInputPreprocessor(mapper);
-                detector = new Detection(ai, interpreter, this,
-                        0,0,0,0,0,0,
-                        miniFabs.getSelectedFab().toString());
-                terminator = new Terminator(
-                        ai.getExecutor(), ai.getVideoInterpreter(),
-                        ai.getSoundInterpreter(), ai.getGpuDelegate(),
-                        videoBuffer, soundBuffer, this
-                );
-                isRunning = true;
-                }
+                new Thread(()->{
+                    ai = actions.performSelectedAction(miniFabs.getSelectedFab());
+                    if (ai!=null) {
+                        interpreter = ai.getVideoInterpreter();
+                        mapper = new TFLiteInputMapper(mWidth, mHeight, ai.getInputWidth(), ai.getInputHeight());
+                        preprocessor = new TFLiteInputPreprocessor(mapper);
+                        detector = new Detection(ai, interpreter, this, 0,0,0,0,0,0, miniFabs.getSelectedFab().toString());
+                        terminator = new Terminator(ai.getExecutor(), ai.getVideoInterpreter(), ai.getSoundInterpreter(), ai.getGpuDelegate(), videoBuffer, soundBuffer, this);
+                        isRunning = true;
+                        isPredicting = true;
+                    } else {
+                        Toast.makeText(this, "Model yükleme başarısız", Toast.LENGTH_SHORT).show();
+                    }
+                }).start();
             } else {
                 terminator.onStopButtonClicked(v);
                 ai.close(); ai=null;
                 isRunning = false;
-                mOpenCvCameraView.disableView();
+                isPredicting = false;
+                //mOpenCvCameraView.disableView();
                 Toast.makeText(this,"Durduruldu",Toast.LENGTH_SHORT).show();
             }
-        });/*
-        // Sound FAB click (if needed)
-        fabSound.setOnClickListener(v -> {
-            if (!isPredicting) {
-                if (miniFabs.getSelectedFab() != null) {
-                    ai = actions.performSelectedAction(miniFabs.getSelectedFab());
-                    if (ai != null) {
-                        // OpenCV camera initialization
-
-
-                        mOpenCvCameraView.enableView();
-                        mOpenCvCameraView.setOnTouchListener(outsideListener);
-                        interpreter = ai.getVideoInterpreter();
-                        mapper = new TFLiteInputMapper(mWidth, mHeight, ai.getInputWidth(), ai.getInputHeight());
-                        preprocessor = new TFLiteInputPreprocessor(mapper);
-                        detectionRunner = new Detection(
-                                ai, interpreter, this,
-                                0, 0f, 0f, 0f, 0f, 0f, miniFabs.getSelectedFab().toString()
-                        );
-                        terminator =new Terminator(ai.getExecutor(),ai.getVideoInterpreter(),ai.getSoundInterpreter(),ai.getGpuDelegate(),videoBuffer,soundBuffer,this);
-                        isPredicting = true;
-                    }
-                } else {
-                    Toast.makeText(this, "Önce bir miniFAB seçin", Toast.LENGTH_SHORT).show();
-                }
-                try {
-
-                } catch (Exception e) {
-                    Log.w("FAB", "Terminator is not created");
-                    isPredicting = true;
-                    throw new RuntimeException(e);
-                }
-            }
-            else if (terminator != null){
-                terminator.onStopButtonClicked(v);
-                isPredicting = false;
-                ai = null;
-                Toast.makeText(this, "Operasyonlar durduruldu", Toast.LENGTH_SHORT).show();
-            }
-        });*/
+            }).start();
+        });
     }
 
     @Override
@@ -310,10 +272,13 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
     public Mat onCameraFrame(CameraBridgeViewBase.CvCameraViewFrame inputFrame) {
         //Mat rgba = inputFrame.rgba();
         Mat rgba = inputFrame.rgba();
+        Log.i(TAG, "onCameraFrame: ai=" + ai + " isPredicting=" + isPredicting + " isRunning=" + isRunning);
         // Eğer ai null ise (henüz başlatılmadıysa) hiç bir şey yapma
         if (ai == null || !isPredicting) {
+            Log.i(TAG, "  → Inference atlandı (ai null veya isPredicting=false)");
             return rgba;
         }
+        Log.i(TAG, "  → Inference bloğuna giriliyor");
         if (!executor.isShutdown()) {
             executor.submit(() -> {
                 try {
@@ -330,6 +295,7 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
                             }
                     );
                     */
+                    Log.e(TAG, "Inference...");
                     detector.handleRT(rgba,ai);
                 } catch (Exception e) {
                     Log.e(TAG, "Inference error in frame", e);

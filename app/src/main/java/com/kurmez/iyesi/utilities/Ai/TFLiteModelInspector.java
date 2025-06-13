@@ -2,13 +2,21 @@ package com.kurmez.iyesi.utilities.Ai;
 
 import android.content.res.AssetFileDescriptor;
 import android.content.res.AssetManager;
+import android.graphics.Bitmap;
+import android.util.Log;
+import android.view.TextureView;
+
+import com.kurmez.iyesi.kurmes.Kurmes;
 
 import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
 import java.io.FileInputStream;
 import java.io.IOException;
+
+import org.tensorflow.lite.DataType;
 import org.tensorflow.lite.Interpreter;
 import org.tensorflow.lite.Tensor;
+import org.tensorflow.lite.support.image.TensorImage;
 
 public class TFLiteModelInspector {
     public static void main(String[] args,Interpreter tflite) {
@@ -55,6 +63,26 @@ public class TFLiteModelInspector {
         }
         sb.append("]");
         return sb.toString();
+    }
+    private void imageSizes(TextureView textureView){
+        try {
+            Bitmap bmp = textureView.getBitmap();
+            Log.i("Tensor Size :", String.format(
+                    "Camera Bitmap: width=%d, height=%d",
+                    bmp.getWidth(), bmp.getHeight()
+            ));
+
+            TensorImage tImg = new TensorImage(DataType.FLOAT32);
+            tImg.load(bmp);
+            Log.i("Don't Show Toolbar", String.format(
+                    "TensorImage after load: width=%d, height=%d",
+                    tImg.getWidth(), tImg.getHeight()
+            ));
+        } catch (Exception e) {
+            e.printStackTrace();
+            throw new RuntimeException(e);
+        }
+
     }
 }
 

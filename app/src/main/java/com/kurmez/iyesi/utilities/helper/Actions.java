@@ -83,175 +83,55 @@ public class Actions {
         //miniFabs.highlightFab(fab);
     }
     public Ai performSelectedAction(FloatingActionButton selectedFab) {
-
-        if (selectedFab == null) return null;
+        if (selectedFab == null) {
+            Log.w(TAG, "performSelectedAction: selectedFab is null!");
+            return null;
+        }
         Threading threading = new Threading();
         int id = selectedFab.getId();
-        if (id == R.id.fab_9) {
-            host.startActivity(new Intent(host, SokakActivity.class));
-            //host.startActivity(intent);
-        } else if (id == R.id.fab_2) {
-            try {
-                //ai = new Ai(host,null,"ml_model/dog/DogBreed.tflite","ml_model/dog/label.txt");
-                ai = new Ai(host,null,"ml_model/dog/dog/DogBreedLabels.tflite","ml_model/dog/dog/DogBreedLabels.txt");
-                threading.availableGPU();
-                threading.availableGPUThreads();
-
-            } catch (IOException e) {
-                throw new RuntimeException(e);
+        try {
+            if (id == R.id.fab_9) {
+                Log.i(TAG, "SokakActivity başlatılıyor.");
+                host.startActivity(new Intent(host, SokakActivity.class));
+            } else if (id == R.id.fab_2) {
+                Log.i(TAG, "DogBreedLabels.tflite yükleniyor...");
+                ai = new Ai(host, null, "ml_model/dog/dog/DogBreedLabels.tflite", "ml_model/dog/dog/DogBreedLabels.txt");
+                Log.i(TAG, "DogBreedLabels.tflite başarıyla yüklendi.");
+            } else if (id == R.id.fab_3) {
+                Log.i(TAG, "animal_ml_model.tflite yükleniyor...");
+                ai = new Ai(host, null, "ml_model/animal_ml_model.tflite", "ml_model/animal_ml_model_labels.txt");
+                Log.i(TAG, "animal_ml_model.tflite başarıyla yüklendi.");
+            } else if (id == R.id.fab_4) {
+                Log.i(TAG, "yamnet_classification.tflite yükleniyor...");
+                ai = new Ai(host, null, "ml_model/dump/yamnet_classification.tflite", "ml_model/dump/labelmap.txt");
+                Log.i(TAG, "yamnet_classification.tflite başarıyla yüklendi.");
+            } else if (id == R.id.fab_5) {
+                Log.i(TAG, "mobilenet_v2.tflite yükleniyor...");
+                ai = new Ai(host, null, "ml_model/dump/mobilenet_v2.tflite", "ml_model/dump/labels.txt");
+                Log.i(TAG, "mobilenet_v2.tflite başarıyla yüklendi.");
+            } else if (id == R.id.fab_6) {
+                Log.i(TAG, "yolov8n.tflite yükleniyor...");
+                ai = new Ai(host, null, "yolov8n.tflite", "coco_labels.txt");
+                Log.i(TAG, "yolov8n.tflite başarıyla yüklendi.");
             }
-        } else if (id == R.id.fab_3) {
-            try {
-                ai = new Ai(host,null,"ml_model/animal_ml_model.tflite","ml_model/animal_ml_model_labels.txt");
-                threading.availableGPU();
-                threading.availableGPUThreads();
-
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            }
-
-        } else if (id == R.id.fab_4) {
-            try {
-                ai = new Ai(host,null,"ml_model/dump/yamnet_classification.tflite","ml_model/dump/labelmap.txt");
-                threading.availableGPU();
-                threading.availableGPUThreads();
-
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            }
-        } else if (id == R.id.fab_5) {
-            try {
-                ai = new Ai(host,null,"ml_model/dump/mobilenet_v2.tflite","ml_model/dump/labels.txt");
-                threading.availableGPU();
-                threading.availableGPUThreads();
-
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            }
-        } else if (id == R.id.fab_6) {
-            try {
-
-                ai = new Ai(host,null,"yolov8n.tflite","coco_labels.txt");}
-            catch (IOException e) {
-                throw new RuntimeException(e);
-            }
-            threading.availableGPU();
-            threading.availableGPUThreads();
-
-        } else if (id == R.id.fab_7) {
-            threading.availableCPU();
-        } else if (id == R.id.fab_8) {
-            threading.availableGPUThreads();
-        } else if (id == R.id.fab_1) {
-            threading.availableGPU();
-        } else if (id == R.id.besleme_fab) {
-        } else if (id == R.id.bolge_fab) {
-            try {
-                ai = new Ai(host,null,"ml_model/animal_ml_model.tflite","ml_model/animal_ml_model_labels.txt");
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            }
-        } else if (id == R.id.nakil_fab) {
-
-            try {
-                ai = new Ai(host,null,"yolov8n.tflite","coco_labels.txt");
-                try {
-                    AnimalCounter counter = new AnimalCounter(host);
-                } catch (Exception e) {
-                    throw new RuntimeException(e);
-                }
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            }
-            host.finish();
-            //host.startActivity(new Intent(host, CatActivity.class));
+            // Diğer FAB id'leri için de benzer şekilde devam ettir...
+            // threading.availableCPU() vs. loglamak istersen ekle.
+        } catch (IOException e) {
+            Log.e(TAG, "Model yükleme hatası: " + e.getMessage(), e);
+            ai = null; // Hatalı ise null'a çek.
         }
-
-
-
-        // isteğe bağlı: seçimi sıfırla
-        //miniFabs.resetFabAppearance(selectedFab);
+        if (ai != null) {
+            try {
+                Log.i(TAG, "Model Input Tensor Info: " + ai.getInputShapeInfo(ai.getVideoInterpreter()));
+                Log.i(TAG, "Model Output Tensor Info: " + ai.getOutputShapeInfo(ai.getVideoInterpreter()));
+            } catch (Exception ex) {
+                Log.e(TAG, "Tensor info alınamadı: " + ex.getMessage());
+            }
+        } else {
+            Log.w(TAG, "Ai nesnesi null, model yüklenemedi.");
+        }
         selectedFab = null;
         return ai;
-    }
-    public Action onFabClickActionKurmes(View view , FloatingActionButton clickedFab) {
-        Action action = null;
-        if (view.getId() == R.id.fab_1) {
-            action = this::actionOne;
-            //kurmes.currentState = Kurmes.State.KEDI;
-        } else if (view.getId() == R.id.fab_2) {
-            action = this::actionTwo;
-            //kurmes.currentState = Kurmes.State.KOPEK;
-        } else if (view.getId() == R.id.fab_3) {
-            action = this::actionThree;
-            //kurmes.currentState = Kurmes.State.KURT;
-        } else if (view.getId() == R.id.fab_4) {
-            action = this::actionFour;
-        } else if (view.getId() == R.id.fab_5) {
-            action = this::actionFive;
-        } else if (view.getId() == R.id.fab_6) {
-            action = this::actionSix;
-        } else if (view.getId() == R.id.fab_7) {
-            action = this::actionSeven;
-        } else if (view.getId() == R.id.fab_8) {
-            action = this::actionEight;
-        } else if (view.getId() == R.id.fab_9) {
-            action = this::actionNine;
-        }
-        return action;
-    }
-
-    private void actionOne() {
-        //kurmes.cameraState(true);
-        //CatSpeciesRecognition();
-        Log.d("Action", "Action One Executed!");
-    }
-    private void actionTwo() {
-        //kurmes.SetLabelText("denedik");
-        //DogSpeciesRecognition();
-        Log.d("Action", "Action Two Executed!");
-    }
-    private void actionThree() {
-        //WolfSpeciesRecognition();
-        Log.d("Action", "Action Three Executed!");
-    }
-    private void actionFour() {
-        //CrowSpeciesRecognition();
-        Log.d("Action", "Action Four Executed!");
-    }
-    private void actionFive() {
-        //HawkSpeciesRecognition();
-        Log.d("Action", "Action Five Executed!");
-    }
-    private void actionSix() {
-        //EagleSpeciesRecognition();
-        Log.d("Action", "Action Six Executed!");
-    }
-    private void actionSeven() {
-        //KeklikSpeciesRecognition();
-        Log.d("Action", "Action Seven Executed!");
-    }
-    private void actionEight() {
-        //PidgeonSpeciesRecognition();
-        Log.d("Action", "Action Eight Executed!");
-    }
-    private void actionNine() {
-        /*
-        Interpreter tflite;
-        try {
-            MappedByteBuffer modelBuffer = loadModelFile(kurmes.getAssets(), "yolov8n.tflite");
-            tflite = new Interpreter(modelBuffer);
-        } catch (IOException e) {
-            Log.e(TAG, "Model yüklenirken hata", e);
-        }
-        try {
-            kurmes.aiContent = new Ai(context, "yolov8n.tflite", "yolov8n.tflite");
-            kurmes.currentState = Kurmes.State.OBJECT_DETECTION;   // burayı ekleyin
-            Log.d("Action", "Content Detection başlatıldı");
-        } catch (IOException e) {
-            Log.e(TAG, "Failed to load TFLite models", e);
-        }
-    }*/
     }
     /** Eğer ihtiyaç varsa runtime’da MiniFabs örneğini değiştirmek için setter */
     public void setMiniFabs(MiniFabs miniFabs) {
