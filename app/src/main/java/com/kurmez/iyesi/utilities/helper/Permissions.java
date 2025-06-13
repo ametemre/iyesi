@@ -42,4 +42,15 @@ public class Permissions {
             ActivityCompat.requestPermissions(activity, new String[]{Manifest.permission.RECORD_AUDIO}, 101);
         }
     }
+    public void requestAllPermissions(Activity activity) {
+        // örnek:
+        ActivityCompat.requestPermissions(activity,
+                new String[]{
+                        Manifest.permission.CAMERA,
+                        Manifest.permission.RECORD_AUDIO,
+                        Manifest.permission.WRITE_EXTERNAL_STORAGE
+                },
+                Kurmes.CAMERA_PERMISSION_REQUEST_CODE
+        );
+    }
 }

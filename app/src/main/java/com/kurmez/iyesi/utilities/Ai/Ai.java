@@ -11,6 +11,10 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.util.Consumer;
 
+import org.opencv.core.Mat;
+import org.opencv.core.Point;
+import org.opencv.core.Scalar;
+import org.opencv.imgproc.Imgproc;
 import org.tensorflow.lite.Interpreter;
 import org.tensorflow.lite.Tensor;
 import org.tensorflow.lite.gpu.CompatibilityList;
@@ -31,6 +35,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Function; // Sınıf başına eklenmeli (eğer yoksa)
 
 /**
  * Enhanced Ai class: Manages TensorFlow Lite models with thread-safe operations,
@@ -39,12 +44,13 @@ import java.util.concurrent.TimeUnit;
 public class Ai implements AutoCloseable {
     private static final String TAG = "AiModel";
     private static final float[][][] EMPTY_VIDEO_OUTPUT = new float[0][0][0];
-
+    private volatile boolean busy = false;
+    private Context context;
     // Core components
     private final Interpreter videoInterpreter;
     private final Interpreter soundInterpreter;
     private final GpuDelegate gpuDelegate;
-    private final ExecutorService executor;
+    private ExecutorService executor;
     private final Handler mainHandler;
 
     // Model metadata
@@ -72,6 +78,7 @@ public class Ai implements AutoCloseable {
             @Nullable String videoModelPath,
             @Nullable String labelsPath
     ) throws IOException {
+        this.context = context;
         // Initialize core components
         this.mainHandler = new Handler(Looper.getMainLooper());
         this.executor = Executors.newFixedThreadPool(2, r -> {
@@ -106,7 +113,6 @@ public class Ai implements AutoCloseable {
                 context.getAssets().open(labelFile),
                 Charset.forName("UTF-8")
         );
-
         // + Eşik değerini al
         this.scoreThreshold = MODEL_THRESHOLDS.getOrDefault(videoModelPath, 0.5f);
         logModelDetails();
@@ -120,6 +126,111 @@ public class Ai implements AutoCloseable {
         }
         return labels;
     }
+
+    public void handleRT(
+            @NonNull Mat frame,
+            @NonNull Function<Mat, float[][][][]> mapper,
+            @NonNull Consumer<float[][][]> callback
+    ) {
+        Mat cloned = frame.clone();
+
+        run(() -> {
+            try {
+                float[][][][] input = mapper.apply(cloned);
+                float[][][] output = predictVideoSync(input);
+                mainHandler.post(() -> callback.accept(output));
+            } catch (Exception e) {
+                Log.e(TAG, "handleRT hatası", e);
+                mainHandler.post(() -> callback.accept(EMPTY_VIDEO_OUTPUT));
+            } finally {
+                cloned.release();
+            }
+        });
+    }
+    public float[][][] predictVideoSync(float[][][][] input) {
+        if (videoInterpreter == null || !validateVideoInput(input)) {
+            return EMPTY_VIDEO_OUTPUT;
+        }
+        try {
+            // Çıkışı processVideoInput ile al, hem 2D hem 3D handle edilsin
+            return processVideoInput(input);
+        } catch (Exception e) {
+            Log.e(TAG, "Sync video prediction failed", e);
+            return EMPTY_VIDEO_OUTPUT;
+        }
+    }
+
+    public List<Detection> parseDetections(float[][][] output) {
+        List<Detection> result = new ArrayList<>();
+        if (output == null || output.length == 0) {
+            return result;  // boşsa hemen döner
+        }
+        for (float[] row : output[0]) {
+            if (row == null || row.length < 6) continue;
+            float score = row[4];
+            if (score < scoreThreshold) continue;
+
+            int classId = -1;
+            float maxClassScore = -1f;
+            for (int i = 5; i < row.length; i++) {
+                if (row[i] > maxClassScore) {
+                    maxClassScore = row[i];
+                    classId = i - 5;
+                }
+            }
+            if (classId < 0) continue;
+
+            float x  = row[0],    y  = row[1];
+            float w  = row[2],    h  = row[3];
+            float x1 = x - w/2f,  y1 = y - h/2f;
+            float x2 = x + w/2f,  y2 = y + h/2f;
+            String label = labels.get(classId);
+
+            result.add(new Detection(
+                    this,                    // Ai instance
+                    videoInterpreter,        // hangi interpreter’la
+                    context,                 // Activity/Context
+                    classId,
+                    maxClassScore,
+                    x1, y1, x2, y2,
+                    label
+            ));
+        }
+        return result;
+    }
+    public void drawDetections(Mat frame,List<Detection> dets) {
+        for (Detection d : dets) {
+            Point tl = new Point(d.x1, d.y1);
+            Point br = new Point(d.x2, d.y2);
+            Imgproc.rectangle(frame, tl, br, new Scalar(0,255,0), 2);
+            Imgproc.putText(
+                    frame,
+                    d.label + String.format(" %.2f", d.score),
+                    new Point(d.x1, d.y1 - 8),
+                    Imgproc.FONT_HERSHEY_SIMPLEX,
+                    0.6,
+                    new Scalar(255,255,255),
+                    2
+            );
+        }
+    }
+    // OpenCV ile Mat üzerine çizim:
+        private void drawDetectionsOnMat(Mat frame, List<Detection> dets) {
+            for (Detection d : dets) {
+                Point tl = new Point(d.x1, d.y1);
+                Point br = new Point(d.x2, d.y2);
+                Imgproc.rectangle(frame, tl, br, new Scalar(0,255,0), 2);
+                Imgproc.putText(
+                        frame,
+                        d.label + String.format(" %.2f", d.score),
+                        new Point(d.x1, d.y1 - 8),
+                        Imgproc.FONT_HERSHEY_SIMPLEX,
+                        0.6,
+                        new Scalar(255,255,255),
+                        2
+                );
+            }
+        }
     // + Yardımcı getter’lar
     public List<String> getLabels() {
         return labels;
@@ -264,7 +375,9 @@ public class Ai implements AutoCloseable {
         }
         return length;
     }
-
+    public void shutdown() {
+        executor.shutdownNow();
+    }
     // --- Public API ---
     public void predictVideo(
             @NonNull float[][][][] input,
@@ -289,7 +402,7 @@ public class Ai implements AutoCloseable {
             throw new RuntimeException(e);
         }
     }
-
+/*
     public float[][][] predictVideoSync(float[][][][] input) {
         if (videoInterpreter == null || !validateVideoInput(input)) {
             return EMPTY_VIDEO_OUTPUT;
@@ -303,6 +416,21 @@ public class Ai implements AutoCloseable {
             Log.e(TAG, "Sync video prediction failed", e);
             return EMPTY_VIDEO_OUTPUT;
         }
+    }*/
+
+    public void run(Runnable task) {
+        if (!busy) {
+            busy = true;
+            executor.submit(() -> {
+                try {
+                    task.run(); // örn: ai.predict()
+                } catch (Exception e) {
+                    e.printStackTrace();
+                } finally {
+                    busy = false;
+                }
+            });
+        } // Aksi halde bu frame atlanır
     }
 
     public void predictSound(

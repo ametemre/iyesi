@@ -3,6 +3,8 @@ package com.kurmez.iyesi.kurmes;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.google.firebase.auth.FirebaseAuth;
 import com.kurmez.iyesi.utilities.Ai.Detection;
+import com.kurmez.iyesi.utilities.Ai.TFLiteInputMapper;
+import com.kurmez.iyesi.utilities.Ai.TFLiteInputPreprocessor;
 import com.kurmez.iyesi.utilities.Ai.Threading;
 import com.kurmez.iyesi.utilities.Terminator;
 import com.kurmez.iyesi.utilities.helper.Actions;
@@ -11,7 +13,6 @@ import com.kurmez.iyesi.R;
 
 import org.opencv.android.CameraBridgeViewBase;
 import org.opencv.core.Mat;
-import org.opencv.imgproc.Imgproc;
 
 import android.Manifest;
 import android.content.pm.PackageManager;
@@ -19,40 +20,40 @@ import android.graphics.Bitmap;
 // ve kendi Detection/Ai class’ınızın import’ları
 
 import android.annotation.SuppressLint;
-import android.graphics.Color;
 import android.os.Bundle;
 import android.os.Handler;
 import android.util.Log;
-import android.view.Menu;
 import android.view.MotionEvent;
 import android.view.SurfaceView;
 import android.view.View;
 import android.view.WindowManager;
 import android.widget.FrameLayout;
-import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 
-import org.opencv.android.CameraActivity;
-import org.opencv.android.CameraBridgeViewBase.CvCameraViewListener2;
-import org.opencv.android.OpenCVLoader;
-import org.opencv.core.MatOfRect;
-import org.tensorflow.lite.Interpreter;
-import org.tensorflow.lite.support.label.Category;
-
-import java.nio.BufferUnderflowException;
-import java.util.ArrayList;
-
-import java.util.List;
-
-import java.util.Collections;
-import java.util.concurrent.RejectedExecutionException;
-
 import com.kurmez.iyesi.utilities.Ai.Ai;
 import com.kurmez.iyesi.utilities.MiniFabs;
+
+import org.opencv.android.CameraActivity;
+import org.opencv.android.OpenCVLoader;
+
+import org.tensorflow.lite.Interpreter;
+
+import java.io.IOException;
+import java.util.Collections;
+import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
+import android.view.Menu;
+
+import org.opencv.android.CameraBridgeViewBase.CvCameraViewListener2;
+import org.opencv.core.MatOfRect;
+
+import java.util.ArrayList;
 
 
 public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
@@ -67,14 +68,18 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
     public Ai aiKedi, aiKopek, aiKurt, aiKarga, aiContent, ai;
     private MiniFabs miniFabs;
     private Actions actions;
+    private Mat frame;
     public enum State {
         KEDI, KOPEK, KURT, KARGA,
         IDLE, FACE_DETECTION, OBJECT_DETECTION, TRACKING, CAPTURE,TEST
     }
+    ExecutorService executor = Executors.newSingleThreadExecutor();
     public State currentState = State.IDLE;
-    Threading threading = new Threading();
+    private int mWidth, mHeight;
     private final List<float[]> soundBuffer = new ArrayList<>();
-    private final List<float[][][]> videoBuffer = new ArrayList<float[][][]>();
+    private final List<float[][][]> videoBuffer = new ArrayList<>();
+    Threading threading = new Threading();
+
     private final int SOUND_THRESHOLD = 5;
     private final int VIDEO_THRESHOLD = 5;
     private Detection detectionRunner;
@@ -85,13 +90,14 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
     private static final String[] KARGA_SOUNDS = {"caw", "squawk"};
     private static final int REQUEST_IMAGE_CAPTURE = 1; // Request code for capturing a photo
     private List<Bitmap> photoList = new ArrayList<>(); // List to store captured images
-    private FloatingActionButton fabDraggable, fabSound;
     private Terminator terminator = null;
+    private TFLiteInputPreprocessor preprocessor;
+    private TFLiteInputMapper mapper;
     private FirebaseAuth mAuth;
     private Handler handler = new Handler();
     public static final int CAMERA_PERMISSION_REQUEST_CODE = 100;
     //private JavaCamera2View cameraView; // Using JavaCamera2View
-    protected TextView labelText;
+    private TextView labelText, statusText;
     public void SetLabelText(String s){
         if (labelText != null) {
             labelText.setText(s);
@@ -104,14 +110,26 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
     private TextView cameraStatusText;
     MatOfRect rects;
     //imported---------------------------------
+
+    private FloatingActionButton fabMain, fabAction;
+    private FrameLayout rootLayout;
+
+
+    private Detection detector;
+
+
+    private Handler uiHandler = new Handler();
+    private boolean isRunning = false;
+
+    private FirebaseAuth auth;
     //private DetectorFunction activeDetectorFunction = () -> videoYapayZeka(getResources().openRawResource(R.raw.lbpcascade_frontalface), null);
     public CameraCalibrator mCalibrator;
     private OnCameraFrameRender mOnCameraFrameRender;
     private Menu mMenu;
-    private int mWidth;
-    private int mHeight;
-    private FrameLayout rootLayout;
-    //--------------------------Creation
+
+    //----------------------------------------------------------------------------------------------<<Creation
+
+    //----------------------------------------------------------------------------------------------<Creation
     @SuppressLint("ClickableViewAccessibility")
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -120,31 +138,22 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
         setContentView(R.layout.activity_kurmes);
         Permissions permissions = new Permissions();
 
-        // Permissions
-        requestAudioPermissions();
-        requestStoragePermission();
-        checkAudioPermission();
-        checkAndRequestPermissions();
-
+        // izinler
+        new Permissions().requestAllPermissions(this);
         // Firebase Auth
         mAuth = FirebaseAuth.getInstance();
-
-        // OpenCV camera initialization
-        mOpenCvCameraView = findViewById(R.id.kurmes_camera_view);
-        mOpenCvCameraView.setVisibility(SurfaceView.VISIBLE);
-        mOpenCvCameraView.setCvCameraViewListener(this);
-        mOpenCvCameraView.enableView();
-
         // Keep screen on
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 
         // UI elements
         labelText        = findViewById(R.id.label_text);
         cameraStatusText = findViewById(R.id.camera_status_text);
-        fabDraggable     = findViewById(R.id.fab_main);
-        fabSound         = findViewById(R.id.fab_Sound);
+        fabMain     = findViewById(R.id.fab_main);
+        fabAction         = findViewById(R.id.fab_Sound);
         rootLayout       = findViewById(android.R.id.content);
-
+        mOpenCvCameraView= findViewById(R.id.kurmes_camera_view);
+        mOpenCvCameraView.setVisibility(SurfaceView.VISIBLE);
+        mOpenCvCameraView.setCvCameraViewListener(this);
         // Instantiate MiniFabs helper and keep as field
         int[] miniFabIds = {
                 R.id.fab_1, R.id.fab_2, R.id.fab_3,
@@ -153,41 +162,74 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
         };
 
 
-        MiniFabs miniFabs = new MiniFabs(
-                this,
-                fabDraggable,
-                fabSound,
-                miniFabIds
-        );
-        // Apply initial teal/default colors
+        miniFabs = new MiniFabs(this, fabMain, fabAction, miniFabIds);
         miniFabs.applyDefaultColors();
-
+        rootLayout.setOnTouchListener((v,e)-> miniFabs.handleOutsideTouch(e));
+        miniFabs.setupDraggableFAB(miniFabs, fabMain);
+        actions = new Actions(miniFabs, this, this);
         // Collapse on outside touch (camera view or root)
         View.OnTouchListener outsideListener = (v, ev) -> {
             return miniFabs.handleOutsideTouch(ev);
         };
-        mOpenCvCameraView.setOnTouchListener(outsideListener);
+
         rootLayout.setOnTouchListener(outsideListener);
 
         // Set up draggable & expand/collapse behavior
-        miniFabs.setupDraggableFAB(miniFabs, fabDraggable);
+        miniFabs.setupDraggableFAB(miniFabs, fabMain);
         Actions actions = new Actions(miniFabs, this, this /* or getApplicationContext() */ );
         // Wire each miniFAB to call selectFab() + your onFabClick logic
         for (FloatingActionButton fab : miniFabs.getFabs()) {
             fab.setOnClickListener(v -> {
-
                 actions.onFabSelected(fab);
                 // Highlight selection
             });
         }
+        // fabAction: başlat/durdur
+        fabAction.setOnClickListener(v-> {
+            if (!isRunning) {
+                if (miniFabs.getSelectedFab()==null) {
+                    Toast.makeText(this,"Önce bir seçenek seçin",Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                mOpenCvCameraView.enableView();
+                ai = actions.performSelectedAction(miniFabs.getSelectedFab());
+                if (ai!=null) {
+                    interpreter = ai.getVideoInterpreter();
 
+                mapper = new TFLiteInputMapper(mWidth, mHeight, ai.getInputWidth(), ai.getInputHeight());
+                preprocessor = new TFLiteInputPreprocessor(mapper);
+                detector = new Detection(ai, interpreter, this,
+                        0,0,0,0,0,0,
+                        miniFabs.getSelectedFab().toString());
+                terminator = new Terminator(
+                        ai.getExecutor(), ai.getVideoInterpreter(),
+                        ai.getSoundInterpreter(), ai.getGpuDelegate(),
+                        videoBuffer, soundBuffer, this
+                );
+                isRunning = true;
+                }
+            } else {
+                terminator.onStopButtonClicked(v);
+                ai.close(); ai=null;
+                isRunning = false;
+                mOpenCvCameraView.disableView();
+                Toast.makeText(this,"Durduruldu",Toast.LENGTH_SHORT).show();
+            }
+        });/*
         // Sound FAB click (if needed)
         fabSound.setOnClickListener(v -> {
             if (!isPredicting) {
                 if (miniFabs.getSelectedFab() != null) {
                     ai = actions.performSelectedAction(miniFabs.getSelectedFab());
                     if (ai != null) {
+                        // OpenCV camera initialization
+
+
+                        mOpenCvCameraView.enableView();
+                        mOpenCvCameraView.setOnTouchListener(outsideListener);
                         interpreter = ai.getVideoInterpreter();
+                        mapper = new TFLiteInputMapper(mWidth, mHeight, ai.getInputWidth(), ai.getInputHeight());
+                        preprocessor = new TFLiteInputPreprocessor(mapper);
                         detectionRunner = new Detection(
                                 ai, interpreter, this,
                                 0, 0f, 0f, 0f, 0f, 0f, miniFabs.getSelectedFab().toString()
@@ -205,7 +247,6 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
                     isPredicting = true;
                     throw new RuntimeException(e);
                 }
-                startPrediction();
             }
             else if (terminator != null){
                 terminator.onStopButtonClicked(v);
@@ -213,48 +254,18 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
                 ai = null;
                 Toast.makeText(this, "Operasyonlar durduruldu", Toast.LENGTH_SHORT).show();
             }
-        });
+        });*/
     }
-    //--------------------------Creation
-    public void updateDetectedSounds(List<Category> detectedCategories) {
-        LinearLayout detectedSoundsLayout = findViewById(R.id.detected_sounds_list);
-
-        //detectedSoundsLayout.removeAllViews(); // Clear previous results
-
-        for (Category category : detectedCategories) {
-            float confidence = category.getScore();
-            if (confidence > 0.79) { // Only show confidence > 79%
-                TextView textView = new TextView(this);
-                textView.setText(category.getDisplayName() + "---" + category.getLabel() + " - " + String.format("%.2f", confidence * 100) + "%");
-                textView.setTextSize(16);
-                textView.setTextColor(Color.WHITE);
-                textView.setPadding(10, 10, 10, 10);
-
-                detectedSoundsLayout.addView(textView);
-            }
-        }
-
-        // If no high-confidence results, show "No strong detection"
-        if (detectedSoundsLayout.getChildCount() == 0) {
-            TextView noResultView = new TextView(this);
-            noResultView.setText("No strong detections");
-            noResultView.setTextSize(16);
-            noResultView.setTextColor(Color.GRAY);
-            noResultView.setPadding(10, 10, 10, 10);
-            detectedSoundsLayout.addView(noResultView);
-        }
-    }
-    //--------------------------Sound
-    public void startPrediction(){
-
-    }
-
 
     @Override
     public void onCameraViewStarted(int width, int height) {
         rgb = new Mat();
         gray = new Mat();
         rects = new MatOfRect();
+        threading = new Threading();
+        threading.availableCPU();
+        threading.availableGPUThreads();
+        //labelText.setText("Camera Started");
         //mRgba = new Mat(height, width, CvType.CV_8UC4);
         Log.i(TAG, "Camera view started: " + width + "x" + height);
         updateCameraStatus("Camera Started.");
@@ -273,7 +284,14 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
         }
 
         threading.availableCPU();
-
+        threading.availableGPUThreads();
+        if (ai!=null) {
+            TFLiteInputMapper mapper = new TFLiteInputMapper(
+                    width, height,
+                    ai.getInputWidth(), ai.getInputHeight()
+            );
+            preprocessor = new TFLiteInputPreprocessor(mapper);
+        }
     }
     @Override
     public void onCameraViewStopped() {
@@ -291,18 +309,34 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
     @Override
     public Mat onCameraFrame(CameraBridgeViewBase.CvCameraViewFrame inputFrame) {
         //Mat rgba = inputFrame.rgba();
-        rgb = inputFrame.rgba();
-        gray =inputFrame.gray();
-        Mat frame = new Mat();;
-        try {
-            // Normal yol: doğrudan RGBA al
-            frame = inputFrame.rgba();
-        } catch (BufferUnderflowException e) {
-            Log.w(TAG, "rgba() buffer underflow, gray→RGBA dönüşümü yapılıyor", e);
-            // Fallback: gray’dan alın ve RGBA’ya çevir
-            Mat gray = inputFrame.gray();
-            Imgproc.cvtColor(gray, frame, Imgproc.COLOR_GRAY2RGBA);
+        Mat rgba = inputFrame.rgba();
+        // Eğer ai null ise (henüz başlatılmadıysa) hiç bir şey yapma
+        if (ai == null || !isPredicting) {
+            return rgba;
         }
+        if (!executor.isShutdown()) {
+            executor.submit(() -> {
+                try {
+                    /*
+                    ai.handleRT(
+                            rgba,
+                            mat -> preprocessor.map(mat),
+                            output -> {
+                                // Burada ai kesinlikle null değil
+                                List<Detection> dets = ai.parseDetections(output);
+                                runOnUiThread(() ->
+                                        ai.drawDetections(rgba, dets)
+                                );
+                            }
+                    );
+                    */
+                    detector.handleRT(rgba,ai);
+                } catch (Exception e) {
+                    Log.e(TAG, "Inference error in frame", e);
+                }
+            });
+        }
+                /*
         // —— YAKLAŞIM A: Asenkron çizim (Detection.java içindeki handleObjectDetection)
         // Bu metot kendi içinde SKIP_FRAMES kontrolü yapar, predictVideo çağırır
         // ve runOnUiThread içinde çizimi gerçekleştirir.
@@ -328,7 +362,7 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
             // Diğer tüm hatalar burada yakalanır ve atlanır
             Log.e(TAG, "Detection sırasında beklenmedik hata, atlanıyor", e);
         }
-
+*/
         /* —— YAKLAŞIM B: Tam senkron parse + çizim
         // 1) Bitmap’e çevir
         Bitmap bmp = Bitmap.createBitmap(frame.cols(), frame.rows(),
@@ -369,7 +403,6 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
                             new Scalar(255,255,255), 2);
         }
         */
-
         switch (currentState) {
             case KEDI:
                 //handleSpecies(rgb, aiKedi);
@@ -414,15 +447,8 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
             default:
                 break;
         }
-
-        //Log.d(TAG, "Processing camera frame...");
-        //updateCameraStatus(currentState.toString() + "birde" + photoList.size());
-
         return frame; // Return the raw RGBA frame
     }               //Essential For Camera
-
-
-
     @Override
     protected void onResume() {
         super.onResume();
@@ -484,8 +510,7 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
         // Aksi takdirde normal akışı devam ettir
         return super.dispatchTouchEvent(ev);
     }
-
-
+    //---------------------------------------------------------------------------------------------->Creation
     @Override
     protected List<? extends CameraBridgeViewBase> getCameraViewList() {
         return Collections.singletonList(mOpenCvCameraView);
@@ -498,6 +523,7 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
             Log.d(TAG, status);
         });
     }//Essential For Camera
+
     public boolean cameraState(Boolean state){
         if (state){
             if (mOpenCvCameraView != null) {
@@ -519,31 +545,5 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
             }
         }
         return state;
-    }
-
-    private void checkAndRequestPermissions() {
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.CAMERA}, CAMERA_PERMISSION_REQUEST_CODE);
-        } else {
-            cameraState(true);
-        }
-    }//Essential For Camera
-    private void requestStoragePermission() {
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE}, 200);
-        }
-    }
-    private void requestAudioPermissions() {
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED ||
-                ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
-
-            ActivityCompat.requestPermissions(this,
-                    new String[]{Manifest.permission.RECORD_AUDIO, Manifest.permission.WRITE_EXTERNAL_STORAGE}, 200);
-        }
-    }
-    private void checkAudioPermission() {
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.RECORD_AUDIO}, 101);
-        }
     }
 }

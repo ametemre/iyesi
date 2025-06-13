@@ -31,7 +31,8 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Objects;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Semaphore;
 
 public class Detection {
     // ————————————————
@@ -259,11 +260,15 @@ public class Detection {
                 }
             }
             inputBuffer.rewind();
-
+            ai.run(() -> {
             // 4. GPU'da arka planda çalıştır
-            Threading.runOnBackground(() -> {
+            //Threading.runOnBackground(() -> {
                 ai.predictVideo(bitmapToInputTensor(reusableScaledBitmap), rawOutput -> {
                     List<Detection> dets = parseDetections(rawOutput);
+                    processDetectionsAndCrop(frame, dets);
+                    runOnUiThread(() ->
+                            ai.drawDetections(frame, dets)
+                    );
                     Threading.runOnUi(() -> {
                         for (Detection d : dets) {
                             if (d.score > SCORE_THRESHOLD) {
@@ -292,7 +297,6 @@ public class Detection {
      * detections listesinden, score'u threshold'dan yüksek olanların
      * etiketlerini döner.
      */
-
 
     private void matchPercepts(Kurmes.State state,
                                List<float[][][]> vidBuf,
@@ -509,7 +513,6 @@ public class Detection {
         }
         return keep;
     }
-
     private float iou(RectF a, RectF b) {
         float left   = Math.max(a.left,   b.left);
         float top    = Math.max(a.top,    b.top);
@@ -519,4 +522,65 @@ public class Detection {
         float union  = a.width()*a.height() + b.width()*b.height() - inter;
         return inter / union;
     }
+    /** BBox ile Mat crop (OpenCV koordinatlarıyla) */
+    public static Mat cropMat(Mat src, RectF box) {
+        // Güvenli sınırlar (out-of-bounds engeli)
+        int left = Math.max(0, Math.round(box.left));
+        int top = Math.max(0, Math.round(box.top));
+        int right = Math.min(src.cols(), Math.round(box.right));
+        int bottom = Math.min(src.rows(), Math.round(box.bottom));
+        if (left >= right || top >= bottom) return null;
+        return src.submat(top, bottom, left, right).clone();
+    }
+    /** BBox ile Bitmap crop */
+    public static Bitmap cropBitmap(Bitmap src, RectF box) {
+        int left = Math.max(0, Math.round(box.left));
+        int top = Math.max(0, Math.round(box.top));
+        int right = Math.min(src.getWidth(), Math.round(box.right));
+        int bottom = Math.min(src.getHeight(), Math.round(box.bottom));
+        if (left >= right || top >= bottom) return null;
+        return Bitmap.createBitmap(src, left, top, right-left, bottom-top);
+    }
+    public void processDetectionsAndCrop(Mat originalFrame, List<Detection> detections) {
+        for (Detection d : detections) {
+            String label = d.label.toLowerCase();
+            // Hayvan tespiti ise...
+            if (label.equals("cat") || label.equals("dog") || label.equals("bird")) {
+                // Mat crop
+                Mat croppedMat = cropMat(originalFrame, d.getRectF());
+                if (croppedMat != null) {
+                    // İstersen Bitmap'e çevir
+                    Bitmap croppedBmp = Bitmap.createBitmap(croppedMat.cols(), croppedMat.rows(), Bitmap.Config.ARGB_8888);
+                    Utils.matToBitmap(croppedMat, croppedBmp);
+
+                    // Kaydet (opsiyonel)
+                    storeScreenshot(croppedBmp, label + "_" + System.currentTimeMillis());
+
+                    // Tensor'e çevirip tekrar modelde kullanmak için:
+                    float[][][][] cropTensor = bitmapToInputTensor(croppedBmp);
+                    // ... (inference için kullanabilirsin)
+                }
+            }
+        }
+    }
+    // BBox'u RectF olarak döndür
+    public RectF getRectF() {
+        return new RectF(x1, y1, x2, y2);
+    }
+    public boolean storeScreenshot(Bitmap bitmap, String filename) {
+        try {
+            File dir = context.getExternalFilesDir(null);
+            File file = new File(dir, filename + ".jpg");
+            FileOutputStream stream = new FileOutputStream(file);
+            bitmap.compress(Bitmap.CompressFormat.JPEG, 100, stream);
+            stream.flush();
+            stream.close();
+            Log.i(TAG, "Photo saved: " + file.getAbsolutePath());
+            return true;
+        } catch (Exception e) {
+            Log.e(TAG, "Failed to save photo: " + e.getMessage());
+            return false;
+        }
+    }
+// ... Diğer kodlar aynı
 }

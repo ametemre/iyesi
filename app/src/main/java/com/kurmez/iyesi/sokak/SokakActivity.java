@@ -29,8 +29,11 @@ import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.google.maps.android.data.geojson.GeoJsonLayer;
 import com.kurmez.iyesi.R;
 import com.kurmez.iyesi.kurmes.Kurmes;
+import com.kurmez.iyesi.utilities.Ai.Detection;
 import com.kurmez.iyesi.utilities.MiniFabs;
 import com.kurmez.iyesi.utilities.helper.Actions;
+
+import java.util.List;
 
 public class SokakActivity extends FragmentActivity {
     private FloatingActionButton selectedFab = null; // Track the selected FAB

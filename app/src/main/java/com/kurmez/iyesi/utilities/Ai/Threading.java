@@ -47,6 +47,38 @@ public class Threading {
         int availableProcessors = Runtime.getRuntime().availableProcessors();
         Log.d("AvailableProcessors", "Number of available threads: " + availableProcessors);
     }
+    public static int getSuggestedGPUThreadCount() {
+        final int[] grpCount = new int[1];
+
+        EGLDisplay display = EGL14.eglGetDisplay(EGL14.EGL_DEFAULT_DISPLAY);
+        if (display == EGL14.EGL_NO_DISPLAY) return 1;
+
+        int[] version = new int[2];
+        if (!EGL14.eglInitialize(display, version, 0, version, 1)) return 1;
+
+        int[] attribList = { EGL14.EGL_RENDERABLE_TYPE, EGL14.EGL_OPENGL_ES2_BIT, EGL14.EGL_NONE };
+        EGLConfig[] configs = new EGLConfig[1];
+        int[] numConfigs = new int[1];
+        EGL14.eglChooseConfig(display, attribList, 0, configs, 0, 1, numConfigs, 0);
+        if (numConfigs[0] == 0) return 1;
+
+        int[] ctxAttribs = { EGL14.EGL_CONTEXT_CLIENT_VERSION, 3, EGL14.EGL_NONE };
+        EGLContext ctx = EGL14.eglCreateContext(display, configs[0], EGL14.EGL_NO_CONTEXT, ctxAttribs, 0);
+        if (ctx == null) return 1;
+
+        int[] surfAttribs = { EGL14.EGL_WIDTH, 1, EGL14.EGL_HEIGHT, 1, EGL14.EGL_NONE };
+        EGLSurface surf = EGL14.eglCreatePbufferSurface(display, configs[0], surfAttribs, 0);
+        EGL14.eglMakeCurrent(display, surf, surf, ctx);
+
+        GLES31.glGetIntegeri_v(GLES31.GL_MAX_COMPUTE_WORK_GROUP_COUNT, 0, grpCount, 0); // X yönü
+        int threadCount = grpCount[0];
+
+        EGL14.eglDestroySurface(display, surf);
+        EGL14.eglDestroyContext(display, ctx);
+        EGL14.eglTerminate(display);
+
+        return Math.max(1, Math.min(threadCount, 6)); // pratik sınır: max 6
+    }
 
     public void availableGPU() {
         // 1. EGL Display aç

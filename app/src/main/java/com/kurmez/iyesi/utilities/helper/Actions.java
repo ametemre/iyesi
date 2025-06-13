@@ -92,13 +92,20 @@ public class Actions {
             //host.startActivity(intent);
         } else if (id == R.id.fab_2) {
             try {
-                ai = new Ai(host,null,"ml_model/dog/DogBreed.tflite","ml_model/dog/label.txt");
+                //ai = new Ai(host,null,"ml_model/dog/DogBreed.tflite","ml_model/dog/label.txt");
+                ai = new Ai(host,null,"ml_model/dog/dog/DogBreedLabels.tflite","ml_model/dog/dog/DogBreedLabels.txt");
+                threading.availableGPU();
+                threading.availableGPUThreads();
+
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
         } else if (id == R.id.fab_3) {
             try {
                 ai = new Ai(host,null,"ml_model/animal_ml_model.tflite","ml_model/animal_ml_model_labels.txt");
+                threading.availableGPU();
+                threading.availableGPUThreads();
+
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
@@ -106,21 +113,31 @@ public class Actions {
         } else if (id == R.id.fab_4) {
             try {
                 ai = new Ai(host,null,"ml_model/dump/yamnet_classification.tflite","ml_model/dump/labelmap.txt");
+                threading.availableGPU();
+                threading.availableGPUThreads();
+
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
         } else if (id == R.id.fab_5) {
             try {
                 ai = new Ai(host,null,"ml_model/dump/mobilenet_v2.tflite","ml_model/dump/labels.txt");
+                threading.availableGPU();
+                threading.availableGPUThreads();
+
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
         } else if (id == R.id.fab_6) {
             try {
+
                 ai = new Ai(host,null,"yolov8n.tflite","coco_labels.txt");}
             catch (IOException e) {
                 throw new RuntimeException(e);
             }
+            threading.availableGPU();
+            threading.availableGPUThreads();
+
         } else if (id == R.id.fab_7) {
             threading.availableCPU();
         } else if (id == R.id.fab_8) {
