@@ -142,23 +142,12 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
                 R.id.fab_7, R.id.fab_8, R.id.fab_9
         };
 
-
         miniFabs = new MiniFabs(this, fabMain, fabAction, miniFabIds);
         miniFabs.applyDefaultColors();
         rootLayout.setOnTouchListener((v, e)-> miniFabs.handleOutsideTouch(e));
         miniFabs.setupDraggableFAB(miniFabs, fabMain);
         actions = new Actions(miniFabs, this, this);
-        // Collapse on outside touch (camera view or root)
-        View.OnTouchListener outsideListener = (v, ev) -> {
-            return miniFabs.handleOutsideTouch(ev);
-        };
 
-        rootLayout.setOnTouchListener(outsideListener);
-
-        // Set up draggable & expand/collapse behavior
-        //miniFabs.setupDraggableFAB(miniFabs, fabMain);
-        //Actions actions = new Actions(miniFabs, this, this /* or getApplicationContext() */ );
-        // Wire each miniFAB to call selectFab() + your onFabClick logic
         for (FloatingActionButton fab : miniFabs.getFabs()) {
             fab.setOnClickListener(v -> {
                 actions.onFabSelected(fab);

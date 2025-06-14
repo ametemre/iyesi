@@ -1,33 +1,56 @@
 package com.kurmez.iyesi.utilities.Ai;
 
-import static org.opencv.android.NativeCameraView.TAG;
+// TFLiteModelInspector.java
 
+import android.util.Log;
+
+import org.tensorflow.lite.Interpreter;
+import org.tensorflow.lite.gpu.GpuDelegate;
+
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.util.Arrays;
 import android.content.res.AssetFileDescriptor;
 import android.content.res.AssetManager;
 import android.graphics.Bitmap;
-import android.util.Log;
 import android.view.TextureView;
-
-import com.kurmez.iyesi.kurmes.Kurmes;
 
 import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
 import java.io.FileInputStream;
 import java.io.IOException;
-import java.util.Arrays;
 
 import org.tensorflow.lite.DataType;
-import org.tensorflow.lite.Interpreter;
 import org.tensorflow.lite.Tensor;
 import org.tensorflow.lite.support.image.TensorImage;
 
 public class TFLiteModelInspector {
+    private static final String TAG = "TFLiteModelInspector";
+    private Interpreter interpreter;
+    private GpuDelegate gpuDelegate;
+    private final ByteBuffer modelBuffer;
     // Model metadata
     private int[] videoInputShape;
     private int[] videoOutputShape;
     private static final float[][][] EMPTY_VIDEO_OUTPUT = new float[0][0][0];
     private TFLiteInputPreprocessor tfLiteInputPreprocessor;
     private int soundOutputLength;
+
+    public TFLiteModelInspector(ByteBuffer modelBuffer, GpuDelegate.Options gpuOptions) {
+        this.modelBuffer = modelBuffer;
+        try {
+            gpuDelegate = new GpuDelegate(gpuOptions);
+            Interpreter.Options opts = new Interpreter.Options()
+                    .addDelegate(gpuDelegate)
+                    .setNumThreads(1);
+            interpreter = new Interpreter(modelBuffer, opts);
+        } catch (Exception e) {
+            Log.w(TAG, "GPU delegate init failed, falling back to CPU", e);
+            interpreter = new Interpreter(modelBuffer,
+                    new Interpreter.Options().setNumThreads(
+                            Runtime.getRuntime().availableProcessors()));
+        }
+    }
     public static void main(String[] args,Interpreter tflite) {
         // Modeli yükle
         //Interpreter tflite = new Interpreter(loadModelFile("dump/my_birds_model.tflite"));
@@ -176,40 +199,76 @@ public class TFLiteModelInspector {
         if (input[0][0][0].length != inputShape[3]) return false;
         return true;
     }
-    public float[][][] processVideoInput(float[][][][] input, Interpreter videoInterpreter) {
-        if (!validateVideoInput(input, videoInterpreter)) {
-            Log.e(TAG, "Geçersiz input tensor (null/eksik boyut/uyumsuz shape)");
-            return EMPTY_VIDEO_OUTPUT;
+    /**
+     * Runs inference on a 4D float array ([1][H][W][C]).
+     */
+    public float[][][] processVideoInput(float[][][][] inputArray) {
+        // 1. Input tensor shape
+        int[] shape = interpreter.getInputTensor(0).shape(); // [1, H, W, C]
+        int batch = shape[0], height = shape[1], width = shape[2], channels = shape[3];
+
+        // 2. Prepare ByteBuffer
+        int byteCount = batch * height * width * channels * Float.BYTES;
+        ByteBuffer inputBuffer = ByteBuffer.allocateDirect(byteCount)
+                .order(ByteOrder.nativeOrder());
+        // 3. Flatten and put floats
+        float[] flat = flatten4D(inputArray);
+        for (float v : flat) {
+            inputBuffer.putFloat(v);
         }
+        inputBuffer.rewind();
 
-        float[][][] output = EMPTY_VIDEO_OUTPUT;
-        int[] videoOutputShape = videoInterpreter.getOutputTensor(0).shape();
+        // 4. Prepare output array
+        int[] outShape = interpreter.getOutputTensor(0).shape(); // e.g. [1, N, M]
+        float[][][] output = new float[outShape[0]][outShape[1]][outShape[2]];
 
+        // 5. Run inference with fallback
         try {
-            if (videoOutputShape == null || videoOutputShape.length == 0) {
-                Log.e(TAG, "Model output shape boş veya null!");
-                return EMPTY_VIDEO_OUTPUT;
+            interpreter.run(inputBuffer, output);
+        } catch (Exception gpuFail) {
+            Log.e(TAG, "GPU inference failed, switching to CPU", gpuFail);
+            // Close GPU interpreter
+            interpreter.close();
+            if (gpuDelegate != null) {
+                gpuDelegate.close();
+                gpuDelegate = null;
             }
-            switch (videoOutputShape.length) {
-                case 3:
-                    output = new float[videoOutputShape[0]][videoOutputShape[1]][videoOutputShape[2]];
-                    videoInterpreter.run(input, output);
-                    break;
-                case 2:
-                    float[][] tmp = new float[videoOutputShape[0]][videoOutputShape[1]];
-                    videoInterpreter.run(input, tmp);
-                    // 2D'yi 3D'ye çevir, helper fonksiyonun varsa (ör: [n, classes] -> [n, classes, 1])
-                    output = tfLiteInputPreprocessor.convert2DTo3D(tmp);
-                    break;
-                default:
-                    Log.e(TAG, "Unsupported output shape rank: " + videoOutputShape.length);
-                    break;
-            }
-        } catch (Exception e) {
-            Log.e(TAG, "processVideoInput: Çıkarım sırasında hata!", e);
-            output = EMPTY_VIDEO_OUTPUT;
+            // CPU interpreter
+            Interpreter cpuInterp = new Interpreter(modelBuffer,
+                    new Interpreter.Options()
+                            .setNumThreads(Runtime.getRuntime().availableProcessors()));
+            cpuInterp.run(inputBuffer, output);
+            cpuInterp.close();
         }
+
         return output;
+    }
+
+    // Helper: flatten a 4D float array to 1D
+    private float[] flatten4D(float[][][][] array) {
+        int b = array.length;
+        int h = array[0].length;
+        int w = array[0][0].length;
+        int c = array[0][0][0].length;
+        float[] flat = new float[b * h * w * c];
+        int idx = 0;
+        for (int bi = 0; bi < b; bi++) {
+            for (int hi = 0; hi < h; hi++) {
+                for (int wi = 0; wi < w; wi++) {
+                    for (int ci = 0; ci < c; ci++) {
+                        flat[idx++] = array[bi][hi][wi][ci];
+                    }
+                }
+            }
+        }
+        return flat;
+    }
+
+    public void close() {
+        interpreter.close();
+        if (gpuDelegate != null) {
+            gpuDelegate.close();
+        }
     }
 }
 

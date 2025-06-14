@@ -27,18 +27,23 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
-
+import android.os.Handler;
+import android.os.HandlerThread;
+import android.os.Looper;
+import androidx.core.util.Consumer;
 public class Ai implements AutoCloseable {
     private static final String TAG = "AiModel";
+    // Sınıf seviyesinde (Ai.java içinde):
+    private MappedByteBuffer modelBuffer;
+    private Interpreter videoInterpreter;
+    private GpuDelegate gpuDelegate;
+    private float[][][] outputBuffer;          // Örn: new float[...][...][...]
+    private final Handler mainHandler = new Handler(Looper.getMainLooper());
+    private final ExecutorService executor;
     private static final float[][][] EMPTY_VIDEO_OUTPUT = new float[0][0][0];
     private final Context context;
-    private final Interpreter videoInterpreter;
     private final Interpreter soundInterpreter;
     private Interpreter interpreter = null;
-    private GpuDelegate gpuDelegate;
-    private final ExecutorService executor;
-    private final Handler mainHandler;
-    TFLiteModelInspector tfLiteModelInspector;
     private final int[] videoInputShape;
     private final int[] videoOutputShape;
     private final int soundOutputLength;
@@ -67,14 +72,12 @@ public class Ai implements AutoCloseable {
 
     public Ai(@NonNull Context context, @Nullable String soundModelPath, @Nullable String videoModelPath, @Nullable String labelsPath) throws IOException {
         this.context = context;
-        this.mainHandler = new Handler(Looper.getMainLooper());
         this.executor = Executors.newFixedThreadPool(2, r -> {
             Thread t = new Thread(r, "AiWorker-" + System.currentTimeMillis());
             t.setPriority(Thread.NORM_PRIORITY - 1);
             return t;
         });
         this.gpuDelegate = initGpuDelegate(context);
-        this.tfLiteModelInspector = new TFLiteModelInspector();
 
         AssetManager assets = context.getAssets();
         Interpreter.Options options = createInterpreterOptions(gpuDelegate);
@@ -151,45 +154,53 @@ public class Ai implements AutoCloseable {
         }
     }
 
-
-
-
-
-
-
-
-
-
     // Inference (video/frame)
     public void predictVideo(final float[][][][] input, final Consumer<float[][][]> callback) {
         if (executor.isShutdown() || executor.isTerminated()) {
-            Log.w(TAG, "predictVideo: executor closed, skipping task");
-            mainHandler.post(() -> callback.accept(EMPTY_VIDEO_OUTPUT));
+            Log.w(TAG, "predictVideo: executor kapalı, atlanıyor");
+            callback.accept(EMPTY_VIDEO_OUTPUT);
             return;
         }
-        try {
-            executor.execute(() -> {
-                try {
-                    // Kapanma sırasında başka task olmasın:
-                    if (videoInterpreter == null) {
-                        Log.e(TAG, "Interpreter kapalı");
-                        mainHandler.post(() -> callback.accept(EMPTY_VIDEO_OUTPUT));
-                        return;
-                    }
-                    float[][][] output;
-                    synchronized (videoInterpreter) {
-                        output = tfLiteModelInspector.processVideoInput(input, videoInterpreter);
-                    }
-                    mainHandler.post(() -> callback.accept(output));
-                } catch (Exception e) {
-                    Log.e(TAG, "Video prediction failed", e);
-                    mainHandler.post(() -> callback.accept(EMPTY_VIDEO_OUTPUT));
+
+        executor.execute(() -> {
+            try {
+                // 1. GPU ile dene
+                synchronized (videoInterpreter) {
+                    videoInterpreter.run(input, outputBuffer);
                 }
-            });
-        } catch (RejectedExecutionException e) {
-            Log.w(TAG, "predictVideo: executor shut down, skipping task", e);
-            mainHandler.post(() -> callback.accept(EMPTY_VIDEO_OUTPUT));
-        }
+                Log.d(TAG, "Inference GPU ile tamamlandı.");
+            } catch (Exception gpuEx) {
+                Log.w(TAG, "GPU inference başarısız, CPU'ya geçiliyor", gpuEx);
+
+                // 2. GPU delegate kapat / interpreter yenile
+                try {
+                    videoInterpreter.close();
+                    if (gpuDelegate != null) {
+                        gpuDelegate.close();
+                        gpuDelegate = null;
+                    }
+                } catch (Exception ignore) { /* zaten kapanmış olabilir */ }
+
+                // 3. CPU-only interpreter oluştur
+                Interpreter.Options cpuOpts = new Interpreter.Options()
+                        .setNumThreads(Runtime.getRuntime().availableProcessors());
+                videoInterpreter = new Interpreter(modelBuffer, cpuOpts);
+
+                // 4. CPU ile tekrar dene
+                try {
+                    synchronized (videoInterpreter) {
+                        videoInterpreter.run(input, outputBuffer);
+                    }
+                    Log.d(TAG, "Inference CPU ile tamamlandı.");
+                } catch (Exception cpuEx) {
+                    Log.e(TAG, "CPU inference de başarısız oldu", cpuEx);
+                    outputBuffer = EMPTY_VIDEO_OUTPUT;  // Tamamen başarısızsa boş çıktı
+                }
+            }
+
+            // 5. Sonucu UI thread’e yolla
+            mainHandler.post(() -> callback.accept(outputBuffer));
+        });
     }
 
     // Inference (sound)
@@ -211,7 +222,7 @@ public class Ai implements AutoCloseable {
         int inputCount = interpreter.getInputTensorCount();
         for (int i = 0; i < inputCount; i++) {
             sb.append("Input[").append(i).append("] shape=")
-                    .append(java.util.Arrays.toString(interpreter.getInputTensor(i).shape()))
+                    .append(Arrays.toString(interpreter.getInputTensor(i).shape()))
                     .append(" type=").append(interpreter.getInputTensor(i).dataType().name())
                     .append("; ");
         }
@@ -223,7 +234,7 @@ public class Ai implements AutoCloseable {
         int outputCount = interpreter.getOutputTensorCount();
         for (int i = 0; i < outputCount; i++) {
             sb.append("Output[").append(i).append("] shape=")
-                    .append(java.util.Arrays.toString(interpreter.getOutputTensor(i).shape()))
+                    .append(Arrays.toString(interpreter.getOutputTensor(i).shape()))
                     .append(" type=").append(interpreter.getOutputTensor(i).dataType().name())
                     .append("; ");
         }

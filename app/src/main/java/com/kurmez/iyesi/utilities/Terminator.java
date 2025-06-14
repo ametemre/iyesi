@@ -182,7 +182,7 @@ public class Terminator {
         cleanupExecutor.shutdown();
     }
 
-    public boolean isPaused()            { return paused; }
+    public boolean isPaused()           { return paused; }
     public boolean isRunning()          { return currentState == AppState.RUNNING; }
     public boolean isIdle()             { return currentState == AppState.IDLE; }
     public boolean isShutdownRequested(){ return shutdownRequested; }
