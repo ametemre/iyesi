@@ -14,10 +14,7 @@ import com.kurmez.iyesi.R;
 import org.opencv.android.CameraBridgeViewBase;
 import org.opencv.core.Mat;
 
-import android.Manifest;
-import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
-// ve kendi Detection/Ai class’ınızın import’ları
 
 import android.annotation.SuppressLint;
 import android.os.Bundle;
@@ -31,9 +28,6 @@ import android.widget.FrameLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import androidx.core.app.ActivityCompat;
-import androidx.core.content.ContextCompat;
-
 import com.kurmez.iyesi.utilities.Ai.Ai;
 import com.kurmez.iyesi.utilities.MiniFabs;
 
@@ -42,7 +36,6 @@ import org.opencv.android.OpenCVLoader;
 
 import org.tensorflow.lite.Interpreter;
 
-import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
@@ -58,46 +51,22 @@ import java.util.ArrayList;
 
 public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
     private static final String TAG = "Kurmes";
-    private CameraBridgeViewBase mOpenCvCameraView;
-    private Mat rgb, gray;
-    // Kurmes.java içinde class başında
-    public static final int DETECTION_INPUT_SIZE = 640;  // 640→320
-    private static final int SKIP_FRAMES = 5;             // her 2. frame’de bir çalıştır
-    private int frameCount = 0;
-    private Interpreter interpreter;
-    public Ai aiKedi, aiKopek, aiKurt, aiKarga, aiContent, ai;
-    private MiniFabs miniFabs;
-    private Actions actions;
-    private Mat frame;
     public enum State {
         KEDI, KOPEK, KURT, KARGA,
         IDLE, FACE_DETECTION, OBJECT_DETECTION, TRACKING, CAPTURE,TEST
     }
-    ExecutorService executor = Executors.newSingleThreadExecutor();
     public State currentState = State.IDLE;
-    private int mWidth, mHeight;
+
     private final List<float[]> soundBuffer = new ArrayList<>();
     private final List<float[][][]> videoBuffer = new ArrayList<>();
-    Threading threading = new Threading();
+    private List<Bitmap> photoList = new ArrayList<>(); // List to store captured images
 
-    private final int SOUND_THRESHOLD = 5;
-    private final int VIDEO_THRESHOLD = 5;
-    private Detection detectionRunner;
     // Sound labels for each species model (fill in actual labels)
     private static final String[] KEDI_SOUNDS  = {"meow", "purr"};
     private static final String[] KOPEK_SOUNDS = {"bark", "growl"};
     private static final String[] KURT_SOUNDS  = {"howl", "snarl"};
     private static final String[] KARGA_SOUNDS = {"caw", "squawk"};
-    private static final int REQUEST_IMAGE_CAPTURE = 1; // Request code for capturing a photo
-    private List<Bitmap> photoList = new ArrayList<>(); // List to store captured images
-    private Terminator terminator = null;
-    private TFLiteInputPreprocessor preprocessor;
-    private TFLiteInputMapper mapper;
-    private FirebaseAuth mAuth;
-    private Handler handler = new Handler();
-    public static final int CAMERA_PERMISSION_REQUEST_CODE = 100;
-    //private JavaCamera2View cameraView; // Using JavaCamera2View
-    private TextView labelText, statusText;
+
     public void SetLabelText(String s){
         if (labelText != null) {
             labelText.setText(s);
@@ -105,30 +74,43 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
             Log.e("Kurmes", "labelText is not initialized yet.");
         }
     }
-    //private boolean cleanUp = false;
-    public boolean isPredicting = false;
-    private TextView cameraStatusText;
-    MatOfRect rects;
     //imported---------------------------------
-
     private FloatingActionButton fabMain, fabAction;
     private FrameLayout rootLayout;
-
-
     private Detection detector;
-
-
+    private Detection detectionRunner;
     private Handler uiHandler = new Handler();
-    private boolean isRunning = false;
-
     private FirebaseAuth auth;
-    //private DetectorFunction activeDetectorFunction = () -> videoYapayZeka(getResources().openRawResource(R.raw.lbpcascade_frontalface), null);
     public CameraCalibrator mCalibrator;
     private OnCameraFrameRender mOnCameraFrameRender;
     private Menu mMenu;
-
+    private FirebaseAuth mAuth;
+    private Handler handler = new Handler();
+    private Terminator terminator = null;
+    private TFLiteInputPreprocessor preprocessor;
+    private TFLiteInputMapper mapper;
+    private CameraBridgeViewBase mOpenCvCameraView;
+    private Interpreter interpreter;
+    public Ai aiKedi, aiKopek, aiKurt, aiKarga, aiContent, ai;
+    private MiniFabs miniFabs;
+    private Actions actions;
+    ExecutorService executor = Executors.newSingleThreadExecutor();
+    Threading threading = new Threading();
     //----------------------------------------------------------------------------------------------<<Creation
-
+    //private boolean cleanUp = false;
+    public boolean isPredicting = false;
+    private boolean isRunning = false;
+    private TextView labelText, statusText,cameraStatusText;
+    public static final int CAMERA_PERMISSION_REQUEST_CODE = 100;
+    private static final int REQUEST_IMAGE_CAPTURE = 1; // Request code for capturing a photo
+    public static final int DETECTION_INPUT_SIZE = 640;  // 640→320
+    private static final int SKIP_FRAMES = 5;             // her 2. frame’de bir çalıştır
+    private final int SOUND_THRESHOLD = 5;
+    private final int VIDEO_THRESHOLD = 5;
+    private int mWidth, mHeight;
+    private int frameCount = 0;
+    private Mat rgb, gray,frame;
+    MatOfRect rects;
     //----------------------------------------------------------------------------------------------<Creation
     @SuppressLint("ClickableViewAccessibility")
     @Override
@@ -193,7 +175,7 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
                     Toast.makeText(this,"Önce bir seçenek seçin",Toast.LENGTH_SHORT).show();
                     return;
                 }
-                new Thread(()->{
+                //new Thread(()->{
                     ai = actions.performSelectedAction(miniFabs.getSelectedFab());
                     if (ai!=null) {
                         interpreter = ai.getVideoInterpreter();
@@ -206,7 +188,7 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
                     } else {
                         Toast.makeText(this, "Model yükleme başarısız", Toast.LENGTH_SHORT).show();
                     }
-                }).start();
+                //}).start();
             } else {
                 terminator.onStopButtonClicked(v);
                 ai.close(); ai=null;
@@ -282,93 +264,21 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
         if (!executor.isShutdown()) {
             executor.submit(() -> {
                 try {
+                    Log.e(TAG, "Inference...");
                     /*
-                    ai.handleRT(
-                            rgba,
-                            mat -> preprocessor.map(mat),
-                            output -> {
+                    ai.handleRT(rgba, mat -> preprocessor.map(mat), output -> {
                                 // Burada ai kesinlikle null değil
                                 List<Detection> dets = ai.parseDetections(output);
                                 runOnUiThread(() ->
                                         ai.drawDetections(rgba, dets)
-                                );
-                            }
-                    );
+                                );});
                     */
-                    Log.e(TAG, "Inference...");
                     detector.handleRT(rgba,ai);
                 } catch (Exception e) {
                     Log.e(TAG, "Inference error in frame", e);
                 }
             });
         }
-                /*
-        // —— YAKLAŞIM A: Asenkron çizim (Detection.java içindeki handleObjectDetection)
-        // Bu metot kendi içinde SKIP_FRAMES kontrolü yapar, predictVideo çağırır
-        // ve runOnUiThread içinde çizimi gerçekleştirir.
-        try {
-            // Önce null kontrolleriyle atlamayı sağlıyoruz
-            if (rgb == null || ai == null) {
-                Log.w(TAG, "Detection atlandı: rgb veya ai null");
-            } else {
-                new Thread(() -> {
-                    detectionRunner.handleRT(rgb, ai);
-                }).start();
-            }
-        } catch (RejectedExecutionException e) {
-            // ThreadPool kapanıyorsa veya queue dolduysa atla
-            Log.w(TAG, "Detection görevi reddedildi, atlanıyor", e);
-        } catch (BufferUnderflowException e) {
-            // Fallback dönüşümünde problem olduysa atla
-            Log.w(TAG, "Buffer underflow oluştu, atlanıyor", e);
-        } catch (NullPointerException e) {
-            // Başka bir null durumunu güvenli atlamak için
-            Log.w(TAG, "Beklenmeyen NPE, atlanıyor", e);
-        } catch (Exception e) {
-            // Diğer tüm hatalar burada yakalanır ve atlanır
-            Log.e(TAG, "Detection sırasında beklenmedik hata, atlanıyor", e);
-        }
-*/
-        /* —— YAKLAŞIM B: Tam senkron parse + çizim
-        // 1) Bitmap’e çevir
-        Bitmap bmp = Bitmap.createBitmap(frame.cols(), frame.rows(),
-                                         Bitmap.Config.ARGB_8888);
-        Utils.matToBitmap(frame, bmp);
-
-        // 2) Ölçekle
-        Bitmap resized = Detection.resizeBitmap(bmp, INPUT_SIZE);
-
-        // 3) ByteBuffer’a yaz
-        int pixelCount = INPUT_SIZE * INPUT_SIZE;
-        ByteBuffer bb = ByteBuffer.allocateDirect(4 * pixelCount * 3)
-                                  .order(ByteOrder.nativeOrder());
-        int[] pixels = new int[pixelCount];
-        resized.getPixels(pixels, 0, INPUT_SIZE, 0, 0, INPUT_SIZE, INPUT_SIZE);
-        for (int i = 0; i < pixelCount; i++) {
-            int p = pixels[i];
-            bb.putFloat(((p >> 16) & 0xFF) / 255f);
-            bb.putFloat(((p >>  8) & 0xFF) / 255f);
-            bb.putFloat(( p        & 0xFF) / 255f);
-        }
-        bb.rewind();
-
-        // 4) Ham çıktıyı al
-        float[][][] rawOut = new float[1][84][8400];
-        interpreter.run(bb, rawOut);
-
-        // 5) Detection listesi oluştur
-        List<Detection> dets = detectionRunner.parseDetections(rawOut);
-
-        // 6) Mat üzeri çizim
-        for (Detection d : dets) {
-            Point tl = new Point(d.x1, d.y1);
-            Point br = new Point(d.x2, d.y2);
-            Imgproc.rectangle(frame, tl, br, new Scalar(0,255,0), 2);
-            Imgproc.putText(frame, d.label, new Point(d.x1, d.y1 - 10),
-                            Imgproc.FONT_HERSHEY_SIMPLEX, 0.5,
-                            new Scalar(255,255,255), 2);
-        }
-        */
         switch (currentState) {
             case KEDI:
                 //handleSpecies(rgb, aiKedi);

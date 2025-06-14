@@ -1,5 +1,8 @@
 package com.kurmez.iyesi.utilities.Ai;
 
+import android.graphics.Bitmap;
+import android.graphics.RectF;
+
 import org.opencv.core.CvType;
 import org.opencv.core.Mat;
 import org.opencv.core.Size;
@@ -8,10 +11,22 @@ import org.opencv.imgproc.Imgproc;
 public class TFLiteInputPreprocessor {
     private final TFLiteInputMapper mapper;
 
-    public TFLiteInputPreprocessor(TFLiteInputMapper mapper) {
-        this.mapper = mapper;
+    float[][][][] bitmapToInputTensor(Bitmap bmp) {
+        /** Bitmap → [1][H][W][3] */
+        int W = bmp.getWidth(), H = bmp.getHeight();
+        float[][][][] tensor = new float[1][H][W][3];
+        int[] pixels = new int[W*H];
+        bmp.getPixels(pixels, 0, W, 0, 0, W, H);
+        for (int j = 0; j < H; j++) {
+            for (int i = 0; i < W; i++) {
+                int p = pixels[j*W + i];
+                tensor[0][j][i][0] = ((p>>16)&0xFF)/255f;
+                tensor[0][j][i][1] = ((p>>8)&0xFF)/255f;
+                tensor[0][j][i][2] = (p&0xFF)/255f;
+            }
+        }
+        return tensor;
     }
-
     public float[][][][] map(Mat inputFrame) {
         int w      = mapper.getScaledWidth();
         int h      = mapper.getScaledHeight();
@@ -55,5 +70,31 @@ public class TFLiteInputPreprocessor {
         padded.release();
 
         return result;
+    }
+    public float[][][] convert2DTo3D(float[][] input) {
+        float[][][] output = new float[input.length][1][input[0].length];
+        for (int i = 0; i < input.length; i++) {
+            System.arraycopy(input[i], 0, output[i][0], 0, input[i].length);
+        }
+        return output;
+    }
+
+    public TFLiteInputPreprocessor(TFLiteInputMapper mapper) {
+        this.mapper = mapper;
+    }
+    public static Bitmap resizeBitmap(Bitmap bmp, int maxSize) {
+        int w = bmp.getWidth(), h = bmp.getHeight();
+        float scale = (float)maxSize / Math.max(w, h);
+        return Bitmap.createScaledBitmap(bmp, (int)(w*scale), (int)(h*scale), true);
+    }
+    public static Bitmap cropBitmap(Bitmap src, RectF box) {
+        /** BBox ile Bitmap crop */
+
+        int left = Math.max(0, Math.round(box.left));
+        int top = Math.max(0, Math.round(box.top));
+        int right = Math.min(src.getWidth(), Math.round(box.right));
+        int bottom = Math.min(src.getHeight(), Math.round(box.bottom));
+        if (left >= right || top >= bottom) return null;
+        return Bitmap.createBitmap(src, left, top, right-left, bottom-top);
     }
 }

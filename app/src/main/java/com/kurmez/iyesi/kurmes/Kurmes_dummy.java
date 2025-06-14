@@ -3,10 +3,12 @@ package com.kurmez.iyesi.kurmes;
 import android.animation.AnimatorSet;
 import android.animation.ObjectAnimator;
 import android.app.ProgressDialog;
+import android.content.Context;
 import android.content.Intent;
 import android.content.res.Resources;
 import android.graphics.Bitmap;
 import android.os.AsyncTask;
+import android.os.Build;
 import android.os.Bundle;
 import android.view.Menu;
 import android.view.MenuItem;
@@ -16,13 +18,18 @@ import android.view.animation.DecelerateInterpolator;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.InputStream;
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 
@@ -32,6 +39,7 @@ import com.kurmez.iyesi.sahiplendirme.Founded;
 import com.kurmez.iyesi.Login;
 import com.kurmez.iyesi.R;
 import com.kurmez.iyesi.sahiplendirme.Welcome;
+import com.kurmez.iyesi.utilities.Ai.Detection;
 
 import android.Manifest;
 import android.animation.ValueAnimator;
@@ -49,22 +57,30 @@ import android.widget.FrameLayout;
 
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
+import androidx.core.util.Consumer;
 
 import org.opencv.android.CameraBridgeViewBase;
 import org.opencv.android.JavaCamera2View;
 import org.opencv.android.OpenCVLoader;
 import org.opencv.core.Mat;
 import org.opencv.core.MatOfRect;
+import org.opencv.core.Point;
 import org.opencv.core.Rect;
 import org.opencv.core.Scalar;
 import org.opencv.core.Size;
 import org.opencv.imgproc.Imgproc;
 import org.opencv.objdetect.CascadeClassifier;
 import org.tensorflow.lite.Interpreter;
+import org.tensorflow.lite.Tensor;
+import org.tensorflow.lite.gpu.CompatibilityList;
+import org.tensorflow.lite.gpu.GpuDelegate;
 
 import java.io.File;
 import java.io.IOException;
 import java.util.Collections;
+import java.util.Map;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.function.Function;
 
 public class Kurmes_dummy extends AppCompatActivity implements CameraBridgeViewBase.CvCameraViewListener2 {
 
@@ -800,4 +816,5 @@ public class Kurmes_dummy extends AppCompatActivity implements CameraBridgeViewB
     private void actionNine() {
         Log.d("Action", "Action Nine Executed!");
     }
+
 }

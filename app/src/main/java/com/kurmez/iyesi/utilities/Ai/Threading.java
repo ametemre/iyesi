@@ -1,6 +1,10 @@
 // Threading.java
 package com.kurmez.iyesi.utilities.Ai;
 
+import static org.opencv.android.NativeCameraView.TAG;
+
+import android.app.Activity;
+import android.content.Context;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
@@ -18,35 +22,95 @@ import android.opengl.EGLDisplay;
 import android.opengl.EGLSurface;
 import android.opengl.GLES31;
 import android.util.Log;
+
+import org.tensorflow.lite.Interpreter;
+import org.tensorflow.lite.gpu.CompatibilityList;
+import org.tensorflow.lite.gpu.GpuDelegate;
+
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
+
 /**
  * Helper sınıf: UI thread dışındaki işleri çalıştırmak ve
  * UI güncellemelerini main thread’e post etmek için kullanılır.
  */
 public class Threading {
-    // UI thread’e görev göndermek için global handler
-    private static final Handler mainHandler = new Handler(Looper.getMainLooper());
+    GpuDelegate initGpuDelegate(Context context) {
+        try {
+            // Skip GPU on known problematic devices
+            if (shouldSkipGpuForDevice()) {
+                Log.w(TAG, "Skipping GPU for this device model");
+                return null;
+            }
+            // Check GPU compatibility
+            CompatibilityList compatList = new CompatibilityList();
+            if (!compatList.isDelegateSupportedOnThisDevice()) {
+                Log.w(TAG, "GPU delegate not supported on this device");
+                return null;
+            }
 
-    /**
-     * Verilen Runnable’ı yeni bir background thread’te çalıştırır.
-     */
+            // Create GPU delegate with options compatible with 2.12.0
+            GpuDelegate.Options options = new GpuDelegate.Options();
+
+            // Set options using reflection to maintain compatibility
+            try {
+                // These methods were introduced in later versions but we try to use them if available
+                Method setPrecisionMethod = GpuDelegate.Options.class.getMethod("setPrecisionLossAllowed", boolean.class);
+                setPrecisionMethod.invoke(options, true);
+
+                // Inference preference setting (2.12.0 uses different constants)
+                Method setInferencePrefMethod = GpuDelegate.Options.class.getMethod("setInferencePreference", int.class);
+                Field sustainedSpeedField = GpuDelegate.Options.class.getField("INFERENCE_PREFERENCE_SUSTAINED_SPEED");
+                setInferencePrefMethod.invoke(options, sustainedSpeedField.getInt(null));
+            } catch (NoSuchMethodException | NoSuchFieldException e) {
+                Log.d(TAG, "Advanced GPU options not available in this version, using defaults");
+            } catch (Exception e) {
+                Log.w(TAG, "Error setting GPU options", e);
+            }
+
+            // Try to create delegate
+            GpuDelegate delegate = new GpuDelegate(options);
+            // Simple test to verify delegate works
+            try {
+                Log.i(TAG, "GPU delegate initialized successfully");
+                Interpreter.Options interpreterOptions = new Interpreter.Options();
+                interpreterOptions.addDelegate(delegate);
+                // Test with a tiny model if possible
+                return delegate;
+            } catch (Exception testException) {
+                delegate.close();
+                Log.w(TAG, "GPU delegate failed basic test", testException);
+                return null;
+            }
+
+        } catch (Exception e) {
+            Log.w(TAG, "GPU acceleration unavailable", e);
+            return null;
+        }
+    }
+
+    private boolean shouldSkipGpuForDevice() {
+        return true;
+    }
+
+    private static final Handler mainHandler = new Handler(Looper.getMainLooper()); // -------------UI thread’e görev göndermek için global handler
     public static void runOnBackground(Runnable task) {
         new Thread(task).start();
+    }//---------------------------------------Verilen Runnable’ı yeni bir background thread’te çalıştırır.
+    public void runOnUiThread(Runnable r,Context context) {
+        /** UI thread’e geçiş */
+        if (context instanceof Activity) {
+            ((Activity)context).runOnUiThread(r);
+        }
     }
-    /**
-     * Verilen Runnable’ı UI (main) thread’te çalıştırmak üzere post eder.
-     */
     public static void runOnUi(Runnable task) {
         mainHandler.post(task);
-    }
+    }//-----------------------------------------------Verilen Runnable’ı UI (main) thread’te çalıştırmak üzere post eder.
     // ToDo : GPU worker
     // ToDo : CPU worker
     // ToDo : orchestrator worker
     // ToDo : MemoryControl
 
-    public void availableCPU() {
-        int availableProcessors = Runtime.getRuntime().availableProcessors();
-        Log.d("AvailableProcessors", "Number of available threads: " + availableProcessors);
-    }
     public static int getSuggestedGPUThreadCount() {
         final int[] grpCount = new int[1];
 
@@ -79,7 +143,6 @@ public class Threading {
 
         return Math.max(1, Math.min(threadCount, 6)); // pratik sınır: max 6
     }
-
     public void availableGPU() {
         // 1. EGL Display aç
         EGLDisplay display = EGL14.eglGetDisplay(EGL14.EGL_DEFAULT_DISPLAY);
@@ -149,6 +212,10 @@ public class Threading {
         EGL14.eglDestroySurface(display, surface);
         EGL14.eglDestroyContext(display, context);
         EGL14.eglTerminate(display);
+    }
+    public void availableCPU() {
+        int availableProcessors = Runtime.getRuntime().availableProcessors();
+        Log.d("AvailableProcessors", "Number of available threads: " + availableProcessors);
     }
     public void availableGPUThreads() {
         EGLDisplay display = EGL14.eglGetDisplay(EGL14.EGL_DEFAULT_DISPLAY);

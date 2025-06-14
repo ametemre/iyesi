@@ -1,6 +1,14 @@
 package com.kurmez.iyesi.utilities.Ai;
 
+import static org.opencv.android.NativeCameraView.TAG;
+
 import android.graphics.RectF;
+import android.util.Log;
+
+import org.tensorflow.lite.Interpreter;
+import org.tensorflow.lite.Tensor;
+
+import java.util.Arrays;
 
 public class TFLiteInputMapper {
     private final int frameWidth;
@@ -26,8 +34,6 @@ public class TFLiteInputMapper {
         this.inputHeight = inputHeight;
         calculate();  // Ölçek ve paddingi hesapla
     }
-
-    // Frame ile model input aspect ratio'larına göre ölçek ve padding hesaplaması
     private void calculate() {
         float frameRatio = (float) frameWidth / frameHeight;
         float inputRatio = (float) inputWidth / inputHeight;
@@ -45,48 +51,29 @@ public class TFLiteInputMapper {
             offsetX = 0;
             offsetY = (inputHeight - scaledHeight) / 2;
         }
-    }
+    }// Frame ile model input aspect ratio'larına göre ölçek ve padding hesaplaması
 
-    /** Ölçek katsayısı (frame→model) */
     public float getScaleFactor() {
         return scaleFactor;
-    }
-
-    /** X yönündeki padding (px) */
+    }/** Ölçek katsayısı (frame→model) */
     public int getOffsetX() {
         return offsetX;
-    }
-
-    /** Y yönündeki padding (px) */
+    }/** X yönündeki padding (px) */
     public int getOffsetY() {
         return offsetY;
-    }
-
-    /** Yeniden boyutlandırılmış genişlik (px) */
+    }/** Y yönündeki padding (px) */
     public int getScaledWidth() {
         return Math.round(frameWidth * scaleFactor);
-    }
-
-    /** Yeniden boyutlandırılmış yükseklik (px) */
+    } /** Yeniden boyutlandırılmış genişlik (px) */
     public int getScaledHeight() {
         return Math.round(frameHeight * scaleFactor);
-    }
-    /**
-     * Frame üzerindeki bir dikdörtgeni model input’a çevirir.
-     * @param rect Frame üzerindeki RectF (px)
-     * @return model input üzerindeki RectF
-     */
+    }/** Yeniden boyutlandırılmış yükseklik (px) */
+
     public RectF mapRect(RectF rect) {
         float[] topLeft     = mapPoint(rect.left, rect.top);
         float[] bottomRight = mapPoint(rect.right, rect.bottom);
         return new RectF(topLeft[0], topLeft[1], bottomRight[0], bottomRight[1]);
     }
-    /**
-     * Frame koordinatındaki bir noktayı model input koordinatına çevirir.
-     * @param x Frame üzerindeki x (px)
-     * @param y Frame üzerindeki y (px)
-     * @return [tx, ty] model input üzerindeki nokta koordinatı
-     */
     public float[] mapPoint(float x, float y) {
         float tx = x * scaleFactor + offsetX;
         float ty = y * scaleFactor + offsetY;

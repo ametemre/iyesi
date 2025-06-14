@@ -26,16 +26,6 @@ public class Actions {
     Activity host;
     Context context;
     Intent intent;
-    public Actions(MiniFabs miniFabs, Activity host, Context context) {
-        setMiniFabs(miniFabs);
-        this.miniFabs = miniFabs;
-        this.host   = host;
-        this.context  = context;
-    }
-
-    interface Action {
-        void execute();
-    }
     public Action onFabClick(FloatingActionButton clickedFab) {
         if (selectedFab == clickedFab) {
             // If clicking the same FAB, deselect it and set it back to Teal
@@ -69,6 +59,15 @@ public class Actions {
             Log.w("FAB", "Unknown FAB clicked!");
         }
         return action;
+    }
+    interface Action {
+        void execute();
+    }
+    public Actions(MiniFabs miniFabs, Activity host, Context context) {
+        setMiniFabs(miniFabs);
+        this.miniFabs = miniFabs;
+        this.host   = host;
+        this.context  = context;
     }
     public void onFabSelected(FloatingActionButton fab) {
         // önceki seçimi temizle
@@ -133,7 +132,6 @@ public class Actions {
         selectedFab = null;
         return ai;
     }
-    /** Eğer ihtiyaç varsa runtime’da MiniFabs örneğini değiştirmek için setter */
     public void setMiniFabs(MiniFabs miniFabs) {
         if (miniFabs == null) {
             throw new IllegalArgumentException("MiniFabs must not be null");
