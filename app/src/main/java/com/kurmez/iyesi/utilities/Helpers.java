@@ -5,6 +5,8 @@ import android.app.Activity;
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.RectF;
+import android.os.Handler;
+import android.os.Looper;
 import android.util.Log;
 import android.widget.Toast;
 
@@ -45,6 +47,10 @@ import java.util.concurrent.RejectedExecutionException;
 public class Helpers {
     void showToast(String message, Context context) {
         Toast.makeText(context, message, Toast.LENGTH_SHORT).show();
+    }
+    public static void showToastSafe(Context ctx, String msg) {
+        Handler handler = new Handler(Looper.getMainLooper());
+        handler.post(() -> Toast.makeText(ctx, msg, Toast.LENGTH_SHORT).show());
     }
 }
 

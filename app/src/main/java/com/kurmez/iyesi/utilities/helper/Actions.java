@@ -14,7 +14,10 @@ import com.kurmez.iyesi.sokak.SokakActivity;
 import com.kurmez.iyesi.utilities.Ai.Ai;
 import com.kurmez.iyesi.utilities.Ai.AnimalCounter;
 import com.kurmez.iyesi.utilities.Ai.Threading;
+import com.kurmez.iyesi.utilities.Helpers;
 import com.kurmez.iyesi.utilities.MiniFabs;
+
+import org.tensorflow.lite.gpu.CompatibilityList;
 
 import java.io.IOException;
 
@@ -82,6 +85,12 @@ public class Actions {
         //miniFabs.highlightFab(fab);
     }
     public Ai performSelectedAction(FloatingActionButton selectedFab) {
+        CompatibilityList compatList = new CompatibilityList();
+        boolean isGpuSupported = compatList.isDelegateSupportedOnThisDevice();
+        Log.i(TAG, "Cihazda GPU delegate desteği: " + isGpuSupported);
+        if (!isGpuSupported) {
+            Helpers.showToastSafe(context,"Cihazda GPU delegate desteği yok, CPU ile çalışacak.");
+        }
         if (selectedFab == null) {
             Log.w(TAG, "performSelectedAction: selectedFab is null!");
             return null;
@@ -120,6 +129,7 @@ public class Actions {
             ai = null; // Hatalı ise null'a çek.
         }
         if (ai != null) {
+            Log.i(TAG, "Model " + ai.getLastUsedDelegate() + " delegate ile yüklendi.");
             try {
                 Log.i(TAG, "Model Input Tensor Info: " + ai.getInputShapeInfo(ai.getVideoInterpreter()));
                 Log.i(TAG, "Model Output Tensor Info: " + ai.getOutputShapeInfo(ai.getVideoInterpreter()));
@@ -129,7 +139,6 @@ public class Actions {
         } else {
             Log.w(TAG, "Ai nesnesi null, model yüklenemedi.");
         }
-        selectedFab = null;
         return ai;
     }
     public void setMiniFabs(MiniFabs miniFabs) {

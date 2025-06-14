@@ -1,211 +1,189 @@
 package com.kurmez.iyesi.utilities;
 
 import android.content.Context;
-import android.util.Log;
-import android.view.View;
-import android.widget.Toast;
-
+import com.kurmez.iyesi.utilities.Helpers;
 import org.tensorflow.lite.Interpreter;
 import org.tensorflow.lite.gpu.GpuDelegate;
-
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Supplier;
 
+/*
+ * Terminator handles AI resource lifecycle: init, start, pause, resume, shutdown, cleanup.
+ * Includes a "turnaround" fallback to CPU mode on interpreter errors.
+ */
 public class Terminator {
-    private static final String TAG = "Terminator";
 
-    // Dependencies to be injected
-    private final ExecutorService executor;
-    private final Interpreter videoInterpreter;
-    private final Interpreter soundInterpreter;
-    private final GpuDelegate gpuDelegate;
+    private enum AppState { IDLE, RUNNING, STANDBY }
+
+    private final Context context;
+    private final ExecutorService aiExecutor;
+    private final ExecutorService cleanupExecutor;
+
+    private final Supplier<Interpreter> videoInterpreterFactory;
+    private final Supplier<Interpreter> soundInterpreterFactory;
+    private final Supplier<GpuDelegate> gpuDelegateFactory;
+
+    private Interpreter videoInterpreter;
+    private Interpreter soundInterpreter;
+    private GpuDelegate gpuDelegate;
+
     private final List<float[][][]> videoBuffer;
     private final List<float[]> soundBuffer;
-    private final Context context;
 
-    // State tracking
-    private enum AppState { IDLE, RUNNING }
-    private AppState currentState = AppState.IDLE;
-    private int frameCount = 0;
+    private final List<Future<?>> submittedTasks = new java.util.concurrent.CopyOnWriteArrayList<>();
 
-    public Terminator(ExecutorService executor,
-                      Interpreter videoInterpreter,
-                      Interpreter soundInterpreter,
-                      GpuDelegate gpuDelegate,
+    private volatile AppState currentState = AppState.IDLE;
+    private volatile boolean paused = false;
+    private volatile boolean shutdownRequested = false;
+
+    public Terminator(Context context,
+                      ExecutorService aiExecutor,
+                      Supplier<Interpreter> videoInterpreterFactory,
+                      Supplier<Interpreter> soundInterpreterFactory,
+                      Supplier<GpuDelegate> gpuDelegateFactory,
                       List<float[][][]> videoBuffer,
-                      List<float[]> soundBuffer,
-                      Context context) {
-        this.executor = executor;
-        this.videoInterpreter = videoInterpreter;
-        this.soundInterpreter = soundInterpreter;
-        this.gpuDelegate = gpuDelegate;
+                      List<float[]> soundBuffer) {
+        this.context = context;
+        this.aiExecutor = aiExecutor;
+        this.cleanupExecutor = Executors.newSingleThreadExecutor();
+        this.videoInterpreterFactory = videoInterpreterFactory;
+        this.soundInterpreterFactory = soundInterpreterFactory;
+        this.gpuDelegateFactory = gpuDelegateFactory;
         this.videoBuffer = videoBuffer;
         this.soundBuffer = soundBuffer;
-        this.context = context;
+    }
+
+    public Terminator(Context context,
+                      ExecutorService aiExecutor,
+                      Interpreter videoInterpreterInstance,
+                      Interpreter soundInterpreterInstance,
+                      GpuDelegate gpuDelegateInstance,
+                      List<float[][][]> videoBuffer,
+                      List<float[]> soundBuffer) {
+        this(context,
+                aiExecutor,
+                () -> videoInterpreterInstance,
+                () -> soundInterpreterInstance,
+                () -> gpuDelegateInstance,
+                videoBuffer,
+                soundBuffer);
+    }
+
+    private synchronized void initResources() {
+        gpuDelegate = gpuDelegateFactory.get();
+        Interpreter.Options options = new Interpreter.Options().addDelegate(gpuDelegate);
+        videoInterpreter = videoInterpreterFactory.get();
+        soundInterpreter = soundInterpreterFactory.get();
+    }
+
+    public synchronized void start() {
+        if (currentState != AppState.IDLE) return;
+        shutdownRequested = false;
+        initResources();
+        paused = false;
+        currentState = AppState.RUNNING;
+        Helpers.showToastSafe(context, "AI started");
+    }
+
+    public synchronized void pause() {
+        if (currentState != AppState.RUNNING) return;
+        paused = true;
+        currentState = AppState.STANDBY;
+        Helpers.showToastSafe(context, "AI paused");
+    }
+
+    public synchronized void resume() {
+        if (currentState != AppState.STANDBY) return;
+        paused = false;
+        currentState = AppState.RUNNING;
+        Helpers.showToastSafe(context, "AI resumed");
     }
 
     /**
-     * Emergency cleanup function to terminate all AI operations
+     * Submit an AI task, tracking its Future and adding error fallback.
      */
-    public synchronized void emergencyShutdown() {
-        Log.i(TAG, "Initiating emergency shutdown");
-
-        try {
-            // 1. Shutdown executors
-            shutdownExecutor();
-
-            // 2. Release interpreters
-            closeInterpreters();
-
-            // 3. Release GPU resources
-            closeGpuDelegate();
-
-            // 4. Clear buffers
-            clearBuffers();
-
-            // 5. System cleanup
-            systemCleanup();
-
-            // 6. Update state
-            updateAppState();Log.i(TAG, "Emergency shutdown complete");
-        } catch (Exception e) {
-            Log.w(TAG, "AI modeli çakıldı !" + e.toString());
-            throw new RuntimeException(e);
-        }
-
-
-
-    }
-
-    private void shutdownExecutor() {
-        if (executor != null) {
-            // 1) Yeni görev almayı kes
-            executor.shutdown();
+    public void submitAiTask(Runnable task) {
+        if (currentState != AppState.RUNNING) return;
+        Future<?> future = aiExecutor.submit(() -> {
+            if (shutdownRequested || Thread.currentThread().isInterrupted()) return;
             try {
-                // 2) Çalışan görevlerin makul süre içinde bitmesini bekle
-                if (!executor.awaitTermination(1, TimeUnit.SECONDS)) {
-                    // hâlâ bitmemişse zorla kes
-                    executor.shutdownNow();
-                    if (!executor.awaitTermination(1, TimeUnit.SECONDS)) {
-                        Log.w(TAG, "Executor did not terminate");
-                    }
-                }
-            } catch (InterruptedException e) {
-                // beklerken interrupt yediysen de zorla kapat
-                executor.shutdownNow();
-                Thread.currentThread().interrupt();
+                task.run();
+            } catch (Exception e) {
+                // Turnaround fallback to CPU-only mode on error
+                Helpers.showToastSafe(context, "Interpreter error, switching to CPU mode");
+                turnaroundToCpu();
             }
-        }
-        if (executor != null && !executor.isShutdown()) {
-            executor.shutdownNow();
-            try {
-                if (!executor.awaitTermination(100, TimeUnit.MILLISECONDS)) {
-                    Log.w(TAG, "Executor termination timeout");
-                }
-            } catch (InterruptedException e) {
-                Log.w(TAG, "Executor termination interrupted", e);
-                Thread.currentThread().interrupt();
-            }
-        }
+        });
+        submittedTasks.add(future);
     }
 
-    private void closeInterpreters() {
-        try {
-            if (videoInterpreter != null) {
-                videoInterpreter.close();
-            }
-        } catch (Exception e) {
-            Log.e(TAG, "Video interpreter close failed", e);
+    /**
+     * Fallback: clean GPU delegate and reinit interpreters in CPU mode.
+     */
+    private synchronized void turnaroundToCpu() {
+        if (currentState != AppState.RUNNING) return;
+        // Close GPU delegate
+        if (gpuDelegate != null) {
+            gpuDelegate.close();
+            gpuDelegate = null;
         }
-
-        try {
-            if (soundInterpreter != null) {
-                soundInterpreter.close();
-            }
-        } catch (Exception e) {
-            Log.e(TAG, "Sound interpreter close failed", e);
-        }
+        // Reinitialize interpreters without GPU
+        Interpreter.Options cpuOptions = new Interpreter.Options();
+        if (videoInterpreter != null) videoInterpreter.close();
+        //videoInterpreter = new Interpreter(videoInterpreter.getInputTensor(0).shape(), cpuOptions);
+        if (soundInterpreter != null) soundInterpreter.close();
+        //soundInterpreter = new Interpreter(soundInterpreter.getInputTensor(0).shape(), cpuOptions);
+        Helpers.showToastSafe(context, "Switched to CPU interpreters");
     }
 
-    private void closeGpuDelegate() {
-        try {
-            if (gpuDelegate != null) {
-                gpuDelegate.close();
-            }
-        } catch (Exception e) {
-            Log.e(TAG, "GPU delegate close failed", e);
-        }
-    }
-
-    private void clearBuffers() {
-        if (videoBuffer != null) {
-            synchronized (videoBuffer) {
-                videoBuffer.clear();
-            }
-        }
-        if (soundBuffer != null) {
-            synchronized (soundBuffer) {
-                soundBuffer.clear();
-            }
-        }
-    }
-
-    private void systemCleanup() {
-        Runtime.getRuntime().gc();
-        Runtime.getRuntime().runFinalization();
-        logMemoryStatus();
-    }
-
-    private void updateAppState() {
+    public synchronized void shutdown() {
+        if (currentState == AppState.IDLE) return;
+        shutdownRequested = true;
+        paused = true;
         currentState = AppState.IDLE;
-        frameCount = 0;
+        aiExecutor.shutdown();
+        cleanupExecutor.execute(() -> {
+            try {
+                if (!aiExecutor.awaitTermination(3, TimeUnit.SECONDS)) {
+                    for (Future<?> f : submittedTasks) {
+                        if (!f.isDone()) f.cancel(true);
+                    }
+                    aiExecutor.shutdownNow();
+                    Helpers.showToastSafe(context, "Force-cancelled AI tasks");
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            cleanupResources();
+        });
     }
 
-    private void logMemoryStatus() {
-        Runtime runtime = Runtime.getRuntime();
-        long used = runtime.totalMemory() - runtime.freeMemory();
-        Log.i(TAG, String.format(
-                "Memory: Used=%.1fMB, Free=%.1fMB",
-                used / (1024f * 1024f),
-                runtime.freeMemory() / (1024f * 1024f)
-        ));
-    }
-
-    /**
-     * Restarts AI operations with fresh resources
-     */
-    public synchronized void restartOperations() {
-        if (currentState == AppState.RUNNING) {
-            Log.w(TAG, "Operations already running");
-            return;
+    private void cleanupResources() {
+        if (videoInterpreter != null) {
+            videoInterpreter.close();
+            videoInterpreter = null;
         }
-
-        try {
-            Log.i(TAG, "Restarting operations");
-            // Reinitialize your resources here
-            currentState = AppState.RUNNING;
-            Toast.makeText(context, "AI operations restarted", Toast.LENGTH_SHORT).show();
-        } catch (Exception e) {
-            Log.e(TAG, "Restart failed", e);
-            currentState = AppState.IDLE;
+        if (soundInterpreter != null) {
+            soundInterpreter.close();
+            soundInterpreter = null;
         }
+        if (gpuDelegate != null) {
+            gpuDelegate.close();
+            gpuDelegate = null;
+        }
+        videoBuffer.clear();
+        soundBuffer.clear();
+        submittedTasks.clear();
+        Helpers.showToastSafe(context, "AI stopped");
+        cleanupExecutor.shutdown();
     }
 
-    /**
-     * Checks if operations are currently running
-     */
-    public boolean isRunning() {
-        return currentState == AppState.RUNNING;
-    }
-
-    // UI callbacks
-    public void onStopButtonClicked(View view) {
-        emergencyShutdown();
-        Toast.makeText(context, "AI operations stopped", Toast.LENGTH_SHORT).show();
-    }
-    public boolean toggleBoolean(boolean boolVal) {
-        return !boolVal;
-    }
+    public boolean isPaused()            { return paused; }
+    public boolean isRunning()          { return currentState == AppState.RUNNING; }
+    public boolean isIdle()             { return currentState == AppState.IDLE; }
+    public boolean isShutdownRequested(){ return shutdownRequested; }
 }

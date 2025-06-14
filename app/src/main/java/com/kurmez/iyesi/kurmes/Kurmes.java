@@ -6,6 +6,7 @@ import com.kurmez.iyesi.utilities.Ai.Detection;
 import com.kurmez.iyesi.utilities.Ai.TFLiteInputMapper;
 import com.kurmez.iyesi.utilities.Ai.TFLiteInputPreprocessor;
 import com.kurmez.iyesi.utilities.Ai.Threading;
+import com.kurmez.iyesi.utilities.Helpers;
 import com.kurmez.iyesi.utilities.Terminator;
 import com.kurmez.iyesi.utilities.helper.Actions;
 import com.kurmez.iyesi.utilities.helper.Permissions;
@@ -76,16 +77,13 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
     }
     //imported---------------------------------
     private FloatingActionButton fabMain, fabAction;
-    private FrameLayout rootLayout;
     private Detection detector;
     private Detection detectionRunner;
-    private Handler uiHandler = new Handler();
     private FirebaseAuth auth;
     public CameraCalibrator mCalibrator;
     private OnCameraFrameRender mOnCameraFrameRender;
     private Menu mMenu;
     private FirebaseAuth mAuth;
-    private Handler handler = new Handler();
     private Terminator terminator = null;
     private TFLiteInputPreprocessor preprocessor;
     private TFLiteInputMapper mapper;
@@ -132,7 +130,7 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
         cameraStatusText = findViewById(R.id.camera_status_text);
         fabMain     = findViewById(R.id.fab_main);
         fabAction         = findViewById(R.id.fab_Sound);
-        rootLayout       = findViewById(android.R.id.content);
+        FrameLayout rootLayout = findViewById(android.R.id.content);
         mOpenCvCameraView= findViewById(R.id.kurmes_camera_view);
         mOpenCvCameraView.setVisibility(SurfaceView.VISIBLE);
         mOpenCvCameraView.setCvCameraViewListener(this);
@@ -147,7 +145,7 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
 
         miniFabs = new MiniFabs(this, fabMain, fabAction, miniFabIds);
         miniFabs.applyDefaultColors();
-        rootLayout.setOnTouchListener((v,e)-> miniFabs.handleOutsideTouch(e));
+        rootLayout.setOnTouchListener((v, e)-> miniFabs.handleOutsideTouch(e));
         miniFabs.setupDraggableFAB(miniFabs, fabMain);
         actions = new Actions(miniFabs, this, this);
         // Collapse on outside touch (camera view or root)
@@ -158,8 +156,8 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
         rootLayout.setOnTouchListener(outsideListener);
 
         // Set up draggable & expand/collapse behavior
-        miniFabs.setupDraggableFAB(miniFabs, fabMain);
-        Actions actions = new Actions(miniFabs, this, this /* or getApplicationContext() */ );
+        //miniFabs.setupDraggableFAB(miniFabs, fabMain);
+        //Actions actions = new Actions(miniFabs, this, this /* or getApplicationContext() */ );
         // Wire each miniFAB to call selectFab() + your onFabClick logic
         for (FloatingActionButton fab : miniFabs.getFabs()) {
             fab.setOnClickListener(v -> {
@@ -168,37 +166,63 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
             });
         }
         // fabAction: başlat/durdur
-        fabAction.setOnClickListener(v-> {
-            new Thread(()->{
-            if (!isRunning) {
-                if (miniFabs.getSelectedFab()==null) {
-                    Toast.makeText(this,"Önce bir seçenek seçin",Toast.LENGTH_SHORT).show();
-                    return;
-                }
-                //new Thread(()->{
-                    ai = actions.performSelectedAction(miniFabs.getSelectedFab());
-                    if (ai!=null) {
+        fabAction.setOnClickListener(v -> {
+            new Thread(() -> {
+                if (!isRunning) {
+                    // Kullanıcı model seçmeden başlatmak isterse
+                    if (miniFabs.getSelectedFab() == null) {
+                        Helpers.showToastSafe(this,"Önce bir seçenek seçin");
+                        //runOnUiThread(() -> Toast.makeText(this, "Önce bir seçenek seçin", Toast.LENGTH_SHORT).show());
+                        return;
+                    }
+
+                    // Model yüklemesi ve fallback güvenliği
+                    try {
+                        ai = actions.performSelectedAction(miniFabs.getSelectedFab());
+                        if (ai == null) {
+                            Helpers.showToastSafe(this,"Model yükleme başarısız");
+                            //runOnUiThread(() -> Toast.makeText(this, "Model yükleme başarısız", Toast.LENGTH_SHORT).show());
+                            return;
+                        }
                         interpreter = ai.getVideoInterpreter();
                         mapper = new TFLiteInputMapper(mWidth, mHeight, ai.getInputWidth(), ai.getInputHeight());
                         preprocessor = new TFLiteInputPreprocessor(mapper);
-                        detector = new Detection(ai, interpreter, this, 0,0,0,0,0,0, miniFabs.getSelectedFab().toString());
-                        terminator = new Terminator(ai.getExecutor(), ai.getVideoInterpreter(), ai.getSoundInterpreter(), ai.getGpuDelegate(), videoBuffer, soundBuffer, this);
+
+                        try {
+                            detector = new Detection(ai, interpreter, this, 0, 0, 0, 0, 0, 0, miniFabs.getSelectedFab().toString());
+                        } catch (Exception e) {
+                            Log.w("Detection Init Error", "Detection nesnesi oluşturulamadı", e);
+                            Helpers.showToastSafe(this,"Algılama nesnesi başlatılamadı");
+                            //runOnUiThread(() -> Toast.makeText(this, "Algılama nesnesi başlatılamadı", Toast.LENGTH_SHORT).show());
+                            return;
+                        }
+
+                        terminator = new Terminator(this,ai.getExecutor(), ai.getVideoInterpreter(), ai.getSoundInterpreter(), ai.getGpuDelegate(), videoBuffer, soundBuffer);
                         isRunning = true;
                         isPredicting = true;
-                    } else {
-                        Toast.makeText(this, "Model yükleme başarısız", Toast.LENGTH_SHORT).show();
+                        Helpers.showToastSafe(this,"AI Başlatıldı");
+                        //runOnUiThread(() -> Toast.makeText(this, "AI Başlatıldı", Toast.LENGTH_SHORT).show());
+
+                    } catch (Exception e) {
+                        Log.e("AI Init Error", "Model başlatma hatası", e);
+                        Helpers.showToastSafe(this,"Model başlatma hatası: ");
+                        //runOnUiThread(() -> Toast.makeText(this, "Model başlatma hatası: " + e.getMessage(), Toast.LENGTH_LONG).show());
                     }
-                //}).start();
-            } else {
-                terminator.onStopButtonClicked(v);
-                ai.close(); ai=null;
-                isRunning = false;
-                isPredicting = false;
-                //mOpenCvCameraView.disableView();
-                Toast.makeText(this,"Durduruldu",Toast.LENGTH_SHORT).show();
-            }
+
+                } else {
+                    if (terminator != null) terminator.shutdown();
+                    if (ai != null) {
+                        ai.close();
+                        ai = null;
+                    }
+                    isRunning = false;
+                    isPredicting = false;
+                    Helpers.showToastSafe(this,"Durduruldu");
+                    //runOnUiThread(() -> Toast.makeText(this, "Durduruldu", Toast.LENGTH_SHORT).show());
+                }
             }).start();
         });
+
     }
 
     @Override
@@ -252,80 +276,23 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
     }                                                         //done
     @Override
     public Mat onCameraFrame(CameraBridgeViewBase.CvCameraViewFrame inputFrame) {
-        //Mat rgba = inputFrame.rgba();
         Mat rgba = inputFrame.rgba();
-        Log.i(TAG, "onCameraFrame: ai=" + ai + " isPredicting=" + isPredicting + " isRunning=" + isRunning);
-        // Eğer ai null ise (henüz başlatılmadıysa) hiç bir şey yapma
-        if (ai == null || !isPredicting) {
-            Log.i(TAG, "  → Inference atlandı (ai null veya isPredicting=false)");
-            return rgba;
-        }
-        Log.i(TAG, "  → Inference bloğuna giriliyor");
+
+        // ToDo: ViewModel’de garbage collecting ve buffer reuse kontrolü (Mat/Bitmap/ByteBuffer için).
+        if (ai == null || !isPredicting) return rgba;
+
         if (!executor.isShutdown()) {
             executor.submit(() -> {
                 try {
-                    Log.e(TAG, "Inference...");
-                    /*
-                    ai.handleRT(rgba, mat -> preprocessor.map(mat), output -> {
-                                // Burada ai kesinlikle null değil
-                                List<Detection> dets = ai.parseDetections(output);
-                                runOnUiThread(() ->
-                                        ai.drawDetections(rgba, dets)
-                                );});
-                    */
-                    detector.handleRT(rgba,ai);
+                    detector.handleRT(rgba, ai);
                 } catch (Exception e) {
-                    Log.e(TAG, "Inference error in frame", e);
+                    // ToDo: Hatalı model yükleme veya AI tespit hatalarında otomatik fallback veya retry mekanizması ekle.
                 }
             });
         }
-        switch (currentState) {
-            case KEDI:
-                //handleSpecies(rgb, aiKedi);
-                break;
-            case KOPEK:
-                //handleSpecies(rgb, aiKopek);
-                break;
-            case KURT:
-                //handleSpecies(rgb, aiKurt);
-                break;
-            case KARGA:
-                //handleSpecies(rgb, aiKarga);
-                break;
-            case FACE_DETECTION:
-                // Perform face detection
-                //videoYapayZeka(getResources().openRawResource(R.raw.lbpcascade_frontalface), null);
-                break;
-            case OBJECT_DETECTION:
-                if (aiContent != null) {
-                    //handleObjectDetection(frame);
-                }
-                //handleObjectDetection(rgba);
-                // Perform object detection
-                // ...
-                break;
-            case CAPTURE:
-                //capturePhoto(rgb);// Perform ImgCapture
-                //navigateToFoundedActivity();
-                // ...
-                break;
-            case TRACKING:
-                // Perform tracking
-                // ...
-                break;
-            case TEST:
-                // Perform tracking
-                // ...
-                break;
-            case IDLE:
-                // Do nothing
-                break;
-            default:
-                break;
-        }
-        return frame; // Return the raw RGBA frame
+        // ToDo: tespitler UI'ya aktarılıp labelText/cameraStatusText/model sınıf listeleri dinamik güncellenecek.
+        return rgba;
     }               //Essential For Camera
-    @Override
     protected void onResume() {
         super.onResume();
         if (OpenCVLoader.initDebug()) {

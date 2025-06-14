@@ -42,7 +42,7 @@ public class SoundClassifier extends Kurmes {
     }
     public void updateLabel(String text) {
         if (kurmesActivity != null) {
-            kurmesActivity.SetLabelText(text);
+            //kurmesActivity.SetLabelText(text);
         }
     }
 
@@ -51,7 +51,7 @@ public class SoundClassifier extends Kurmes {
     }
 
     public void onStartRecording(View view) {
-        kurmesActivity.SetLabelText("Recording !");
+        //kurmesActivity.SetLabelText("Recording !");
         int availableProcessors = Runtime.getRuntime().availableProcessors();
         Log.d("AvailableProcessors", "Number of available threads: " + availableProcessors);
         //        Toast.makeText(this, "AvailableProcessors" + "Number of available threads: " + availableProcessors, Toast.LENGTH_SHORT).show();
@@ -106,23 +106,23 @@ public class SoundClassifier extends Kurmes {
 
                         runOnUiThread(() -> {
                             if (finalOutput.isEmpty()) {
-                                kurmesActivity.SetLabelText("Listening...");
+                                //kurmesActivity.SetLabelText("Listening...");
                             } else {
                                 for (Category category : finalOutput) {
                                     outputStr.append(category.getLabel()).append(": ")
                                             .append(category.getScore()).append("\n");
                                 }
-                                kurmesActivity.SetLabelText(outputStr.toString());
+                                //kurmesActivity.SetLabelText(outputStr.toString());
                             }
                             if (finalOutput2.isEmpty()) {
-                                kurmesActivity.SetLabelText("Dinliyor...");
+                                //kurmesActivity.SetLabelText("Dinliyor...");
                                 //labelText.setText("Tanımlama yapılamadı.");
                             } else {
                                 for (Category category : finalOutput2) {
                                     outputStr.append(category.getLabel()).append(": ").append(category.getScore()).append("\n");
                                     //kurmesActivity.updateDetectedSounds(finalOutput2);
                                 }
-                                kurmesActivity.SetLabelText(outputStr.toString());
+                                //kurmesActivity.SetLabelText(outputStr.toString());
                                 //labelText.setText(outputStr.toString());  // Use the TextView reference
                             }
                         });
@@ -149,7 +149,7 @@ public class SoundClassifier extends Kurmes {
             record.release();
             record = null;
         }
-        kurmesActivity.SetLabelText("Stopped Recording");
+        //kurmesActivity.SetLabelText("Stopped Recording");
     }
 
     public List<String> printModelDetails(int get) {

@@ -1,6 +1,8 @@
 package com.kurmez.iyesi.utilities.Ai;
 
 import android.graphics.Bitmap;
+import android.graphics.Canvas;
+import android.graphics.Color;
 import android.graphics.RectF;
 
 import org.opencv.core.CvType;
@@ -10,23 +12,39 @@ import org.opencv.imgproc.Imgproc;
 
 public class TFLiteInputPreprocessor {
     private final TFLiteInputMapper mapper;
+    // Ölçek + Padding: Model input boyutuna uygun bitmap oluştur
+    public static Bitmap scaleAndPadBitmap(Bitmap input, int dstW, int dstH) {
+        if (input == null) return null;
+        int srcW = input.getWidth(), srcH = input.getHeight();
+        TFLiteInputMapper mapper = new TFLiteInputMapper(srcW, srcH, dstW, dstH);
+        Bitmap output = Bitmap.createBitmap(dstW, dstH, Bitmap.Config.ARGB_8888);
+        Bitmap scaled = Bitmap.createScaledBitmap(input, mapper.getScaledWidth(), mapper.getScaledHeight(), true);
+        Canvas canvas = new Canvas(output);
+        canvas.drawColor(Color.BLACK);
+        canvas.drawBitmap(scaled, mapper.getOffsetX(), mapper.getOffsetY(), null);
+        scaled.recycle();
+        return output;
+    }
 
-    float[][][][] bitmapToInputTensor(Bitmap bmp) {
-        /** Bitmap → [1][H][W][3] */
-        int W = bmp.getWidth(), H = bmp.getHeight();
-        float[][][][] tensor = new float[1][H][W][3];
-        int[] pixels = new int[W*H];
-        bmp.getPixels(pixels, 0, W, 0, 0, W, H);
-        for (int j = 0; j < H; j++) {
-            for (int i = 0; i < W; i++) {
-                int p = pixels[j*W + i];
-                tensor[0][j][i][0] = ((p>>16)&0xFF)/255f;
-                tensor[0][j][i][1] = ((p>>8)&0xFF)/255f;
-                tensor[0][j][i][2] = (p&0xFF)/255f;
+    // Bitmap'i Tensor'a çevir (ör. float[1][H][W][3])
+    public static float[][][][] bitmapToInputTensor(Bitmap bmp) {
+        if (bmp == null) return null;
+        int w = bmp.getWidth(), h = bmp.getHeight();
+        float[][][][] tensor = new float[1][h][w][3];
+        for (int y = 0; y < h; y++) {
+            for (int x = 0; x < w; x++) {
+                int p = bmp.getPixel(x, y);
+                tensor[0][y][x][0] = ((p >> 16) & 0xFF) / 255f;
+                tensor[0][y][x][1] = ((p >> 8) & 0xFF) / 255f;
+                tensor[0][y][x][2] = (p & 0xFF) / 255f;
             }
         }
         return tensor;
     }
+
+    // Gerekirse: Bitmap'i doğrudan ByteBuffer'a çevir
+    // public static ByteBuffer bitmapToByteBuffer(Bitmap bmp) { ... }
+
     public float[][][][] map(Mat inputFrame) {
         int w      = mapper.getScaledWidth();
         int h      = mapper.getScaledHeight();

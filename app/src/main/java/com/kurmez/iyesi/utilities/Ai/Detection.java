@@ -65,6 +65,7 @@ public class Detection {
     private static final int SOUND_THRESHOLD = 3;
     private Bitmap reusableFrameBitmap = null;
     private Bitmap reusableScaledBitmap = null;
+    private ByteBuffer reusableInputBuffer = null;
     private final Object lock = new Object(); // thread-safe olması için
     private Kurmes.State currentState;
     private Executor executor;
@@ -73,170 +74,25 @@ public class Detection {
     private final List<Bitmap> photoList = new ArrayList<>();
     private static final int REQUEST_STORAGE_PERMISSION = 1001;
 
-    public Detection(Ai ai, Interpreter interpreter, Context context, int classId, float score, float x1, float y1, float x2, float y2, String label) {
-        this.ai   = ai;
+    public Detection(Ai ai, Interpreter interpreter, Context context,
+                     int classId, float score, float x1, float y1, float x2, float y2, String label) {
+        this.ai = ai;
         this.interpreter = interpreter;
-        this.context     = context;
-
+        this.context = context;
         this.classId = classId;
-        this.score   = score;
+        this.score = score;
         this.x1 = x1; this.y1 = y1;
         this.x2 = x2; this.y2 = y2;
         this.label = label;
-        initiateDetection(ai,frame);
+        // initiateDetection(ai, frame); // GEREKSİZ!
     }
+
 
     private void initiateDetection(Ai ai,Bitmap frame) {
         this.mapper = new TFLiteInputMapper(frame.getWidth(),frame.getHeight(),ai.getInputWidth(),ai.getInputHeight());
         this.preProcess =  new TFLiteInputPreprocessor(mapper);
     }
 
-    public void handleRT(Mat frame, Ai ai) {
-        Log.i(TAG, "Inference başlıyor...");
-        synchronized (lock) {
-            if (frame == null || frame.empty()) {
-                Log.e("handleRT", "Giriş frame boş.");
-                return;
-            }
-            Log.i(TAG, "Inference başladı");
-            // 1. RGB to RGBA
-            Mat rgba = new Mat();
-            if (frame.channels() == 3) {
-                Imgproc.cvtColor(frame, rgba, Imgproc.COLOR_RGB2RGBA);
-            } else {
-                rgba = frame.clone();
-            }
-            int w = rgba.cols();
-            int h = rgba.rows();
-            if (w <= 0 || h <= 0) {
-                Log.e("handleRT", "RGBA boyutu geçersiz: " + w + "x" + h);
-                rgba.release();
-                return;
-            }
-
-            if (reusableFrameBitmap == null || reusableFrameBitmap.getWidth() != w || reusableFrameBitmap.getHeight() != h || reusableFrameBitmap.isRecycled()) {
-                if (reusableFrameBitmap != null && !reusableFrameBitmap.isRecycled()) {
-                    reusableFrameBitmap.recycle();
-                }
-                reusableFrameBitmap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
-            }
-
-            try {
-                Utils.matToBitmap(rgba, reusableFrameBitmap);
-            } catch (Exception e) {
-                Log.e("handleRT", "matToBitmap hatası: " + e.getMessage());
-                rgba.release();
-                return;
-            }
-            rgba.release();
-
-            // 2. Scale + Padding için mapper
-            TFLiteInputMapper mapper = new TFLiteInputMapper(w, h, ai.getInputWidth(), ai.getInputHeight());
-
-            if (reusableScaledBitmap == null ||
-                    reusableScaledBitmap.getWidth() != ai.getInputWidth() ||
-                    reusableScaledBitmap.getHeight() != ai.getInputHeight() ||
-                    reusableScaledBitmap.isRecycled()) {
-
-                if (reusableScaledBitmap != null && !reusableScaledBitmap.isRecycled()) {
-                    reusableScaledBitmap.recycle();
-                }
-
-                reusableScaledBitmap = Bitmap.createBitmap(
-                        ai.getInputWidth(),
-                        ai.getInputHeight(),
-                        Bitmap.Config.ARGB_8888
-                );
-            }
-
-            Bitmap tempScaled = Bitmap.createScaledBitmap(reusableFrameBitmap, mapper.getScaledWidth(), mapper.getScaledHeight(), true);
-            Canvas canvas = new Canvas(reusableScaledBitmap);
-            canvas.drawColor(Color.BLACK);
-            canvas.drawBitmap(tempScaled, mapper.getOffsetX(), mapper.getOffsetY(), null);
-            tempScaled.recycle();
-
-            // 3. Bitmap'i modelin istediği ByteBuffer formatına dönüştür
-            ByteBuffer inputBuffer = ByteBuffer.allocateDirect(4 * ai.getInputWidth() * ai.getInputHeight() * 3)
-                    .order(ByteOrder.nativeOrder());
-
-            for (int y = 0; y < ai.getInputHeight(); y++) {
-                for (int x = 0; x < ai.getInputWidth(); x++) {
-                    int pixel = reusableScaledBitmap.getPixel(x, y);
-                    inputBuffer.putFloat(((pixel >> 16) & 0xFF) / 255f); // R
-                    inputBuffer.putFloat(((pixel >> 8) & 0xFF) / 255f);  // G
-                    inputBuffer.putFloat((pixel & 0xFF) / 255f);         // B
-                }
-            }
-            inputBuffer.rewind();
-
-            //ai.run(() -> {
-            // 4. GPU'da arka planda çalıştır
-            //Threading.runOnBackground(() -> {
-            // 4. GPU'da arka planda çalıştır
-            //Threading.runOnBackground(() -> {
-            ai.predictVideo(preProcess.bitmapToInputTensor(reusableScaledBitmap), rawOutput -> {
-                if (rawOutput == null || rawOutput.length < 1) {
-                    Log.e(TAG, "Inference çıktısı beklenenden kısa: batch boyutu " +
-                            (rawOutput==null? "null" : rawOutput.length));
-                    return;
-                }
-                decodeExecutor.execute(() -> {
-                    // rawOutput: float[1][C][N]
-                    float[][][] modelOut = rawOutput;
-                    // 1) Batch boyutunu at
-                    //float[][] raw = modelOut[0];
-                    float[][] raw = rawOutput[0];  // <— burası çok önemli
-                    int C = raw.length;       // kanal sayısı
-                    int N = raw[0].length;    // hücre sayısı
-
-                    // 2) Sabit kanallar
-                    float[] boxCx      = raw[0];
-                    float[] boxCy      = raw[1];
-                    float[] boxW       = raw[2];
-                    float[] boxH       = raw[3];
-                    float[] objectness = raw[4];
-
-                    // 3) Dinamik sınıf kanalları
-                    List<String> labels = ai.getLabels();      // modelin etiket listesi
-                    int numClasses = C - 5;                     // = labels.size()
-                    Map<String, float[]> classScores = new HashMap<>();
-                    for (int i = 0; i < numClasses; i++) {
-                        // Kanal raw[5 + i] → labels.get(i)
-                        classScores.put(labels.get(i), raw[5 + i]);
-                    }
-
-                    // Örnek: “dog” sınıfı üzerinden skorlar:
-                    float[] dogScores = classScores.get("dog");
-                    if (dogScores != null) {
-                        Log.i(TAG, "Dog skorları[0] = " + dogScores[0]);
-                    }
-
-                    // 4) İsterseniz Non-Max Suppression’dan önce her hücreyi kendi sınıfı ile eşleyin
-                    List<Detection> dets = new ArrayList<>();
-                    for (int c = 0; c < N; c++) {
-                        if (objectness[c] < 0.5f) continue;
-                        // en yüksek sınıfı bul
-                        int bestCls = 0;
-                        float bestScore = 0f;
-                        for (int i = 0; i < numClasses; i++) {
-                            float s = raw[5 + i][c];
-                            if (s > bestScore) {
-                                bestScore = s;
-                                bestCls   = i;
-                            }
-                        }
-                        float cx = boxCx[c], cy = boxCy[c];
-                        float wb  = boxW[c],  hb  = boxH[c];
-                        // … burdan Detected box hesaplaması vs.
-                        //   dets.add(new Detection(..., bestCls, bestScore, ...));
-                    }
-                });
-                // 5) Çizim
-                //runOnUiThread(() -> ai.drawDetections(frame, dets));
-            });
-            //});
-        }
-    }
 
     public String getLabelName(int classId) {
         String[] labels = {"person","bicycle","car", /* … */};
@@ -311,5 +167,52 @@ public class Detection {
             ));
         }
         return result;
+    }
+    // --- RT PIPELINE ENTRYPOINT ---
+    public void handleRT(Mat frame, Ai ai) {
+        if (frame == null || frame.empty()) return;
+
+        // 1. Mat → Bitmap
+        Bitmap inputBitmap = matToBitmap(frame);
+        if (inputBitmap == null) return;
+
+        // 2. Ölçek+paddingle modele uygun bitmap’e dönüştür (TFLiteInputPreprocessor)
+        Bitmap modelBitmap = TFLiteInputPreprocessor.scaleAndPadBitmap(
+                inputBitmap, ai.getInputWidth(), ai.getInputHeight());
+        if (modelBitmap == null) return;
+
+        // 3. Bitmap → Tensor
+        float[][][][] inputTensor = TFLiteInputPreprocessor.bitmapToInputTensor(modelBitmap);
+        if (inputTensor == null) return;
+
+        // 4. Inference (Ai.java)
+        ai.predictVideo(inputTensor, rawOutput -> {
+            // 5. Çıktı post-processing (parseDetections veya benzeri fonksiyon)
+            List<Detection> detections = parseDetections(rawOutput, ai);
+            // 6. ToDo: UI update veya threading ile ana thread'e aktar
+            // Threading.runOnUiThread(() -> ...);
+        });
+    }
+
+    // --- UTIL: Mat to Bitmap ---
+    private Bitmap matToBitmap(Mat frame) {
+        // ToDo: TFLiteInputPreprocessor içinde varsa oradan çağır!
+        try {
+            int w = frame.cols(), h = frame.rows();
+            Bitmap bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
+            org.opencv.android.Utils.matToBitmap(frame, bmp);
+            return bmp;
+        } catch (Exception e) {
+            Log.e(TAG, "matToBitmap error: " + e.getMessage());
+            return null;
+        }
+    }
+
+    // --- Detection Post-Processing (parseDetections) ---
+    private List<Detection> parseDetections(float[][][] rawOutput, Ai ai) {
+        // ToDo: AI modeline özel detection parsing
+        // Bu örnek basit bir şablondur:
+        // float[][] raw = rawOutput[0]; ...
+        return new ArrayList<>(); // ya da parse et
     }
 }

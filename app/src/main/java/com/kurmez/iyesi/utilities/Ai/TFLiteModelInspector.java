@@ -157,31 +157,57 @@ public class TFLiteModelInspector {
     }
     private boolean validateVideoInput(float[][][][] input, Interpreter videoInterpreter ) {
         if (videoInterpreter == null) return false;
-        if (input.length != videoInputShape[0]) return false;
-        if (input[0].length != videoInputShape[1]) return false;
-        if (input[0][0].length != videoInputShape[2]) return false;
-        if (input[0][0][0].length != videoInputShape[3]) return false;
+        // Null/boyut kontrolleri
+        if (input == null || input.length == 0 || input[0] == null || input[0].length == 0 ||
+                input[0][0] == null || input[0][0].length == 0 || input[0][0][0] == null) {
+            Log.e(TAG, "Input tensor null veya boyutsuz");
+            return false;
+        }
+        int[] inputShape = videoInterpreter.getInputTensor(0).shape();
+        // inputShape 4 boyutlu mu? (ör: [1,224,224,3])
+        if (inputShape.length != 4) {
+            Log.e(TAG, "Model input tensor shape 4 değil: " + java.util.Arrays.toString(inputShape));
+            return false;
+        }
+        // Her bir eksende boyut karşılaştırması
+        if (input.length != inputShape[0]) return false;
+        if (input[0].length != inputShape[1]) return false;
+        if (input[0][0].length != inputShape[2]) return false;
+        if (input[0][0][0].length != inputShape[3]) return false;
         return true;
     }
-    float[][][] processVideoInput(float[][][][] input, Interpreter videoInterpreter) {
-        if (!validateVideoInput(input,videoInterpreter)) {
+    public float[][][] processVideoInput(float[][][][] input, Interpreter videoInterpreter) {
+        if (!validateVideoInput(input, videoInterpreter)) {
+            Log.e(TAG, "Geçersiz input tensor (null/eksik boyut/uyumsuz shape)");
             return EMPTY_VIDEO_OUTPUT;
         }
 
-        float[][][] output;
-        switch (videoOutputShape.length) {
-            case 3:
-                output = new float[videoOutputShape[0]][videoOutputShape[1]][videoOutputShape[2]];
-                videoInterpreter.run(input, output);
-                break;
-            case 2:
-                float[][] tmp = new float[videoOutputShape[0]][videoOutputShape[1]];
-                videoInterpreter.run(input, tmp);
-                output = tfLiteInputPreprocessor.convert2DTo3D(tmp);
-                break;
-            default:
-                Log.e(TAG, "Unsupported output shape rank: " + videoOutputShape.length);
-                output = EMPTY_VIDEO_OUTPUT;
+        float[][][] output = EMPTY_VIDEO_OUTPUT;
+        int[] videoOutputShape = videoInterpreter.getOutputTensor(0).shape();
+
+        try {
+            if (videoOutputShape == null || videoOutputShape.length == 0) {
+                Log.e(TAG, "Model output shape boş veya null!");
+                return EMPTY_VIDEO_OUTPUT;
+            }
+            switch (videoOutputShape.length) {
+                case 3:
+                    output = new float[videoOutputShape[0]][videoOutputShape[1]][videoOutputShape[2]];
+                    videoInterpreter.run(input, output);
+                    break;
+                case 2:
+                    float[][] tmp = new float[videoOutputShape[0]][videoOutputShape[1]];
+                    videoInterpreter.run(input, tmp);
+                    // 2D'yi 3D'ye çevir, helper fonksiyonun varsa (ör: [n, classes] -> [n, classes, 1])
+                    output = tfLiteInputPreprocessor.convert2DTo3D(tmp);
+                    break;
+                default:
+                    Log.e(TAG, "Unsupported output shape rank: " + videoOutputShape.length);
+                    break;
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "processVideoInput: Çıkarım sırasında hata!", e);
+            output = EMPTY_VIDEO_OUTPUT;
         }
         return output;
     }

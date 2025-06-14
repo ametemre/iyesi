@@ -76,6 +76,7 @@ public class MiniFabs {
         this.miniFabs = new FloatingActionButton[miniFabIds.length];
         this.fabPositions = new float[miniFabIds.length][2];
         this.rootView = activity.findViewById(android.R.id.content);
+        this.rootLayout = (FrameLayout) this.rootView;
         for (int i = 0; i < miniFabIds.length; i++) {
             FloatingActionButton fab = activity.findViewById(miniFabIds[i]);
             fab.setVisibility(View.GONE);
@@ -361,7 +362,7 @@ public class MiniFabs {
                         // Sürükleme sonrası momentumlu animasyon
                         float vx = velocityTracker.getXVelocity();
                         float vy = velocityTracker.getYVelocity();
-                        miniFabs.animateMomentumGravity(v, vx, vy,rootLayout);
+                        miniFabs.animateMomentumGravity(v, vx, vy,this.rootLayout);
                     }
                     return true;
 

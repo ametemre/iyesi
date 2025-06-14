@@ -1,9 +1,9 @@
 package com.kurmez.iyesi.utilities.Ai;
 
+import static com.kurmez.iyesi.utilities.Ai.Threading.initGpuDelegate;
+
 import android.content.Context;
 import android.content.res.AssetManager;
-import android.graphics.Bitmap;
-import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
@@ -12,62 +12,40 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.util.Consumer;
 
-import org.opencv.core.Mat;
-import org.opencv.core.Point;
-import org.opencv.core.Scalar;
-import org.opencv.imgproc.Imgproc;
-import org.tensorflow.lite.DataType;
 import org.tensorflow.lite.Interpreter;
 import org.tensorflow.lite.Tensor;
-import org.tensorflow.lite.gpu.CompatibilityList;
 import org.tensorflow.lite.gpu.GpuDelegate;
 import org.tensorflow.lite.support.common.FileUtil;
 
 import java.io.IOException;
-import java.lang.reflect.Field;
-import java.lang.reflect.Method;
-import java.nio.ByteBuffer;
 import java.nio.MappedByteBuffer;
 import java.nio.charset.Charset;
-import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
-import java.util.function.Function; // Sınıf başına eklenmeli (eğer yoksa)
 
-/**
- * Enhanced Ai class: Manages TensorFlow Lite models with thread-safe operations,
- * GPU acceleration, and robust error handling.
- */
 public class Ai implements AutoCloseable {
     private static final String TAG = "AiModel";
     private static final float[][][] EMPTY_VIDEO_OUTPUT = new float[0][0][0];
-    private volatile boolean busy = false;
-    private Context context;
-    // Core components
+    private final Context context;
     private final Interpreter videoInterpreter;
     private final Interpreter soundInterpreter;
-    private TFLiteModelInspector tfLiteModelInspector;
-    private final GpuDelegate gpuDelegate;
-    private Threading threading;
-    private ExecutorService executor;
+    private Interpreter interpreter = null;
+    private GpuDelegate gpuDelegate;
+    private final ExecutorService executor;
     private final Handler mainHandler;
-
-    // Model metadata
+    TFLiteModelInspector tfLiteModelInspector;
     private final int[] videoInputShape;
     private final int[] videoOutputShape;
     private final int soundOutputLength;
-    // + Yeni eklenenler →
     private final List<String> labels;
-    private final float       scoreThreshold;
-
-    // Statik konfigürasyon (isterseniz JSON’dan da yükleyebilirsiniz)
+    private final float scoreThreshold;
+    private float[][][] output;
+    // Statik model path → label ve threshold eşlemeleri
     private static final Map<String, String> MODEL_LABEL_FILES = Map.of(
             "yolov8n.tflite",                               "coco_labels.txt",
             "DogBreed.tflite",                              "dogbreed_labels.txt",
@@ -86,18 +64,24 @@ public class Ai implements AutoCloseable {
             "ml_model/animal_ml_model.tflite", 0.7f,
             "ml_model/dog/dog/DogBreedLabels.tflite",0.8f
     );
+
     public Ai(@NonNull Context context, @Nullable String soundModelPath, @Nullable String videoModelPath, @Nullable String labelsPath) throws IOException {
         this.context = context;
-
         this.mainHandler = new Handler(Looper.getMainLooper());
-        this.executor = Executors.newFixedThreadPool(2, r -> {Thread t = new Thread(r, "AiWorker-" + System.currentTimeMillis());t.setPriority(Thread.NORM_PRIORITY - 1); /* Slightly lower priority*/return t;});
-        this.gpuDelegate = threading.initGpuDelegate(context);
-        // Load models
-        inspectModel(videoModelPath);
+        this.executor = Executors.newFixedThreadPool(2, r -> {
+            Thread t = new Thread(r, "AiWorker-" + System.currentTimeMillis());
+            t.setPriority(Thread.NORM_PRIORITY - 1);
+            return t;
+        });
+        this.gpuDelegate = initGpuDelegate(context);
+        this.tfLiteModelInspector = new TFLiteModelInspector();
+
         AssetManager assets = context.getAssets();
         Interpreter.Options options = createInterpreterOptions(gpuDelegate);
+
         this.videoInterpreter = initModel(assets, videoModelPath, options, context);
         this.soundInterpreter = initModel(assets, soundModelPath, options, context);
+
         this.videoInputShape = videoInterpreter != null ? videoInterpreter.getInputTensor(0).shape() : new int[0];
         this.videoOutputShape = videoInterpreter != null ? videoInterpreter.getOutputTensor(0).shape() : new int[0];
         this.soundOutputLength = soundInterpreter != null ? calculateOutputLength(soundInterpreter.getOutputTensor(0)) : 0;
@@ -105,103 +89,97 @@ public class Ai implements AutoCloseable {
         String labelFile = labelsPath != null ? labelsPath : MODEL_LABEL_FILES.getOrDefault(videoModelPath, "coco_labels.txt");
         this.labels = FileUtil.loadLabels(context.getAssets().open(labelFile), Charset.forName("UTF-8"));
         this.scoreThreshold = MODEL_THRESHOLDS.getOrDefault(videoModelPath, 0.5f);
-        //logModelTensorInfo();
     }
-    private Interpreter.Options createInterpreterOptions(GpuDelegate delegate) {
-        Interpreter.Options options = new Interpreter.Options()
-                .setNumThreads(Math.max(1, Runtime.getRuntime().availableProcessors() - 1));
 
-        if (delegate != null) {
-            options.addDelegate(delegate);
-        }
+    private Interpreter.Options createInterpreterOptions(GpuDelegate delegate) {
+        Interpreter.Options options = new Interpreter.Options().setNumThreads(Math.max(1, Runtime.getRuntime().availableProcessors() - 1));
+        if (delegate != null) options.addDelegate(delegate);
         return options;
     }
     private int calculateOutputLength(Tensor tensor) {
         int[] shape = tensor.shape();
         int length = 1;
-        for (int dim : shape) {
-            length *= dim;
-        }
+        for (int dim : shape) length *= dim;
         return length;
     }
-    // --- Helper Methods ---
-    private Interpreter initModel(AssetManager assets, String modelPath, Interpreter.Options options, Context context) throws IOException {
-        if (modelPath == null || modelPath.isEmpty()) {
-            return null;
-        }
+    private Interpreter initModel(AssetManager assets, String modelPath, Interpreter.Options baseOptions, Context context) {
+        if (modelPath == null || modelPath.isEmpty()) return null;
+        try {
+            MappedByteBuffer modelBuffer = TFLiteModelInspector.loadModelFile(assets, modelPath);
 
-        // Load model once
-        MappedByteBuffer modelBuffer = TFLiteModelInspector.loadModelFile(assets, modelPath);
-        Interpreter interpreter = null;
-
-        // Stage 1: Try with GPU
-        GpuDelegate gpuDelegate = threading.initGpuDelegate(context);
-        if (gpuDelegate != null) {
+            // Try GPU first
             try {
-                Interpreter.Options gpuOptions = new Interpreter.Options(options);
-                gpuOptions.addDelegate(gpuDelegate);
-                interpreter = new Interpreter(modelBuffer, gpuOptions);
-                Log.i(TAG, "Model loaded with GPU acceleration");
+                gpuDelegate = initGpuDelegate(context);
+                if (gpuDelegate != null) {
+                    Interpreter.Options gpuOptions = new Interpreter.Options();
+                    gpuOptions.addDelegate(gpuDelegate);
+                    interpreter = new Interpreter(modelBuffer, gpuOptions);
+                    lastUsedDelegate = "GPU";
+                    Log.i(TAG, "Model loaded with GPU delegate");
+                    return interpreter;
+                }
+            } catch (Exception e) {
+                Log.w(TAG, "GPU delegate failed, try NNAPI", e);
+                if (gpuDelegate != null) gpuDelegate.close();
+            }
+
+            // Try NNAPI
+            try {
+                Interpreter.Options nnapiOptions = new Interpreter.Options();
+                nnapiOptions.setUseNNAPI(true);
+                interpreter = new Interpreter(modelBuffer, nnapiOptions);
+                lastUsedDelegate = "NNAPI";
+                Log.i(TAG, "Model loaded with NNAPI delegate");
                 return interpreter;
             } catch (Exception e) {
-                Log.w(TAG, "GPU acceleration failed", e);
-                gpuDelegate.close();
+                Log.w(TAG, "NNAPI failed, try CPU", e);
             }
-        }
 
-        // Stage 2: Try with NNAPI
-        try {
-            Interpreter.Options nnapiOptions = new Interpreter.Options(options);
-            nnapiOptions.setUseNNAPI(true);
-            interpreter = new Interpreter(modelBuffer, nnapiOptions);
-            Log.i(TAG, "Model loaded with NNAPI");
-            return interpreter;
-        } catch (Exception e) {
-            Log.w(TAG, "NNAPI acceleration failed", e);
-        }
-
-        // Stage 3: Fallback to CPU
-        try {
-            interpreter = new Interpreter(modelBuffer, options);
-            interpreter.allocateTensors();
-            Log.i(TAG, "Model loaded with CPU");
-            return interpreter;
-        } catch (Exception e) {
-            Log.e(TAG, "Failed to initialize model", e);
-            throw new RuntimeException("Model initialization failed", e);
-        }
-    }
-    public void inspectModel(String videoModelPath) {
-        try {
-            MappedByteBuffer modelBuf =
-                    TFLiteModelInspector.loadModelFile(context.getAssets(), videoModelPath);
-            Interpreter tflite = new Interpreter(modelBuf);
-            Log.i(TAG, "Output tensor count: " + tflite.getOutputTensorCount());
-            for (int i = 0; i < tflite.getOutputTensorCount(); i++) {
-                Tensor t = tflite.getOutputTensor(i);
-                Log.i(TAG,
-                        String.format("[%d] name=%s shape=%s type=%s",
-                                i,
-                                t.name(),
-                                Arrays.toString(t.shape()),
-                                t.dataType().name()
-                        )
-                );
+            // Last resort: CPU
+            try {
+                interpreter = new Interpreter(modelBuffer, baseOptions);
+                lastUsedDelegate = "CPU";
+                Log.i(TAG, "Model loaded with CPU");
+                return interpreter;
+            } catch (Exception e) {
+                Log.e(TAG, "CPU load failed", e);
+                return null;
             }
-            tflite.close();
-        } catch (IOException e) {
-            Log.e(TAG, "Model inspection failed", e);
+        } catch (Exception e) {
+            Log.e(TAG, "Asset load failed", e);
+            return null;
         }
     }
 
 
 
 
-    public void predictVideo(@NonNull float[][][][] input, @NonNull Consumer<float[][][]> callback) {
+
+
+
+
+
+
+    // Inference (video/frame)
+    public void predictVideo(final float[][][][] input, final Consumer<float[][][]> callback) {
+        if (executor.isShutdown() || executor.isTerminated()) {
+            Log.w(TAG, "predictVideo: executor closed, skipping task");
+            mainHandler.post(() -> callback.accept(EMPTY_VIDEO_OUTPUT));
+            return;
+        }
         try {
             executor.execute(() -> {
                 try {
-                    float[][][] output = tfLiteModelInspector.processVideoInput(input,videoInterpreter);
+                    // Kapanma sırasında başka task olmasın:
+                    if (videoInterpreter == null) {
+                        Log.e(TAG, "Interpreter kapalı");
+                        mainHandler.post(() -> callback.accept(EMPTY_VIDEO_OUTPUT));
+                        return;
+                    }
+                    float[][][] output;
+                    synchronized (videoInterpreter) {
+                        output = tfLiteModelInspector.processVideoInput(input, videoInterpreter);
+                    }
                     mainHandler.post(() -> callback.accept(output));
                 } catch (Exception e) {
                     Log.e(TAG, "Video prediction failed", e);
@@ -210,13 +188,11 @@ public class Ai implements AutoCloseable {
             });
         } catch (RejectedExecutionException e) {
             Log.w(TAG, "predictVideo: executor shut down, skipping task", e);
-            // İstersen callback’e boş bir çıktı dönebilirsin:
             mainHandler.post(() -> callback.accept(EMPTY_VIDEO_OUTPUT));
-        } catch (Exception e) {
-            Log.w(TAG, "predictVideo: executor crashed, skipping task", e);
-            throw new RuntimeException(e);
         }
     }
+
+    // Inference (sound)
     public void predictSound(@NonNull float[][] input, @NonNull Consumer<float[]> callback) {
         executor.execute(() -> {
             try {
@@ -228,32 +204,6 @@ public class Ai implements AutoCloseable {
                 mainHandler.post(() -> callback.accept(new float[0]));
             }
         });
-    }
-
-    // --- Getters ---
-    public Interpreter getVideoInterpreter() {
-        if (videoInterpreter != null) {
-            return videoInterpreter;
-        }
-        return videoInterpreter;
-    }
-    public Interpreter getSoundInterpreter() {
-        if (soundInterpreter != null) {
-            return soundInterpreter;
-        }
-        return soundInterpreter;
-    }
-    public ExecutorService getExecutor() {
-        if (executor != null) {
-            return executor;
-        }
-        return executor;
-    }
-    public GpuDelegate getGpuDelegate() {
-        if (gpuDelegate != null) {
-            return gpuDelegate;
-        }
-        return gpuDelegate;
     }
     public String getInputShapeInfo(Interpreter interpreter) {
         if (interpreter == null) return "interpreter=null";
@@ -279,32 +229,57 @@ public class Ai implements AutoCloseable {
         }
         return sb.toString();
     }
-    public int getInputWidth() {
-        return videoInputShape.length >= 3 ? videoInputShape[2] : 0;
-    }
-    public int getInputHeight() {
-        return videoInputShape.length >= 2 ? videoInputShape[1] : 0;
-    }
-    public List<String> getLabels() {
-        return labels;
-    }
-    // --- Resource Management ---
+    // Getter'lar
+    public Interpreter getVideoInterpreter() { return videoInterpreter; }
+    public Interpreter getSoundInterpreter() { return soundInterpreter; }
+    public ExecutorService getExecutor() { return executor; }
+    public GpuDelegate getGpuDelegate() { return gpuDelegate; }
+    public int getInputWidth() { return videoInputShape.length >= 3 ? videoInputShape[2] : 0; }
+    public int getInputHeight() { return videoInputShape.length >= 2 ? videoInputShape[1] : 0; }
+    public List<String> getLabels() { return labels; }
+
+    // Kaynak temizliği
     @Override
     public void close() {
-        executor.shutdown();
-        try {
-            if (!executor.awaitTermination(800, TimeUnit.MILLISECONDS)) {
+        // Executor'u güvenli şekilde kapat
+        if (executor != null && !executor.isShutdown()) {
+            executor.shutdown();
+            try {
+                if (!executor.awaitTermination(800, TimeUnit.MILLISECONDS)) {
+                    executor.shutdownNow();
+                }
+            } catch (InterruptedException e) {
                 executor.shutdownNow();
+                Thread.currentThread().interrupt();
             }
-        } catch (InterruptedException e) {
-            executor.shutdownNow();
-            Thread.currentThread().interrupt();
         }
 
-        if (videoInterpreter != null) videoInterpreter.close();
-        if (soundInterpreter != null) soundInterpreter.close();
-        if (gpuDelegate != null) gpuDelegate.close();
+        // Model interpreter’ları kapat
+        try {
+            if (videoInterpreter != null) videoInterpreter.close();
+        } catch (Exception e) {
+            Log.w(TAG, "videoInterpreter kapatılamadı", e);
+        }
+        try {
+            if (soundInterpreter != null) soundInterpreter.close();
+        } catch (Exception e) {
+            Log.w(TAG, "soundInterpreter kapatılamadı", e);
+        }
+        try {
+            if (gpuDelegate != null) gpuDelegate.close();
+        } catch (Exception e) {
+            Log.w(TAG, "gpuDelegate kapatılamadı", e);
+        }
+
+        // Tüm referansları null’la
+        // (Bunlar opsiyonel ama erişim hatalarını azaltır)
+        // executor = null;
+        // videoInterpreter = null;
+        // soundInterpreter = null;
+        // gpuDelegate = null;
 
         Log.i(TAG, "Resources released");
     }
+    private String lastUsedDelegate = "NONE";
+    public String getLastUsedDelegate() { return lastUsedDelegate; }
 }
