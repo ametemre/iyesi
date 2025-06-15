@@ -39,6 +39,9 @@ public class Detection {
     // DetectionActivity.java
     private static final float SCORE_THRESHOLD = 0.9f;  // 50% üzeri kesin kabul
     float scoreThreshold = 0.25f;
+    private List<Detection> detections;
+    private boolean isInitiated = false;
+
     public float getScoreThreshold() {
         return scoreThreshold;
     }
@@ -74,8 +77,7 @@ public class Detection {
     private final List<Bitmap> photoList = new ArrayList<>();
     private static final int REQUEST_STORAGE_PERMISSION = 1001;
 
-    public Detection(Ai ai, Interpreter interpreter, Context context,
-                     int classId, float score, float x1, float y1, float x2, float y2, String label) {
+    public Detection(Ai ai, Interpreter interpreter, Context context, int classId, float score, float x1, float y1, float x2, float y2, String label) {
         this.ai = ai;
         this.interpreter = interpreter;
         this.context = context;
@@ -87,12 +89,10 @@ public class Detection {
         // initiateDetection(ai, frame); // GEREKSİZ!
     }
 
-
     private void initiateDetection(Ai ai,Bitmap frame) {
         this.mapper = new TFLiteInputMapper(frame.getWidth(),frame.getHeight(),ai.getInputWidth(),ai.getInputHeight());
         this.preProcess =  new TFLiteInputPreprocessor(mapper);
     }
-
 
     public String getLabelName(int classId) {
         String[] labels = {"person","bicycle","car", /* … */};
@@ -169,31 +169,35 @@ public class Detection {
         return result;
     }
     // --- RT PIPELINE ENTRYPOINT ---
-    public void handleRT(Mat frame, Ai ai) {
-        if (frame == null || frame.empty()) return;
+    public List<Detection> handleRT(Mat frame, Ai ai) {
+        if (!isInitiated) {
+            Log.d(TAG, "RTDetection initiates...");
+            isInitiated = true;
+        }
+        if (frame == null || frame.empty()) return null;
 
         // 1. Mat → Bitmap
         Bitmap inputBitmap = matToBitmap(frame);
-        if (inputBitmap == null) return;
+        if (inputBitmap == null) return null;
 
         // 2. Ölçek+paddingle modele uygun bitmap’e dönüştür (TFLiteInputPreprocessor)
         Bitmap modelBitmap = TFLiteInputPreprocessor.scaleAndPadBitmap(
                 inputBitmap, ai.getInputWidth(), ai.getInputHeight());
-        if (modelBitmap == null) return;
+        if (modelBitmap == null) return null;
 
         // 3. Bitmap → Tensor
         float[][][][] inputTensor = TFLiteInputPreprocessor.bitmapToInputTensor(modelBitmap);
-        if (inputTensor == null) return;
+        if (inputTensor == null) return null;
 
         // 4. Inference (Ai.java)
         ai.predictVideo(inputTensor, rawOutput -> {
             // 5. Çıktı post-processing (parseDetections veya benzeri fonksiyon)
-            List<Detection> detections = parseDetections(rawOutput, ai);
+            detections = parseDetections(rawOutput, ai);
             // 6. ToDo: UI update veya threading ile ana thread'e aktar
             // Threading.runOnUiThread(() -> ...);
         });
+        return detections;
     }
-
     // --- UTIL: Mat to Bitmap ---
     private Bitmap matToBitmap(Mat frame) {
         // ToDo: TFLiteInputPreprocessor içinde varsa oradan çağır!
@@ -207,7 +211,6 @@ public class Detection {
             return null;
         }
     }
-
     // --- Detection Post-Processing (parseDetections) ---
     private List<Detection> parseDetections(float[][][] rawOutput, Ai ai) {
         // ToDo: AI modeline özel detection parsing

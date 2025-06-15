@@ -32,6 +32,7 @@ import java.util.concurrent.RejectedExecutionException;
  * OpenCV kamera akışında sabit bir dikdörtgen çizmek için örnek sınıf
  */
 public class OpenCV implements CameraBridgeViewBase.CvCameraViewListener2 {
+    private static final String TAG = "OpenCV";
     private Rect roi;
     private void initROI(int width, int height) {
         int w = 200, h = 200; // dikdörtgen boyutu
@@ -40,6 +41,7 @@ public class OpenCV implements CameraBridgeViewBase.CvCameraViewListener2 {
         roi = new Rect(new Point(x, y), new Point(x + w, y + h));
     }
     public void drawDetections(Mat frame,List<Detection> dets) {
+        Log.d(TAG, "-drawDetections- çağırıldı...");
         for (Detection d : dets) {
             Point tl = new Point(d.x1, d.y1);
             Point br = new Point(d.x2, d.y2);
@@ -53,6 +55,7 @@ public class OpenCV implements CameraBridgeViewBase.CvCameraViewListener2 {
                     new Scalar(255,255,255),
                     2
             );
+            Log.i(TAG,d.classId + "Detection" + d.label + d.x1 + d.y1 + d.x2 + d.y2 + d.score);
         }
     }
     @Override

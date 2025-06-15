@@ -25,12 +25,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.RejectedExecutionException;
+
 import java.util.concurrent.TimeUnit;
-import android.os.Handler;
-import android.os.HandlerThread;
-import android.os.Looper;
-import androidx.core.util.Consumer;
+
 public class Ai implements AutoCloseable {
     private static final String TAG = "AiModel";
     // Sınıf seviyesinde (Ai.java içinde):
@@ -161,7 +158,7 @@ public class Ai implements AutoCloseable {
             callback.accept(EMPTY_VIDEO_OUTPUT);
             return;
         }
-
+        Log.d(TAG, "-predictVideo- çağırıldı...");
         executor.execute(() -> {
             try {
                 // 1. GPU ile dene

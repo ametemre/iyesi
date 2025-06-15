@@ -238,8 +238,8 @@ public class MiniFabs {
             }
         }
     }
-    public void selectFab(FloatingActionButton fab) {
-        applyDefaultColors();
+    public FloatingActionButton selectFab(FloatingActionButton fab) {
+        //applyDefaultColors();
         selectedFab = fab;
         fab.setBackgroundTintList(ColorStateList.valueOf(Color.RED));
         Drawable icon = fab.getDrawable();
@@ -248,6 +248,7 @@ public class MiniFabs {
             wIcon.setColorFilter(Color.WHITE, PorterDuff.Mode.SRC_ATOP);
             fab.setImageDrawable(wIcon);
         }
+        return selectedFab;
     }
     public void resetIconColor(FloatingActionButton fab) {
         fab.setBackgroundTintList(ColorStateList.valueOf(Color.parseColor("#FF40C4FF"))); // Teal

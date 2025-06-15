@@ -3,10 +3,12 @@ package com.kurmez.iyesi.kurmes;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.google.firebase.auth.FirebaseAuth;
 import com.kurmez.iyesi.utilities.Ai.Detection;
+import com.kurmez.iyesi.utilities.Ai.OpenCV;
 import com.kurmez.iyesi.utilities.Ai.TFLiteInputMapper;
 import com.kurmez.iyesi.utilities.Ai.TFLiteInputPreprocessor;
 import com.kurmez.iyesi.utilities.Ai.Threading;
 import com.kurmez.iyesi.utilities.Helpers;
+import com.kurmez.iyesi.utilities.RTPipeline;
 import com.kurmez.iyesi.utilities.Terminator;
 import com.kurmez.iyesi.utilities.helper.Actions;
 import com.kurmez.iyesi.utilities.helper.Permissions;
@@ -48,6 +50,7 @@ import org.opencv.android.CameraBridgeViewBase.CvCameraViewListener2;
 import org.opencv.core.MatOfRect;
 
 import java.util.ArrayList;
+import java.util.concurrent.TimeUnit;
 
 
 public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
@@ -89,7 +92,9 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
     private TFLiteInputMapper mapper;
     private CameraBridgeViewBase mOpenCvCameraView;
     private Interpreter interpreter;
-    public Ai aiKedi, aiKopek, aiKurt, aiKarga, aiContent, ai;
+    public Ai /*aiKedi, aiKopek, aiKurt, aiKarga, aiContent, */ai;
+    private OpenCV openCV;
+    private RTPipeline pipeline;
     private MiniFabs miniFabs;
     private Actions actions;
     ExecutorService executor = Executors.newSingleThreadExecutor();
@@ -116,8 +121,6 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
         Log.i(TAG, "called Kurmes onCreate");
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_kurmes);
-        Permissions permissions = new Permissions();
-
         // izinler
         new Permissions().requestAllPermissions(this);
         // Firebase Auth
@@ -130,23 +133,27 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
         cameraStatusText = findViewById(R.id.camera_status_text);
         fabMain     = findViewById(R.id.fab_main);
         fabAction         = findViewById(R.id.fab_Sound);
-        FrameLayout rootLayout = findViewById(android.R.id.content);
+
+        // 1) Ai ve pipeline başlat
+        pipeline = new RTPipeline();
+        openCV = new OpenCV();
+        pipeline.logGpuInfo();  // GPU bilgilerini loglamak istersen
+
         mOpenCvCameraView= findViewById(R.id.kurmes_camera_view);
-        mOpenCvCameraView.setVisibility(SurfaceView.VISIBLE);
         mOpenCvCameraView.setCvCameraViewListener(this);
-        mOpenCvCameraView.enableView();
-        // Instantiate MiniFabs helper and keep as field
+        cameraState(true);
+        // ----------------------------------------------------------------------------------------Instantiate MiniFabs helper and keep as field
         int[] miniFabIds = {
                 R.id.fab_1, R.id.fab_2, R.id.fab_3,
                 R.id.fab_4, R.id.fab_5, R.id.fab_6,
                 R.id.fab_7, R.id.fab_8, R.id.fab_9
         };
-
         miniFabs = new MiniFabs(this, fabMain, fabAction, miniFabIds);
-        miniFabs.applyDefaultColors();
-        rootLayout.setOnTouchListener((v, e)-> miniFabs.handleOutsideTouch(e));
         miniFabs.setupDraggableFAB(miniFabs, fabMain);
+        miniFabs.applyDefaultColors();
+
         actions = new Actions(miniFabs, this, this);
+        // ----------------------------------------------------------------------------------------Instantiate MiniFabs helper and keep as field
 
         for (FloatingActionButton fab : miniFabs.getFabs()) {
             fab.setOnClickListener(v -> {
@@ -156,7 +163,7 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
         }
         // fabAction: başlat/durdur
         fabAction.setOnClickListener(v -> {
-            new Thread(() -> {
+//            new Thread(() -> {
                 if (!isRunning) {
                     // Kullanıcı model seçmeden başlatmak isterse
                     if (miniFabs.getSelectedFab() == null) {
@@ -176,6 +183,7 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
                         interpreter = ai.getVideoInterpreter();
                         mapper = new TFLiteInputMapper(mWidth, mHeight, ai.getInputWidth(), ai.getInputHeight());
                         preprocessor = new TFLiteInputPreprocessor(mapper);
+                        terminator = new Terminator(this,ai.getExecutor(), ai.getVideoInterpreter(), ai.getSoundInterpreter(), ai.getGpuDelegate(), videoBuffer, soundBuffer);
 
                         try {
                             detector = new Detection(ai, interpreter, this, 0, 0, 0, 0, 0, 0, miniFabs.getSelectedFab().toString());
@@ -185,8 +193,7 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
                             //runOnUiThread(() -> Toast.makeText(this, "Algılama nesnesi başlatılamadı", Toast.LENGTH_SHORT).show());
                             return;
                         }
-
-                        terminator = new Terminator(this,ai.getExecutor(), ai.getVideoInterpreter(), ai.getSoundInterpreter(), ai.getGpuDelegate(), videoBuffer, soundBuffer);
+                        //cameraState(true);
                         isRunning = true;
                         isPredicting = true;
                         Helpers.showToastSafe(this,"AI Başlatıldı");
@@ -199,17 +206,30 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
                     }
 
                 } else {
+                    // 1. Önce AI tahminlerini kapat
+                    isPredicting = false;
+                    // 2. Executor’ü kapat ve bitmesini bekle
+                    if (!executor.isShutdown()) {
+                        executor.shutdown();
+                        try {
+                            if (!executor.awaitTermination(1000, TimeUnit.MILLISECONDS)) {
+                                executor.shutdownNow();
+                            }
+                        } catch (InterruptedException e) {
+                            executor.shutdownNow();
+                        }
+                    }
+                    // 3. En son kamera kısmını kapat
+                    //cameraState(false);
                     if (terminator != null) terminator.shutdown();
                     if (ai != null) {
                         ai.close();
                         ai = null;
                     }
                     isRunning = false;
-                    isPredicting = false;
-                    Helpers.showToastSafe(this,"Durduruldu");
-                    //runOnUiThread(() -> Toast.makeText(this, "Durduruldu", Toast.LENGTH_SHORT).show());
+                    Helpers.showToastSafe(this, "Durduruldu");
                 }
-            }).start();
+//            }).start();
         });
 
     }
@@ -219,9 +239,6 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
         rgb = new Mat();
         gray = new Mat();
         rects = new MatOfRect();
-        threading = new Threading();
-        threading.availableCPU();
-        threading.availableGPUThreads();
         //labelText.setText("Camera Started");
         //mRgba = new Mat(height, width, CvType.CV_8UC4);
         Log.i(TAG, "Camera view started: " + width + "x" + height);
@@ -240,8 +257,6 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
             mOnCameraFrameRender = new OnCameraFrameRender(new CalibrationFrameRender(mCalibrator));
         }
 
-        threading.availableCPU();
-        threading.availableGPUThreads();
         if (ai!=null) {
             TFLiteInputMapper mapper = new TFLiteInputMapper(
                     width, height,
@@ -266,14 +281,14 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
     @Override
     public Mat onCameraFrame(CameraBridgeViewBase.CvCameraViewFrame inputFrame) {
         Mat rgba = inputFrame.rgba();
-
         // ToDo: ViewModel’de garbage collecting ve buffer reuse kontrolü (Mat/Bitmap/ByteBuffer için).
         if (ai == null || !isPredicting) return rgba;
 
         if (!executor.isShutdown()) {
             executor.submit(() -> {
                 try {
-                    detector.handleRT(rgba, ai);
+                    openCV.drawDetections(rgba,detectionRunner.handleRT(rgba,ai));
+                    //detector.handleRT(rgba, ai);
                 } catch (Exception e) {
                     // ToDo: Hatalı model yükleme veya AI tespit hatalarında otomatik fallback veya retry mekanizması ekle.
                 }
@@ -301,12 +316,13 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
         if (mOpenCvCameraView != null) {
             cameraState(false);
         }
-
+        Log.d(TAG, "OpenCV unLoaded successfully.");
+        updateCameraStatus("Camera View Paused.");
     }
     @Override
     protected void onDestroy() {
         // TFLite ve OpenCV kaynaklarını güvenle kapat
-        if (aiKedi != null) {
+/*        if (aiKedi != null) {
             aiKedi.close();
             aiKedi = null;
         }
@@ -324,7 +340,7 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
         if (aiKarga != null) {
             aiKarga.close();
             aiKarga = null;
-        }
+        }*/
 
         if (mOpenCvCameraView != null) {
             mOpenCvCameraView.disableView();
@@ -355,13 +371,12 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
             Log.d(TAG, status);
         });
     }//Essential For Camera
-
     public boolean cameraState(Boolean state){
         if (state){
             if (mOpenCvCameraView != null) {
                 mOpenCvCameraView.enableView();
                 mOpenCvCameraView.setVisibility(View.VISIBLE);
-
+                currentState = State.CAPTURE;
                 updateCameraStatus("Camera Enabled.");
             }
         }
@@ -370,7 +385,6 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
                 if (mOpenCvCameraView.isEnabled()) {
                     mOpenCvCameraView.disableView();
                     mOpenCvCameraView.setVisibility(View.GONE);
-
                     currentState = State.IDLE;
                     updateCameraStatus("Camera Paused.");
                 }

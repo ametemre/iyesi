@@ -199,10 +199,11 @@ public class TFLiteModelInspector {
         if (input[0][0][0].length != inputShape[3]) return false;
         return true;
     }
-    /**
-     * Runs inference on a 4D float array ([1][H][W][C]).
-     */
+
     public float[][][] processVideoInput(float[][][][] inputArray) {
+        /**
+         * Runs inference on a 4D float array ([1][H][W][C]).
+         */
         // 1. Input tensor shape
         int[] shape = interpreter.getInputTensor(0).shape(); // [1, H, W, C]
         int batch = shape[0], height = shape[1], width = shape[2], channels = shape[3];
@@ -244,7 +245,6 @@ public class TFLiteModelInspector {
         return output;
     }
 
-    // Helper: flatten a 4D float array to 1D
     private float[] flatten4D(float[][][][] array) {
         int b = array.length;
         int h = array[0].length;
@@ -262,7 +262,7 @@ public class TFLiteModelInspector {
             }
         }
         return flat;
-    }
+    }// Helper: flatten a 4D float array to 1D
 
     public void close() {
         interpreter.close();

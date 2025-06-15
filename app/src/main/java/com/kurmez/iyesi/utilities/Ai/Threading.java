@@ -40,6 +40,7 @@ public class Threading {
                 return null;
             }
             GpuDelegate.Options options = new GpuDelegate.Options();
+            options.setQuantizedModelsAllowed(true);
             // Try advanced options (reflective)
             try {
                 Method setPrecisionMethod = GpuDelegate.Options.class.getMethod("setPrecisionLossAllowed", boolean.class);
