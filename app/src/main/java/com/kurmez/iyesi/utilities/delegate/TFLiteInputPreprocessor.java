@@ -9,16 +9,19 @@ import org.opencv.core.CvType;
 import org.opencv.core.Mat;
 import org.opencv.core.Size;
 import org.opencv.imgproc.Imgproc;
+import org.tensorflow.lite.Interpreter;
 
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 
 public class TFLiteInputPreprocessor {
-    private final TFLiteInputMapper mapper;
+    private TFLiteInputMapper mapper;
+    private Interpreter interpreter;
     ByteBuffer inBuf;
     ByteBuffer outBuf;
     // Ölçek + Padding: Model input boyutuna uygun bitmap oluştur
-    public TFLiteInputPreprocessor(TFLiteInputMapper mapper) {
+    public TFLiteInputPreprocessor(TFLiteInputMapper mapper, Interpreter interpreter) {
+        this.interpreter = interpreter;
         this.mapper = mapper;
 
     }
@@ -52,8 +55,24 @@ public class TFLiteInputPreprocessor {
         return tensor;
     }
     // Gerekirse: Bitmap'i doğrudan ByteBuffer'a çevir
+// Yardımcı metod: Bitmap -> ByteBuffer dönüşümü
+    private ByteBuffer convertBitmapToByteBuffer(Bitmap bitmap) {
+        ByteBuffer inputBuffer = ByteBuffer.allocateDirect(interpreter.getInputTensor(0).numBytes());
+        inputBuffer.order(ByteOrder.nativeOrder());
 
+        // Normalizasyon (model gereksinimlerine göre ayarlayın)
+        for (int y = 0; y < bitmap.getHeight(); y++) {
+            for (int x = 0; x < bitmap.getWidth(); x++) {
+                int pixel = bitmap.getPixel(x, y);
+                inputBuffer.putFloat(((pixel >> 16) & 0xFF) / 255.0f); // R
+                inputBuffer.putFloat(((pixel >> 8) & 0xFF) / 255.0f);  // G
+                inputBuffer.putFloat((pixel & 0xFF) / 255.0f);         // B
+            }
+        }
+        return inputBuffer;
+    }
     // public static ByteBuffer bitmapToByteBuffer(Bitmap bmp) { ... }
+    /*
     public float[][][][] map(Mat inputFrame) {
         int w      = mapper.getScaledWidth();
         int h      = mapper.getScaledHeight();
@@ -98,6 +117,7 @@ public class TFLiteInputPreprocessor {
 
         return result;
     }
+     */
     public float[][][] convert2DTo3D(float[][] input) {
         float[][][] output = new float[input.length][1][input[0].length];
         for (int i = 0; i < input.length; i++) {

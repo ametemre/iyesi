@@ -51,14 +51,17 @@ import java.util.concurrent.TimeUnit;
 
 public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
     private static final String TAG = "Kurmes";
+    public Mat rgba;
+
     public enum State {
         KEDI, KOPEK, KURT, KARGA,
         IDLE, FACE_DETECTION, OBJECT_DETECTION, TRACKING, CAPTURE,TEST
     }
     public State currentState = State.IDLE;
 
-    private final List<float[]> soundBuffer = new ArrayList<>();
-    private final List<float[][][]> videoBuffer = new ArrayList<>();
+    private List<float[]> buffer = new ArrayList<>();
+    private List<float[]> soundBuffer = new ArrayList<>();
+    private List<float[][][]> videoBuffer = new ArrayList<>();
     private List<Bitmap> photoList = new ArrayList<>(); // List to store captured images
 
     // Sound labels for each species model (fill in actual labels)
@@ -167,7 +170,7 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
                         //runOnUiThread(() -> Toast.makeText(this, "Önce bir seçenek seçin", Toast.LENGTH_SHORT).show());
                         return;
                     }
-
+                    //executor.submit(() -> {
                     // Model yüklemesi ve fallback güvenliği
                     try {
                         ai = actions.performSelectedAction(miniFabs.getSelectedFab());
@@ -179,7 +182,7 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
                         interpreter = ai.getVideoInterpreter();
                         //mapper = new TFLiteInputMapper(mWidth, mHeight, ai.getInputWidth(), ai.getInputHeight());
 
-                        //terminator = new Terminator(this,ai.getExecutor(), ai.getVideoInterpreter(), ai.getSoundInterpreter(), ai.getGpuDelegate(), videoBuffer, soundBuffer);
+                        //terminator = new Terminator(this,executor, ai.getVideoInterpreter(), ai.getSoundInterpreter(), ai.getGpuDelegate(), videoBuffer, soundBuffer);
 
                         try {
                             detectionRunner = new Detection(ai, interpreter, this/*, 0, 0, 0, 0, 0, 0, miniFabs.getSelectedFab().toString()*/);
@@ -201,7 +204,7 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
                         Helpers.showToastSafe(this,"Model başlatma hatası: ");
                         //runOnUiThread(() -> Toast.makeText(this, "Model başlatma hatası: " + e.getMessage(), Toast.LENGTH_LONG).show());
                     }
-
+                    //});
                 } else {
                     // 1. Önce AI tahminlerini kapat
                     isPredicting = false;
@@ -253,14 +256,6 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
             }
             mOnCameraFrameRender = new OnCameraFrameRender(new CalibrationFrameRender(mCalibrator));
         }
-
-        if (ai!=null) {
-/*            TFLiteInputMapper mapper = new TFLiteInputMapper(
-                    width, height,
-                    ai.getInputWidth(), ai.getInputHeight()
-            );
-            preprocessor = new TFLiteInputPreprocessor(mapper);*/
-        }
     }
     @Override
     public void onCameraViewStopped() {
@@ -277,32 +272,21 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
     }                                                         //done
     @Override
     public Mat onCameraFrame(CameraBridgeViewBase.CvCameraViewFrame inputFrame) {
-
-        if (inputFrame == null){
-            Log.e(TAG,"İnputFrame : Null!");
-        }
-        Mat rgba = null;
         try {
-            rgba = inputFrame.rgba();
+            this.rgba = inputFrame.rgba();
         } catch (Exception e) {
             Log.e(TAG,"İnputFrame : " + e);
             throw new RuntimeException(e);
         }
 
-        //Log.i(TAG,setFrame(rgba));
         // ToDo: ViewModel’de garbage collecting ve buffer reuse kontrolü (Mat/Bitmap/ByteBuffer için).
         if (ai == null || !isPredicting) return rgba;
 
         if (!executor.isShutdown()) {
             //executor.submit(() -> {
                 try {
-                    detectionRunner.process(rgba);
-                    //setFrame(rgba);
-                    //detectionRunner.setIncomingFrame(rgba);
-                    //Log.i(TAG,setFrame(rgba));
-                    //openCV.drawDetections(rgba,detectionRunner.handleRT(rgba,ai));
-                    //Log.d(TAG,detectionRunner.handleRT(rgba, ai).toString());
-                    //Log.d(TAG,detectionRunner.parseDetectionsScored(ai,));
+                    buffer = detectionRunner.runInference(detectionRunner.process(rgba));
+
                 } catch (Exception e) {
                     // ToDo: Hatalı model yükleme veya AI tespit hatalarında otomatik fallback veya retry mekanizması ekle.
                 }

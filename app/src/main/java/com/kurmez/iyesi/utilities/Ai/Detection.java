@@ -8,24 +8,26 @@ import com.kurmez.iyesi.kurmes.Kurmes;
 import com.kurmez.iyesi.utilities.delegate.TFLiteInputMapper;
 import com.kurmez.iyesi.utilities.delegate.TFLiteInputPreprocessor;
 
+import org.opencv.android.Utils;
 import org.opencv.core.Mat;
 
 import org.tensorflow.lite.Interpreter;
+import org.tensorflow.lite.Tensor;
 
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 public class Detection {
     public Mat incomingFrame;
-    public Bitmap incomingBitmap;
-
-    public void setIncomingFrame(Mat incomingFrame) {
-        this.incomingFrame = incomingFrame;
-    }
     public Mat getIncomingFrame(){
         return incomingFrame;
     }
@@ -33,10 +35,6 @@ public class Detection {
     // ————————————————
     // ❶ Detection sonucu alanları
     // ————————————————
-/*    public final String label;
-    public final int classId;
-    public final float x1, y1, x2, y2, score;*/
-    // DetectionActivity.java
     private static final float SCORE_THRESHOLD = 0.9f;  // 50% üzeri kesin kabul
     float scoreThreshold = 0.25f;
     private List<Detection> detections;
@@ -82,157 +80,66 @@ public class Detection {
         this.ai = ai;
         this.interpreter = interpreter;
         this.context = context;
-        //process(this.incomingFrame);
-        /*
-        this.classId = classId;
-        this.score = score;
-        this.x1 = x1; this.y1 = y1;
-        this.x2 = x2; this.y2 = y2;
-        this.label = label;*/
-        // initiateDetection(ai, frame); // GEREKSİZ!
     }
-    public void process(Mat incomingFrame){
+    public Mat process(Mat incomingFrame){
         try {
             this.incomingFrame = incomingFrame;
             this.mapper = new TFLiteInputMapper(ai,incomingFrame,context);
-            this.preProcess =  new TFLiteInputPreprocessor(mapper);
+            this.preProcess =  new TFLiteInputPreprocessor(mapper,interpreter);
         } catch (Exception e) {
             Log.e(TAG,"Error:" + e);
             throw new RuntimeException(e);
         }
-
-
+        return mapper.map();
     }
-/*
-    private void initiateDetection(Ai ai,Bitmap frame) {
-        this.mapper = new TFLiteInputMapper(frame.getWidth(),frame.getHeight(),ai.getInputWidth(),ai.getInputHeight());
-        this.preProcess =  new TFLiteInputPreprocessor(mapper);
-    }
-
-    public String getLabelName(int classId) {
-        String[] labels = {"person","bicycle","car", *//* … *//*};
-        if (classId >= 0 && classId < labels.length) return labels[classId];
-        return "cls" + classId;
-    }
-
-    public List<String> getLabelsAboveThreshold(List<Detection> detections, float threshold) {
-        List<String> labels = new ArrayList<>();
-        for (Detection d : detections) {
-            if (d.score > threshold) {
-                labels.add(d.label);
-            }
-        }
-        return labels;
-    }
-    public List<Detection> parseDetections(float[][][] output) {
-        *//**
-         * Modelin float[][][] çıktısı → Detection listesi
-         *//*
-        List<Detection> list = new ArrayList<>();
-        if (output == null || output.length == 0 || output[0] == null) return list;
-        for (float[] row : output[0]) {
-            if (row == null || row.length < 6) continue;
-            float s = row[4];
-            if (s < 0.5f) continue;
-            int cls = (int) row[5];
-            list.add(new Detection(
-                    ai, interpreter, context,
-                    cls, s,
-                    row[0], row[1], row[2], row[3],
-                    getLabelName(cls)
-            ));
-        }
-        return list;
-    }
-    public List<Detection> parseDetectionsScored(float[][][] output, Interpreter videoInterpreter,Ai ai) {
-        this.ai = ai;
-        List<Detection> result = new ArrayList<>();
-        if (output == null || output.length == 0) {
-            return result;  // boşsa hemen döner
-        }
-        for (float[] row : output[0]) {
-            if (row == null || row.length < 6) continue;
-            float score = row[4];
-            if (score < scoreThreshold) continue;
-
-            int classId = -1;
-            float maxClassScore = -1f;
-            for (int i = 5; i < row.length; i++) {
-                if (row[i] > maxClassScore) {
-                    maxClassScore = row[i];
-                    classId = i - 5;
-                }
-            }
-            if (classId < 0) continue;
-
-            float x  = row[0],    y  = row[1];
-            float w  = row[2],    h  = row[3];
-            float x1 = x - w/2f,  y1 = y - h/2f;
-            float x2 = x + w/2f,  y2 = y + h/2f;
-            String label = labels.get(classId);
-
-            result.add(new Detection(
-                    ai,                    // Ai instance
-                    videoInterpreter,        // hangi interpreter’la
-                    context,                 // Activity/Context
-                    classId,
-                    maxClassScore,
-                    x1, y1, x2, y2,
-                    label
-            ));
-        }
-        return result;
-    }
-    // --- RT PIPELINE ENTRYPOINT ---
-    public List<Detection> handleRT(Mat frame, Ai ai) {
-        if (!isInitiated) {
-            Log.d(TAG, "RTDetection initiates...");
-            isInitiated = true;
-        }
-        if (frame == null || frame.empty()) return null;
-
-        // 1. Mat → Bitmap
-        Bitmap inputBitmap = matToBitmap(frame);
-        if (inputBitmap == null) return null;
-
-        // 2. Ölçek+paddingle modele uygun bitmap’e dönüştür (TFLiteInputPreprocessor)
-        Bitmap modelBitmap = TFLiteInputPreprocessor.scaleAndPadBitmap(
-                inputBitmap, ai.getInputWidth(), ai.getInputHeight());
-        if (modelBitmap == null) return null;
-
-        // 3. Bitmap → Tensor
-        float[][][][] inputTensor = TFLiteInputPreprocessor.bitmapToInputTensor(modelBitmap);
-        if (inputTensor == null) return null;
-
-*//*        // 4. Inference (Ai.java)
-        ai.predictVideo(inputTensor, rawOutput -> {
-            Log.d(TAG, "prediction initiates...");
-            // 5. Çıktı post-processing (parseDetections veya benzeri fonksiyon)
-            detections = parseDetectionsScored(rawOutput,interpreter, ai);
-            // 6. ToDo: UI update veya threading ile ana thread'e aktar
-            // Threading.runOnUiThread(() -> ...);
-        });*//*
-        return detections;
-    }
-    // --- UTIL: Mat to Bitmap ---
-    private Bitmap matToBitmap(Mat frame) {
-        // ToDo: TFLiteInputPreprocessor içinde varsa oradan çağır!
+    // Detection.java'ya yeni metod ekleyin
+    public List<float[]> runInference(Mat frame) {
         try {
-            int w = frame.cols(), h = frame.rows();
-            Bitmap bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
-            org.opencv.android.Utils.matToBitmap(frame, bmp);
-            return bmp;
+            // 1. Giriş verisini hazırla (Mat -> Bitmap -> ByteBuffer)
+            Bitmap inputBitmap = matToBitmap(frame); // Mat'ten Bitmap'e dönüşüm
+            ByteBuffer inputBuffer = convertBitmapToByteBuffer(inputBitmap);
+
+            // 2. Çıktı tensörü için bellek ayır
+            Tensor outputTensor = interpreter.getOutputTensor(0);
+            float[][] outputArray = new float[1][outputTensor.shape()[1]]; // [1][N] boyutunda
+
+            // 3. Modeli çalıştır
+            Map<Integer, Object> outputs = new HashMap<>();
+            outputs.put(0, outputArray);
+            interpreter.runForMultipleInputsOutputs(new Object[]{inputBuffer}, outputs);
+
+            // 4. Çıktıyı işle (örnek: ilk 5 değeri logla)
+            float[] results = outputArray[0];
+            Log.d(TAG, "Model Output: " + Arrays.toString(Arrays.copyOf(results, Math.min(5, results.length))));
+
+            return Collections.singletonList(results);
         } catch (Exception e) {
-            Log.e(TAG, "matToBitmap error: " + e.getMessage());
-            return null;
+            Log.e(TAG, "Inference error: " + e.getMessage());
+            return new ArrayList<>();
         }
     }
-    // --- Detection Post-Processing (parseDetections) ---
-    private List<Detection> parseDetections(float[][][] rawOutput, Ai ai) {
-        // ToDo: AI modeline özel detection parsing
-        // Bu örnek basit bir şablondur:
-        // float[][] raw = rawOutput[0]; ...
-        return new ArrayList<>(); // ya da parse et
+
+    // Yardımcı metod: Mat -> Bitmap dönüşümü
+    private Bitmap matToBitmap(Mat mat) {
+        Bitmap bitmap = Bitmap.createBitmap(mat.cols(), mat.rows(), Bitmap.Config.ARGB_8888);
+        Utils.matToBitmap(mat, bitmap);
+        return bitmap;
     }
-    */
+
+    // Yardımcı metod: Bitmap -> ByteBuffer dönüşümü
+    private ByteBuffer convertBitmapToByteBuffer(Bitmap bitmap) {
+        ByteBuffer inputBuffer = ByteBuffer.allocateDirect(interpreter.getInputTensor(0).numBytes());
+        inputBuffer.order(ByteOrder.nativeOrder());
+
+        // Normalizasyon (model gereksinimlerine göre ayarlayın)
+        for (int y = 0; y < bitmap.getHeight(); y++) {
+            for (int x = 0; x < bitmap.getWidth(); x++) {
+                int pixel = bitmap.getPixel(x, y);
+                inputBuffer.putFloat(((pixel >> 16) & 0xFF) / 255.0f); // R
+                inputBuffer.putFloat(((pixel >> 8) & 0xFF) / 255.0f);  // G
+                inputBuffer.putFloat((pixel & 0xFF) / 255.0f);         // B
+            }
+        }
+        return inputBuffer;
+    }
 }
