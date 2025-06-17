@@ -11,6 +11,9 @@ import com.kurmez.iyesi.utilities.delegate.TFLiteInputPreprocessor;
 import org.opencv.android.Utils;
 import org.opencv.core.Mat;
 
+import org.opencv.core.Point;
+import org.opencv.core.Scalar;
+import org.opencv.imgproc.Imgproc;
 import org.tensorflow.lite.Interpreter;
 import org.tensorflow.lite.Tensor;
 
@@ -35,6 +38,12 @@ public class Detection {
     // ————————————————
     // ❶ Detection sonucu alanları
     // ————————————————
+    // Sınıflandırma eşik değeri (confidence threshold)
+    private static final float CONFIDENCE_THRESHOLD = 0.5f;
+
+    // Renk tanımları (BGR formatında)
+    private static final Scalar GREEN = new Scalar(0, 255, 0);
+    private static final int BOX_THICKNESS = 2;
     private static final float SCORE_THRESHOLD = 0.9f;  // 50% üzeri kesin kabul
     float scoreThreshold = 0.25f;
     private List<Detection> detections;
@@ -84,7 +93,7 @@ public class Detection {
     public Mat process(Mat incomingFrame){
         try {
             this.incomingFrame = incomingFrame;
-            this.mapper = new TFLiteInputMapper(ai,incomingFrame,context);
+            this.mapper = new TFLiteInputMapper(ai,this.incomingFrame,context);
             this.preProcess =  new TFLiteInputPreprocessor(mapper,interpreter);
         } catch (Exception e) {
             Log.e(TAG,"Error:" + e);
@@ -150,5 +159,87 @@ public class Detection {
             }
         }
         return inputBuffer;
+    }
+    public Mat drawDetections(Mat originalFrame, List<float[]> detections) {
+        // Orijinal çerçevenin kopyasını oluştur
+        Mat resultFrame = originalFrame.clone();
+
+        // Görüntü boyutlarını al
+        int width = resultFrame.cols();
+        int height = resultFrame.rows();
+
+        for (float[] detection : detections) {
+            // En yüksek skorlu sınıfı bul
+            int classId = -1;
+            float maxConfidence = 0f;
+            for (int i = 4; i < detection.length; i++) {
+                if (detection[i] > maxConfidence) {
+                    maxConfidence = detection[i];
+                    classId = i - 4;
+                }
+            }
+
+            // Güven skoru eşik değerini geçiyorsa
+            if (maxConfidence > CONFIDENCE_THRESHOLD) {
+                // Bounding box koordinatlarını hesapla
+                float x_center = detection[0] * width;
+                float y_center = detection[1] * height;
+                float box_width = detection[2] * width;
+                float box_height = detection[3] * height;
+
+                // Sol üst köşe koordinatları
+                int x = (int) (x_center - box_width / 2);
+                int y = (int) (y_center - box_height / 2);
+
+                // Koordinatları görüntü sınırlarına kırp
+                x = Math.max(0, Math.min(x, width - 1));
+                y = Math.max(0, Math.min(y, height - 1));
+                int right = Math.max(0, Math.min(x + (int)box_width, width - 1));
+                int bottom = Math.max(0, Math.min(y + (int)box_height, height - 1));
+
+                // Yeşil dikdörtgen çiz
+                Imgproc.rectangle(
+                        resultFrame,
+                        new Point(x, y),
+                        new Point(right, bottom),
+                        GREEN,
+                        BOX_THICKNESS
+                );
+
+                // Sınıf bilgisi ve güven skorunu yazdır (isteğe bağlı)
+                String label = String.format("%s: %.2f", getClassName(classId), maxConfidence);
+                Imgproc.putText(
+                        resultFrame,
+                        label,
+                        new Point(x, y - 5),
+                        Imgproc.FONT_HERSHEY_SIMPLEX,
+                        0.5,
+                        GREEN,
+                        1
+                );
+            }
+        }
+
+        return resultFrame;
+    }
+
+    private String getClassName(int classId) {
+        // COCO veri seti sınıfları (80 sınıf)
+        String[] classNames = {
+                "person", "bicycle", "car", "motorcycle", "airplane", "bus", "train", "truck",
+                "boat", "traffic light", "fire hydrant", "stop sign", "parking meter", "bench",
+                "bird", "cat", "dog", "horse", "sheep", "cow", "elephant", "bear", "zebra", "giraffe",
+                "backpack", "umbrella", "handbag", "tie", "suitcase", "frisbee", "skis", "snowboard",
+                "sports ball", "kite", "baseball bat", "baseball glove", "skateboard", "surfboard",
+                "tennis racket", "bottle", "wine glass", "cup", "fork", "knife", "spoon", "bowl", "banana",
+                "apple", "sandwich", "orange", "broccoli", "carrot", "hot dog", "pizza", "donut", "cake",
+                "chair", "couch", "potted plant", "bed", "dining table", "toilet", "tv", "laptop", "mouse",
+                "remote", "keyboard", "cell phone", "microwave", "oven", "toaster", "sink", "refrigerator",
+                "book", "clock", "vase", "scissors", "teddy bear", "hair drier", "toothbrush"
+        };
+
+        return (classId >= 0 && classId < classNames.length)
+                ? classNames[classId]
+                : "Unknown";
     }
 }

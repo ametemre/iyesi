@@ -314,7 +314,9 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
                     Log.d(TAG,"İnputFrame rgb : " + rgb.height() + "/" + rgb.width());
 
                     buffer = detectionRunner.runInference(rgb);
-                    Bitmap frameBitmap = detectionRunner.matToBitmap(rgb);
+                    List<float[]> detections =buffer;
+                    Mat outputFrame = detectionRunner.drawDetections(rgb, detections);
+                    Bitmap frameBitmap = detectionRunner.matToBitmap(/*rgb*/outputFrame);
                     Log.d(TAG,"İnputFrame bitmap : " + frameBitmap.getHeight() + "/" + frameBitmap.getWidth());
                     videoClassifier.classifyFrame(frameBitmap);
                     rgb.release();

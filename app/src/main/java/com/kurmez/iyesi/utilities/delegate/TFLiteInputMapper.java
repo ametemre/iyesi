@@ -38,7 +38,7 @@ public class TFLiteInputMapper {
     private float scaleFactor;
     private int offsetX;
     private int offsetY;
-    private static final String TAG = "Threading";
+    private static final String TAG = "Mapper";
 
     public TFLiteInputMapper(Ai ai, Mat frame, Context context/*int frameWidth, int frameHeight, int inputWidth, int inputHeight*/) {
         try {
@@ -83,7 +83,7 @@ public class TFLiteInputMapper {
     public Mat map() {
         try {
             Size newSize = new Size(inputWidth,inputHeight);
-            safeResize(inputFrame,this.resized,newSize);
+            safeResize(inputFrame,resized,newSize);
             // 2) Pad ekle
             Mat output = new Mat();
             Core.copyMakeBorder(
