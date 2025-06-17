@@ -102,7 +102,7 @@ public class Ai implements AutoCloseable {
     private Interpreter initModel(AssetManager assets, String modelPath, Interpreter.Options baseOptions, Context context) {
         if (modelPath == null || modelPath.isEmpty()) return null;
         try {
-            MappedByteBuffer modelBuffer = TFLiteModelInspector.loadModelFile(assets, modelPath);
+            this.modelBuffer = TFLiteModelInspector.loadModelFile(assets, modelPath);
 
             // Try GPU first
             try {

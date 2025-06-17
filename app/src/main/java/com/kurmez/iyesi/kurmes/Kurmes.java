@@ -20,11 +20,13 @@ import org.opencv.core.Mat;
 import android.graphics.Bitmap;
 
 import android.annotation.SuppressLint;
+import android.graphics.Color;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowManager;
+import android.widget.LinearLayout;
 import android.widget.TextView;
 
 import com.kurmez.iyesi.utilities.Ai.Ai;
@@ -44,6 +46,7 @@ import android.view.Menu;
 
 import org.opencv.android.CameraBridgeViewBase.CvCameraViewListener2;
 import org.opencv.core.MatOfRect;
+import org.tensorflow.lite.support.label.Category;
 
 import java.util.ArrayList;
 import java.util.concurrent.TimeUnit;
@@ -130,9 +133,9 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
         // UI elements
         labelText        = findViewById(R.id.label_text);
         cameraStatusText = findViewById(R.id.camera_status_text);
-        fabMain     = findViewById(R.id.fab_main);
+        fabMain         = findViewById(R.id.fab_main);
         fabAction         = findViewById(R.id.fab_Sound);
-
+        labelText.setText("init...");
         // 1) Ai ve pipeline başlat
         pipeline = new RTPipeline();
         //openCV = new OpenCV();
@@ -152,6 +155,7 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
         miniFabs.applyDefaultColors();
 
         actions = new Actions(miniFabs, this, this);
+        labelText.setText("fabs...");
         // ----------------------------------------------------------------------------------------Instantiate MiniFabs helper and keep as field
 
         for (FloatingActionButton fab : miniFabs.getFabs()) {
@@ -160,8 +164,10 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
                 // Highlight selection
             });
         }
+        labelText.setText("ready...");
         // fabAction: başlat/durdur
         fabAction.setOnClickListener(v -> {
+            labelText.setText("standby...");
 //            new Thread(() -> {
                 if (!isRunning) {
                     // Kullanıcı model seçmeden başlatmak isterse
@@ -197,6 +203,8 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
                         isRunning = true;
                         isPredicting = true;
                         Helpers.showToastSafe(this,"AI Başlatıldı");
+                        labelText.setText("Processing...");
+
                         //runOnUiThread(() -> Toast.makeText(this, "AI Başlatıldı", Toast.LENGTH_SHORT).show());
 
                     } catch (Exception e) {
@@ -286,7 +294,7 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
             //executor.submit(() -> {
                 try {
                     buffer = detectionRunner.runInference(detectionRunner.process(rgba));
-
+                    //updateDetectionList(buffer);
                 } catch (Exception e) {
                     // ToDo: Hatalı model yükleme veya AI tespit hatalarında otomatik fallback veya retry mekanizması ekle.
                 }
@@ -369,6 +377,35 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
             Log.d(TAG, status);
         });
     }//Essential For Camera
+    //--------------------------Creation
+    public void updateDetectionList(List<Category> detectedCategories) {
+        LinearLayout detectedSoundsLayout = findViewById(R.id.detected_sounds_list);
+
+        //detectedSoundsLayout.removeAllViews(); // Clear previous results
+
+        for (Category category : detectedCategories) {
+            float confidence = category.getScore();
+            if (confidence > 0.79) { // Only show confidence > 79%
+                TextView textView = new TextView(this);
+                textView.setText(category.getDisplayName() + "---" + category.getLabel() + " - " + String.format("%.2f", confidence * 100) + "%");
+                textView.setTextSize(16);
+                textView.setTextColor(Color.WHITE);
+                textView.setPadding(10, 10, 10, 10);
+
+                detectedSoundsLayout.addView(textView);
+            }
+        }
+
+        // If no high-confidence results, show "No strong detection"
+        if (detectedSoundsLayout.getChildCount() == 0) {
+            TextView noResultView = new TextView(this);
+            noResultView.setText("No strong detections");
+            noResultView.setTextSize(16);
+            noResultView.setTextColor(Color.CYAN);
+            noResultView.setPadding(10, 10, 10, 10);
+            detectedSoundsLayout.addView(noResultView);
+        }
+    }
     public boolean cameraState(Boolean state){
         if (state){
             if (mOpenCvCameraView != null) {

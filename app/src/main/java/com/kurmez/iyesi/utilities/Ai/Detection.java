@@ -111,6 +111,7 @@ public class Detection {
             // 4. Çıktıyı işle (örnek: ilk 5 değeri logla)
             float[] results = outputArray[0];
             Log.d(TAG, "Model Output: " + Arrays.toString(Arrays.copyOf(results, Math.min(5, results.length))));
+            Log.d(TAG, "Model Output: " + Collections.singletonList(results));
 
             return Collections.singletonList(results);
         } catch (Exception e) {

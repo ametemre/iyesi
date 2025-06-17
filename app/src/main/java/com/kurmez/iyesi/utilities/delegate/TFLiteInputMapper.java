@@ -68,12 +68,15 @@ public class TFLiteInputMapper {
         );
 
         this.inputMat = map();
-        this.inputTensor = tensor(inputMat);
-        this.inputBitmap = matToBitmap(map());
+        //this.inputTensor = inputMat;
+        //this.inputTensor = tensor(inputMat);
+        this.inputBitmap = matToBitmap(inputMat);
         //this.interpreter = ai.getVideoInterpereter();
         //threading = new Threading();
-
-        Log.d(TAG,inspector.processVideoInput(inputTensor).toString());
+        this.inputTensor = tensor(inputMat);
+        //inspector = new TFLiteModelInspector(modelBuffer, gpuOptions);
+        //Log.d(TAG,inspector.processVideoInput(inputTensor).toString());
+        Log.d(TAG,inputTensor.toString());
     }
     // Yardımcı metod: Mat -> Bitmap dönüşümü
     private Bitmap matToBitmap(Mat mat) {
@@ -133,20 +136,44 @@ public class TFLiteInputMapper {
         }
     }
     public float[][][][] tensor(Mat frame) {
-        int frameW = frame.width();
-        int frameH = frame.height();
-        // float[1][H][W][3] tensor dizisi oluştur
-        float[][][][] inputTensor = new float[1][frameH][frameW][3];
-        for (int y = 0; y < frameH; y++) {
-            for (int x = 0; x < frameW; x++) {
-                double[] bgr = frame.get(y, x);
-                // BGR → RGB ve normalize [0,1]
-                inputTensor[0][y][x][0] = (float) (bgr[2] / 255.0);
-                inputTensor[0][y][x][1] = (float) (bgr[1] / 255.0);
-                inputTensor[0][y][x][2] = (float) (bgr[0] / 255.0);
+        // 1) Null/empty kontrolü
+        if (frame == null || frame.empty()) {
+            Log.e(TAG, "tensor: input frame null veya empty!");
+            return new float[0][][][];  // ya da null dönebilirsiniz
+        }
+
+        // 2) frame'i resize etmek için geçici Mat
+        Mat resized = new Mat();
+        Size targetSize = new Size(inputWidth, inputHeight);
+        if (!safeResize(frame, resized, targetSize)) {
+            Log.e(TAG, "tensor: frame resize edilemedi");
+            resized.release();
+            return new float[0][][][];
+        }
+
+        // 3) Normalize edilmiş tensor dizisini oluştur
+        int H = resized.height();
+        int W = resized.width();
+        float[][][][] inputTensor = new float[1][H][W][3];
+
+        // 4) Piksel değerlerini BGR→RGB [0,1] aralığına çevir
+        for (int y = 0; y < H; y++) {
+            for (int x = 0; x < W; x++) {
+                double[] px = resized.get(y, x);
+                // OpenCV'de bazen 4 kanallı geliyorsa, alpha'yı atıyoruz
+                if (px.length >= 3) {
+                    inputTensor[0][y][x][0] = (float)(px[2] / 255.0);  // R
+                    inputTensor[0][y][x][1] = (float)(px[1] / 255.0);  // G
+                    inputTensor[0][y][x][2] = (float)(px[0] / 255.0);  // B
+                } else {
+                    // beklenmeyen kanal sayısı
+                    inputTensor[0][y][x][0] = inputTensor[0][y][x][1] = inputTensor[0][y][x][2] = 0f;
+                }
             }
         }
 
+        // 5) Geçici Mat'i serbest bırak
+        resized.release();
         return inputTensor;
     }
     /** Ölçek katsayısı (frame→model) */
