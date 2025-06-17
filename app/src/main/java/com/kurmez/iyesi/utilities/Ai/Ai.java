@@ -43,6 +43,14 @@ public class Ai implements AutoCloseable {
     private final int[] videoOutputShape;
     private final int soundOutputLength;
     private final List<String> labels;
+    private String labelsPath;
+    public String getLabelsPath(){
+        return labelsPath;
+    }
+    private String path;
+    public String getPath(){
+        return path;
+    }
     private final float scoreThreshold;
     private float[][][] output;
     // Statik model path → label ve threshold eşlemeleri
@@ -80,12 +88,14 @@ public class Ai implements AutoCloseable {
         this.soundInterpreter = initModel(assets, soundModelPath, options, context);
 
         this.videoInputShape = videoInterpreter != null ? videoInterpreter.getInputTensor(0).shape() : new int[0];
+        this.path = videoModelPath;
         this.videoOutputShape = videoInterpreter != null ? videoInterpreter.getOutputTensor(0).shape() : new int[0];
         this.soundOutputLength = soundInterpreter != null ? calculateOutputLength(soundInterpreter.getOutputTensor(0)) : 0;
 
         String labelFile = labelsPath != null ? labelsPath : MODEL_LABEL_FILES.getOrDefault(videoModelPath, "coco_labels.txt");
         this.labels = FileUtil.loadLabels(context.getAssets().open(labelFile), Charset.forName("UTF-8"));
         this.scoreThreshold = MODEL_THRESHOLDS.getOrDefault(videoModelPath, 0.5f);
+        this.labelsPath = labelsPath;
     }
 
     private Interpreter.Options createInterpreterOptions(GpuDelegate delegate) {

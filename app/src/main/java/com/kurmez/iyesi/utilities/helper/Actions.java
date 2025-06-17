@@ -93,6 +93,7 @@ public class Actions {
             Log.w(TAG, "performSelectedAction: selectedFab is null!");
             return null;
         }
+
         Threading threading = new Threading();
         int id = selectedFab.getId();
         try {

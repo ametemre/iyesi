@@ -78,13 +78,8 @@ public class TFLiteInputMapper {
         //Log.d(TAG,inspector.processVideoInput(inputTensor).toString());
         Log.d(TAG,inputTensor.toString());
     }
-    // Yardımcı metod: Mat -> Bitmap dönüşümü
-    private Bitmap matToBitmap(Mat mat) {
-        Bitmap bitmap = Bitmap.createBitmap(mat.cols(), mat.rows(), Bitmap.Config.ARGB_8888);
-        Utils.matToBitmap(mat, bitmap);
-        Log.d(TAG,"Bitmap values h:" + mat.height() +"w:" + mat.width());
-        return bitmap;
-    }
+
+
     public Mat map() {
         try {
             Size newSize = new Size(inputWidth,inputHeight);
@@ -107,34 +102,12 @@ public class TFLiteInputMapper {
             throw new RuntimeException(e);
         }
     }
-    /**
-     * src ve dst null ya da boş değilse resize işlemini yapar.
-     * @param src  Kaynak Mat
-     * @param dst  Çıktı Mat (mutlaka new Mat() ile oluşturulmuş olmalı)
-     * @param size Hedef boyut
-     * @return     true -> resize yapıldı, false -> hata atlandı
-     */
-    private boolean safeResize(Mat src, Mat dst, Size size) {
-        if (src == null) {
-            Log.e(TAG, "safeResize: src Mat null");
-            return false;
-        }
-        if (src.empty()) {
-            Log.e(TAG, "safeResize: src Mat empty");
-            return false;
-        }
-        if (dst == null) {
-            Log.e(TAG, "safeResize: dst Mat null");
-            return false;
-        }
-        try {
-            Imgproc.resize(src, dst, size);
-            return true;
-        } catch (Exception e) {
-            Log.e(TAG, "safeResize: resize sırasında hata", e);
-            return false;
-        }
-    }
+    private Bitmap matToBitmap(Mat mat) {
+        Bitmap bitmap = Bitmap.createBitmap(mat.cols(), mat.rows(), Bitmap.Config.ARGB_8888);
+        Utils.matToBitmap(mat, bitmap);
+        Log.d(TAG,"Bitmap values h:" + mat.height() +"w:" + mat.width());
+        return bitmap;
+    }    // ------------------------------------------------Yardımcı metod: Mat -> Bitmap dönüşümü
     public float[][][][] tensor(Mat frame) {
         // 1) Null/empty kontrolü
         if (frame == null || frame.empty()) {
@@ -175,33 +148,42 @@ public class TFLiteInputMapper {
         // 5) Geçici Mat'i serbest bırak
         resized.release();
         return inputTensor;
-    }
-    /** Ölçek katsayısı (frame→model) */
+    } //-------------------------------------------------Yardımcı metod: Mat -> float[][][][] dönüşümü
+    private boolean safeResize(Mat src, Mat dst, Size size) {
+        /**
+         * src ve dst null ya da boş değilse resize işlemini yapar.
+         * @param src  Kaynak Mat
+         * @param dst  Çıktı Mat (mutlaka new Mat() ile oluşturulmuş olmalı)
+         * @param size Hedef boyut
+         * @return     true -> resize yapıldı, false -> hata atlandı
+         */
+        if (src == null) {
+            Log.e(TAG, "safeResize: src Mat null");
+            return false;
+        }
+        if (src.empty()) {
+            Log.e(TAG, "safeResize: src Mat empty");
+            return false;
+        }
+        if (dst == null) {
+            Log.e(TAG, "safeResize: dst Mat null");
+            return false;
+        }
+        try {
+            Imgproc.resize(src, dst, size);
+            return true;
+        } catch (Exception e) {
+            Log.e(TAG, "safeResize: resize sırasında hata", e);
+            return false;
+        }
+    }//---------------------------------Yardımcı metod: size dönüşümü
+
+
+
     public float getScaleFactor() { return scaleFactor; }
-
-    /** X yönünde padding (px) */
     public int getOffsetX() { return offsetX; }
-
-    /** Y yönünde padding (px) */
     public int getOffsetY() { return offsetY; }
-
-    /** Yeniden boyutlandırılmış genişlik (px) */
     public int getScaledWidth() { return Math.round(frameWidth * scaleFactor); }
-
-    /** Yeniden boyutlandırılmış yükseklik (px) */
     public int getScaledHeight() { return Math.round(frameHeight * scaleFactor); }
 
-    /** Verilen RectF’i modele uygun şekilde çevirir (sol-üst, sağ-alt) */
-    public RectF mapRect(RectF rect) {
-        float[] topLeft     = mapPoint(rect.left, rect.top);
-        float[] bottomRight = mapPoint(rect.right, rect.bottom);
-        return new RectF(topLeft[0], topLeft[1], bottomRight[0], bottomRight[1]);
-    }
-
-    /** Verilen bir noktayı modele uygun şekilde dönüştürür */
-    public float[] mapPoint(float x, float y) {
-        float tx = x * scaleFactor + offsetX;
-        float ty = y * scaleFactor + offsetY;
-        return new float[]{tx, ty};
-    }
 }

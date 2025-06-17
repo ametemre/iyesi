@@ -95,25 +95,33 @@ public class Detection {
     // Detection.java'ya yeni metod ekleyin
     public List<float[]> runInference(Mat frame) {
         try {
-            // 1. Giriş verisini hazırla (Mat -> Bitmap -> ByteBuffer)
-            Bitmap inputBitmap = matToBitmap(frame); // Mat'ten Bitmap'e dönüşüm
+            // 1. Giriş verisini hazırla
+            Bitmap inputBitmap = matToBitmap(frame);
             ByteBuffer inputBuffer = convertBitmapToByteBuffer(inputBitmap);
 
-            // 2. Çıktı tensörü için bellek ayır
+            // 2. Çıktı tensörünün şeklini al ve uygun dizi oluştur
             Tensor outputTensor = interpreter.getOutputTensor(0);
-            float[][] outputArray = new float[1][outputTensor.shape()[1]]; // [1][N] boyutunda
+            int[] outputShape = outputTensor.shape(); // [1, 84, 8400]
+            float[][][] outputArray = new float[outputShape[0]][outputShape[1]][outputShape[2]];
 
             // 3. Modeli çalıştır
             Map<Integer, Object> outputs = new HashMap<>();
             outputs.put(0, outputArray);
             interpreter.runForMultipleInputsOutputs(new Object[]{inputBuffer}, outputs);
 
-            // 4. Çıktıyı işle (örnek: ilk 5 değeri logla)
-            float[] results = outputArray[0];
-            Log.d(TAG, "Model Output: " + Arrays.toString(Arrays.copyOf(results, Math.min(5, results.length))));
-            Log.d(TAG, "Model Output: " + Collections.singletonList(results));
+            // 4. Çıktıyı yeniden düzenle: [8400, 84] formatına getir
+            List<float[]> outputList = new ArrayList<>();
+            for (int i = 0; i < outputShape[2]; i++) { // 8400 nesne
+                float[] features = new float[outputShape[1]]; // 84 özellik
+                for (int j = 0; j < outputShape[1]; j++) {
+                    features[j] = outputArray[0][j][i];
+                }
+                outputList.add(features);
+            }
 
-            return Collections.singletonList(results);
+            // Log kontrolü (isteğe bağlı)
+            Log.d(TAG, "Toplam tespit: " + outputList.size());
+            return outputList;
         } catch (Exception e) {
             Log.e(TAG, "Inference error: " + e.getMessage());
             return new ArrayList<>();
@@ -121,7 +129,7 @@ public class Detection {
     }
 
     // Yardımcı metod: Mat -> Bitmap dönüşümü
-    private Bitmap matToBitmap(Mat mat) {
+    public Bitmap matToBitmap(Mat mat) {
         Bitmap bitmap = Bitmap.createBitmap(mat.cols(), mat.rows(), Bitmap.Config.ARGB_8888);
         Utils.matToBitmap(mat, bitmap);
         return bitmap;
