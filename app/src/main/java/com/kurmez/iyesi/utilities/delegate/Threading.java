@@ -1,4 +1,4 @@
-package com.kurmez.iyesi.utilities.Ai;
+package com.kurmez.iyesi.utilities.delegate;
 
 import android.app.Activity;
 import android.content.Context;
@@ -201,5 +201,4 @@ public class Threading {
         EGL14.eglDestroyContext(display, ctx);
         EGL14.eglTerminate(display);
     }
-
 }

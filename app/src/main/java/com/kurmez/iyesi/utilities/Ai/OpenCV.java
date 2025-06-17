@@ -42,7 +42,7 @@ public class OpenCV implements CameraBridgeViewBase.CvCameraViewListener2 {
     }
     public void drawDetections(Mat frame,List<Detection> dets) {
         Log.d(TAG, "-drawDetections- çağırıldı...");
-        for (Detection d : dets) {
+        /*for (Detection d : dets) {
             Point tl = new Point(d.x1, d.y1);
             Point br = new Point(d.x2, d.y2);
             Imgproc.rectangle(frame, tl, br, new Scalar(0,255,0), 2);
@@ -56,7 +56,7 @@ public class OpenCV implements CameraBridgeViewBase.CvCameraViewListener2 {
                     2
             );
             Log.i(TAG,d.classId + "Detection" + d.label + d.x1 + d.y1 + d.x2 + d.y2 + d.score);
-        }
+        }*/
     }
     @Override
     public void onCameraViewStarted(int width, int height) {
@@ -74,7 +74,7 @@ public class OpenCV implements CameraBridgeViewBase.CvCameraViewListener2 {
         return frame;
     }
     private void drawDetectionsOnMat(Mat frame, List<Detection> dets) {
-        for (Detection d : dets) {
+        /*for (Detection d : dets) {
             Point tl = new Point(d.x1, d.y1);
             Point br = new Point(d.x2, d.y2);
             Imgproc.rectangle(frame, tl, br, new Scalar(0,255,0), 2);
@@ -87,7 +87,7 @@ public class OpenCV implements CameraBridgeViewBase.CvCameraViewListener2 {
                     new Scalar(255,255,255),
                     2
             );
-        }
+        }*/
     }
 
 }

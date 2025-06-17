@@ -6,14 +6,12 @@ import android.content.Intent;
 import android.content.res.ColorStateList;
 import android.graphics.Color;
 import android.util.Log;
-import android.view.View;
 
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.kurmez.iyesi.R;
 import com.kurmez.iyesi.sokak.SokakActivity;
 import com.kurmez.iyesi.utilities.Ai.Ai;
-import com.kurmez.iyesi.utilities.Ai.AnimalCounter;
-import com.kurmez.iyesi.utilities.Ai.Threading;
+import com.kurmez.iyesi.utilities.delegate.Threading;
 import com.kurmez.iyesi.utilities.Helpers;
 import com.kurmez.iyesi.utilities.MiniFabs;
 

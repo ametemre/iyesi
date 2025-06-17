@@ -1,4 +1,4 @@
-package com.kurmez.iyesi.utilities.Ai;
+package com.kurmez.iyesi.utilities.delegate;
 
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
@@ -10,23 +10,33 @@ import org.opencv.core.Mat;
 import org.opencv.core.Size;
 import org.opencv.imgproc.Imgproc;
 
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+
 public class TFLiteInputPreprocessor {
     private final TFLiteInputMapper mapper;
+    ByteBuffer inBuf;
+    ByteBuffer outBuf;
     // Ölçek + Padding: Model input boyutuna uygun bitmap oluştur
+    public TFLiteInputPreprocessor(TFLiteInputMapper mapper) {
+        this.mapper = mapper;
+
+    }
+
     public static Bitmap scaleAndPadBitmap(Bitmap input, int dstW, int dstH) {
         if (input == null) return null;
         int srcW = input.getWidth(), srcH = input.getHeight();
-        TFLiteInputMapper mapper = new TFLiteInputMapper(srcW, srcH, dstW, dstH);
+        //TFLiteInputMapper mapper = new TFLiteInputMapper(srcW, srcH, dstW, dstH);
         Bitmap output = Bitmap.createBitmap(dstW, dstH, Bitmap.Config.ARGB_8888);
-        Bitmap scaled = Bitmap.createScaledBitmap(input, mapper.getScaledWidth(), mapper.getScaledHeight(), true);
+        //Bitmap scaled = Bitmap.createScaledBitmap(input, mapper.getScaledWidth(), mapper.getScaledHeight(), true);
         Canvas canvas = new Canvas(output);
         canvas.drawColor(Color.BLACK);
-        canvas.drawBitmap(scaled, mapper.getOffsetX(), mapper.getOffsetY(), null);
-        scaled.recycle();
+        //canvas.drawBitmap(scaled, mapper.getOffsetX(), mapper.getOffsetY(), null);
+        //scaled.recycle();
         return output;
     }
-
     // Bitmap'i Tensor'a çevir (ör. float[1][H][W][3])
+
     public static float[][][][] bitmapToInputTensor(Bitmap bmp) {
         if (bmp == null) return null;
         int w = bmp.getWidth(), h = bmp.getHeight();
@@ -41,10 +51,9 @@ public class TFLiteInputPreprocessor {
         }
         return tensor;
     }
-
     // Gerekirse: Bitmap'i doğrudan ByteBuffer'a çevir
-    // public static ByteBuffer bitmapToByteBuffer(Bitmap bmp) { ... }
 
+    // public static ByteBuffer bitmapToByteBuffer(Bitmap bmp) { ... }
     public float[][][][] map(Mat inputFrame) {
         int w      = mapper.getScaledWidth();
         int h      = mapper.getScaledHeight();
@@ -96,9 +105,12 @@ public class TFLiteInputPreprocessor {
         }
         return output;
     }
-
-    public TFLiteInputPreprocessor(TFLiteInputMapper mapper) {
-        this.mapper = mapper;
+    public void inputBuffer(int height, int width){
+        int batch = 1, h = 224, w = 224, c = 3;
+        if (height ==h || width ==w) {
+            this.inBuf = ByteBuffer.allocateDirect(batch * h * w * c * 4).order(ByteOrder.nativeOrder());
+            this.outBuf = ByteBuffer.allocateDirect(batch * 120 * 4).order(ByteOrder.nativeOrder());
+        }
     }
     public static Bitmap resizeBitmap(Bitmap bmp, int maxSize) {
         int w = bmp.getWidth(), h = bmp.getHeight();

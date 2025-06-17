@@ -3,10 +3,10 @@ package com.kurmez.iyesi.kurmes;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.google.firebase.auth.FirebaseAuth;
 import com.kurmez.iyesi.utilities.Ai.Detection;
-import com.kurmez.iyesi.utilities.Ai.OpenCV;
-import com.kurmez.iyesi.utilities.Ai.TFLiteInputMapper;
-import com.kurmez.iyesi.utilities.Ai.TFLiteInputPreprocessor;
-import com.kurmez.iyesi.utilities.Ai.Threading;
+//import com.kurmez.iyesi.utilities.Ai.OpenCV;
+import com.kurmez.iyesi.utilities.delegate.TFLiteInputMapper;
+import com.kurmez.iyesi.utilities.delegate.TFLiteInputPreprocessor;
+import com.kurmez.iyesi.utilities.delegate.Threading;
 import com.kurmez.iyesi.utilities.Helpers;
 import com.kurmez.iyesi.utilities.RTPipeline;
 import com.kurmez.iyesi.utilities.Terminator;
@@ -21,15 +21,11 @@ import android.graphics.Bitmap;
 
 import android.annotation.SuppressLint;
 import android.os.Bundle;
-import android.os.Handler;
 import android.util.Log;
 import android.view.MotionEvent;
-import android.view.SurfaceView;
 import android.view.View;
 import android.view.WindowManager;
-import android.widget.FrameLayout;
 import android.widget.TextView;
-import android.widget.Toast;
 
 import com.kurmez.iyesi.utilities.Ai.Ai;
 import com.kurmez.iyesi.utilities.MiniFabs;
@@ -93,7 +89,7 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
     private CameraBridgeViewBase mOpenCvCameraView;
     private Interpreter interpreter;
     public Ai /*aiKedi, aiKopek, aiKurt, aiKarga, aiContent, */ai;
-    private OpenCV openCV;
+    //private OpenCV openCV;
     private RTPipeline pipeline;
     private MiniFabs miniFabs;
     private Actions actions;
@@ -112,7 +108,7 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
     private final int VIDEO_THRESHOLD = 5;
     private int mWidth, mHeight;
     private int frameCount = 0;
-    private Mat rgb, gray,frame;
+    public Mat rgb, gray,frame;
     MatOfRect rects;
     //----------------------------------------------------------------------------------------------<Creation
     @SuppressLint("ClickableViewAccessibility")
@@ -136,7 +132,7 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
 
         // 1) Ai ve pipeline başlat
         pipeline = new RTPipeline();
-        openCV = new OpenCV();
+        //openCV = new OpenCV();
         pipeline.logGpuInfo();  // GPU bilgilerini loglamak istersen
 
         mOpenCvCameraView= findViewById(R.id.kurmes_camera_view);
@@ -175,18 +171,19 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
                     // Model yüklemesi ve fallback güvenliği
                     try {
                         ai = actions.performSelectedAction(miniFabs.getSelectedFab());
-                        if (ai == null) {
+                        if (ai == null) {//-----------Dilkkat !
                             Helpers.showToastSafe(this,"Model yükleme başarısız");
                             //runOnUiThread(() -> Toast.makeText(this, "Model yükleme başarısız", Toast.LENGTH_SHORT).show());
                             return;
                         }
                         interpreter = ai.getVideoInterpreter();
-                        mapper = new TFLiteInputMapper(mWidth, mHeight, ai.getInputWidth(), ai.getInputHeight());
-                        preprocessor = new TFLiteInputPreprocessor(mapper);
-                        terminator = new Terminator(this,ai.getExecutor(), ai.getVideoInterpreter(), ai.getSoundInterpreter(), ai.getGpuDelegate(), videoBuffer, soundBuffer);
+                        //mapper = new TFLiteInputMapper(mWidth, mHeight, ai.getInputWidth(), ai.getInputHeight());
+
+                        //terminator = new Terminator(this,ai.getExecutor(), ai.getVideoInterpreter(), ai.getSoundInterpreter(), ai.getGpuDelegate(), videoBuffer, soundBuffer);
 
                         try {
-                            detector = new Detection(ai, interpreter, this, 0, 0, 0, 0, 0, 0, miniFabs.getSelectedFab().toString());
+                            detectionRunner = new Detection(ai, interpreter, this/*, 0, 0, 0, 0, 0, 0, miniFabs.getSelectedFab().toString()*/);
+
                         } catch (Exception e) {
                             Log.w("Detection Init Error", "Detection nesnesi oluşturulamadı", e);
                             Helpers.showToastSafe(this,"Algılama nesnesi başlatılamadı");
@@ -258,11 +255,11 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
         }
 
         if (ai!=null) {
-            TFLiteInputMapper mapper = new TFLiteInputMapper(
+/*            TFLiteInputMapper mapper = new TFLiteInputMapper(
                     width, height,
                     ai.getInputWidth(), ai.getInputHeight()
             );
-            preprocessor = new TFLiteInputPreprocessor(mapper);
+            preprocessor = new TFLiteInputPreprocessor(mapper);*/
         }
     }
     @Override
@@ -280,22 +277,39 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
     }                                                         //done
     @Override
     public Mat onCameraFrame(CameraBridgeViewBase.CvCameraViewFrame inputFrame) {
-        Mat rgba = inputFrame.rgba();
+
+        if (inputFrame == null){
+            Log.e(TAG,"İnputFrame : Null!");
+        }
+        Mat rgba = null;
+        try {
+            rgba = inputFrame.rgba();
+        } catch (Exception e) {
+            Log.e(TAG,"İnputFrame : " + e);
+            throw new RuntimeException(e);
+        }
+
+        //Log.i(TAG,setFrame(rgba));
         // ToDo: ViewModel’de garbage collecting ve buffer reuse kontrolü (Mat/Bitmap/ByteBuffer için).
         if (ai == null || !isPredicting) return rgba;
 
         if (!executor.isShutdown()) {
-            executor.submit(() -> {
+            //executor.submit(() -> {
                 try {
-                    openCV.drawDetections(rgba,detectionRunner.handleRT(rgba,ai));
-                    //detector.handleRT(rgba, ai);
+                    detectionRunner.process(rgba);
+                    //setFrame(rgba);
+                    //detectionRunner.setIncomingFrame(rgba);
+                    //Log.i(TAG,setFrame(rgba));
+                    //openCV.drawDetections(rgba,detectionRunner.handleRT(rgba,ai));
+                    //Log.d(TAG,detectionRunner.handleRT(rgba, ai).toString());
+                    //Log.d(TAG,detectionRunner.parseDetectionsScored(ai,));
                 } catch (Exception e) {
                     // ToDo: Hatalı model yükleme veya AI tespit hatalarında otomatik fallback veya retry mekanizması ekle.
                 }
-            });
+            //});
         }
         // ToDo: tespitler UI'ya aktarılıp labelText/cameraStatusText/model sınıf listeleri dinamik güncellenecek.
-        return rgba;
+        return setFrame(rgba);
     }               //Essential For Camera
     protected void onResume() {
         super.onResume();
@@ -391,5 +405,9 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
             }
         }
         return state;
+    }
+    public Mat setFrame(Mat frame){
+        this.frame=frame;
+        return frame;
     }
 }

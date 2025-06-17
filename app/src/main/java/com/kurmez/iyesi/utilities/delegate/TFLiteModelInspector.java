@@ -1,4 +1,4 @@
-package com.kurmez.iyesi.utilities.Ai;
+package com.kurmez.iyesi.utilities.delegate;
 
 // TFLiteModelInspector.java
 
@@ -36,7 +36,17 @@ public class TFLiteModelInspector {
     private TFLiteInputPreprocessor tfLiteInputPreprocessor;
     private int soundOutputLength;
 
-    public TFLiteModelInspector(ByteBuffer modelBuffer, GpuDelegate.Options gpuOptions) {
+    public TFLiteModelInspector(ByteBuffer modelBuffer, GpuDelegate gpuDelegate) {
+        this.modelBuffer = modelBuffer;
+        this.gpuDelegate = gpuDelegate;
+        Interpreter.Options opts = new Interpreter.Options()
+                .setNumThreads(1);
+        if (gpuDelegate != null) {
+            opts.addDelegate(gpuDelegate);
+        }
+        this.interpreter = new Interpreter(modelBuffer, opts);
+    }
+/*    public TFLiteModelInspector(ByteBuffer modelBuffer, GpuDelegate.Options gpuOptions) {
         this.modelBuffer = modelBuffer;
         try {
             gpuDelegate = new GpuDelegate(gpuOptions);
@@ -50,7 +60,7 @@ public class TFLiteModelInspector {
                     new Interpreter.Options().setNumThreads(
                             Runtime.getRuntime().availableProcessors()));
         }
-    }
+    }*/
     public static void main(String[] args,Interpreter tflite) {
         // Modeli yükle
         //Interpreter tflite = new Interpreter(loadModelFile("dump/my_birds_model.tflite"));
@@ -223,24 +233,34 @@ public class TFLiteModelInspector {
         int[] outShape = interpreter.getOutputTensor(0).shape(); // e.g. [1, N, M]
         float[][][] output = new float[outShape[0]][outShape[1]][outShape[2]];
 
-        // 5. Run inference with fallback
-        try {
-            interpreter.run(inputBuffer, output);
-        } catch (Exception gpuFail) {
-            Log.e(TAG, "GPU inference failed, switching to CPU", gpuFail);
-            // Close GPU interpreter
-            interpreter.close();
-            if (gpuDelegate != null) {
-                gpuDelegate.close();
-                gpuDelegate = null;
+// 5. Run inference with null-check ve fallback
+        if (interpreter != null && inputBuffer != null && output != null) {
+            try {
+                interpreter.run(inputBuffer, output);
+            } catch (Exception gpuFail) {
+                Log.e(TAG, "GPU inference failed, switching to CPU", gpuFail);
+                // GPU interpreter’ı kapat
+                interpreter.close();
+                if (gpuDelegate != null) {
+                    gpuDelegate.close();
+                    gpuDelegate = null;
+                }
+                // CPU interpreter
+                Interpreter cpuInterp = new Interpreter(modelBuffer,
+                        new Interpreter.Options()
+                                .setNumThreads(
+                                        Runtime.getRuntime().availableProcessors()));
+                if (cpuInterp != null) {
+                    cpuInterp.run(inputBuffer, output);
+                    cpuInterp.close();
+                } else {
+                    Log.e(TAG, "CPU interpreter oluşturulamadı, inference atlandı");
+                }
             }
-            // CPU interpreter
-            Interpreter cpuInterp = new Interpreter(modelBuffer,
-                    new Interpreter.Options()
-                            .setNumThreads(Runtime.getRuntime().availableProcessors()));
-            cpuInterp.run(inputBuffer, output);
-            cpuInterp.close();
+        } else {
+            Log.e(TAG, "Interpreter ya da buffer’lar null, inference atlandı");
         }
+
 
         return output;
     }

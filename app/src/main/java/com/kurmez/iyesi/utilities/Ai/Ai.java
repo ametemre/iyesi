@@ -1,6 +1,6 @@
 package com.kurmez.iyesi.utilities.Ai;
 
-import static com.kurmez.iyesi.utilities.Ai.Threading.initGpuDelegate;
+import static com.kurmez.iyesi.utilities.delegate.Threading.initGpuDelegate;
 
 import android.content.Context;
 import android.content.res.AssetManager;
@@ -11,6 +11,8 @@ import android.util.Log;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.util.Consumer;
+
+import com.kurmez.iyesi.utilities.delegate.TFLiteModelInspector;
 
 import org.tensorflow.lite.Interpreter;
 import org.tensorflow.lite.Tensor;
@@ -23,10 +25,6 @@ import java.nio.charset.Charset;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-
-import java.util.concurrent.TimeUnit;
 
 public class Ai implements AutoCloseable {
     private static final String TAG = "AiModel";
@@ -36,7 +34,7 @@ public class Ai implements AutoCloseable {
     private GpuDelegate gpuDelegate;
     private float[][][] outputBuffer;          // Örn: new float[...][...][...]
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
-    private final ExecutorService executor;
+    //private final ExecutorService executor;
     private static final float[][][] EMPTY_VIDEO_OUTPUT = new float[0][0][0];
     private final Context context;
     private final Interpreter soundInterpreter;
@@ -69,13 +67,12 @@ public class Ai implements AutoCloseable {
 
     public Ai(@NonNull Context context, @Nullable String soundModelPath, @Nullable String videoModelPath, @Nullable String labelsPath) throws IOException {
         this.context = context;
-        this.executor = Executors.newFixedThreadPool(2, r -> {
+/*        this.executor = Executors.newFixedThreadPool(2, r -> {
             Thread t = new Thread(r, "AiWorker-" + System.currentTimeMillis());
             t.setPriority(Thread.NORM_PRIORITY - 1);
             return t;
         });
-        this.gpuDelegate = initGpuDelegate(context);
-
+        this.gpuDelegate = initGpuDelegate(context);*/
         AssetManager assets = context.getAssets();
         Interpreter.Options options = createInterpreterOptions(gpuDelegate);
 
@@ -153,17 +150,17 @@ public class Ai implements AutoCloseable {
 
     // Inference (video/frame)
     public void predictVideo(final float[][][][] input, final Consumer<float[][][]> callback) {
-        if (executor.isShutdown() || executor.isTerminated()) {
+/*        if (executor.isShutdown() || executor.isTerminated()) {
             Log.w(TAG, "predictVideo: executor kapalı, atlanıyor");
             callback.accept(EMPTY_VIDEO_OUTPUT);
             return;
         }
         Log.d(TAG, "-predictVideo- çağırıldı...");
-        executor.execute(() -> {
+        executor.execute(() -> {*/
             try {
                 // 1. GPU ile dene
                 synchronized (videoInterpreter) {
-                    videoInterpreter.run(input, outputBuffer);
+                    this.videoInterpreter.run(input, outputBuffer);
                 }
                 Log.d(TAG, "Inference GPU ile tamamlandı.");
             } catch (Exception gpuEx) {
@@ -197,12 +194,12 @@ public class Ai implements AutoCloseable {
 
             // 5. Sonucu UI thread’e yolla
             mainHandler.post(() -> callback.accept(outputBuffer));
-        });
+        //});
     }
 
     // Inference (sound)
     public void predictSound(@NonNull float[][] input, @NonNull Consumer<float[]> callback) {
-        executor.execute(() -> {
+        //executor.execute(() -> {
             try {
                 float[] output = new float[soundOutputLength];
                 soundInterpreter.run(input, output);
@@ -211,7 +208,7 @@ public class Ai implements AutoCloseable {
                 Log.e(TAG, "Sound prediction failed", e);
                 mainHandler.post(() -> callback.accept(new float[0]));
             }
-        });
+        //});
     }
     public String getInputShapeInfo(Interpreter interpreter) {
         if (interpreter == null) return "interpreter=null";
@@ -240,7 +237,7 @@ public class Ai implements AutoCloseable {
     // Getter'lar
     public Interpreter getVideoInterpreter() { return videoInterpreter; }
     public Interpreter getSoundInterpreter() { return soundInterpreter; }
-    public ExecutorService getExecutor() { return executor; }
+    //public ExecutorService getExecutor() { return executor; }
     public GpuDelegate getGpuDelegate() { return gpuDelegate; }
     public int getInputWidth() { return videoInputShape.length >= 3 ? videoInputShape[2] : 0; }
     public int getInputHeight() { return videoInputShape.length >= 2 ? videoInputShape[1] : 0; }
@@ -249,6 +246,7 @@ public class Ai implements AutoCloseable {
     // Kaynak temizliği
     @Override
     public void close() {
+        /*
         // Executor'u güvenli şekilde kapat
         if (executor != null && !executor.isShutdown()) {
             executor.shutdown();
@@ -261,7 +259,7 @@ public class Ai implements AutoCloseable {
                 Thread.currentThread().interrupt();
             }
         }
-
+*/
         // Model interpreter’ları kapat
         try {
             if (videoInterpreter != null) videoInterpreter.close();
@@ -290,4 +288,8 @@ public class Ai implements AutoCloseable {
     }
     private String lastUsedDelegate = "NONE";
     public String getLastUsedDelegate() { return lastUsedDelegate; }
+
+    public Interpreter getVideoInterpereter() {
+        return videoInterpreter;
+    }
 }

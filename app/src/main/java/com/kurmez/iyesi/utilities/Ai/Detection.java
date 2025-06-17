@@ -2,40 +2,40 @@ package com.kurmez.iyesi.utilities.Ai;
 
 import android.content.Context;
 import android.graphics.Bitmap;
-import android.graphics.Canvas;
-import android.graphics.Color;
 import android.util.Log;
 
-import androidx.annotation.NonNull;
-import androidx.annotation.Nullable;
-import androidx.core.util.Consumer;
-import androidx.core.util.Function;
-
 import com.kurmez.iyesi.kurmes.Kurmes;
+import com.kurmez.iyesi.utilities.delegate.TFLiteInputMapper;
+import com.kurmez.iyesi.utilities.delegate.TFLiteInputPreprocessor;
 
-import org.opencv.android.Utils;
 import org.opencv.core.Mat;
-import org.opencv.imgproc.Imgproc;
 
 import org.tensorflow.lite.Interpreter;
 
 import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 public class Detection {
+    public Mat incomingFrame;
+    public Bitmap incomingBitmap;
+
+    public void setIncomingFrame(Mat incomingFrame) {
+        this.incomingFrame = incomingFrame;
+    }
+    public Mat getIncomingFrame(){
+        return incomingFrame;
+    }
+
     // ————————————————
     // ❶ Detection sonucu alanları
     // ————————————————
-    public final String label;
+/*    public final String label;
     public final int classId;
-    public final float x1, y1, x2, y2, score;
+    public final float x1, y1, x2, y2, score;*/
     // DetectionActivity.java
     private static final float SCORE_THRESHOLD = 0.9f;  // 50% üzeri kesin kabul
     float scoreThreshold = 0.25f;
@@ -67,6 +67,7 @@ public class Detection {
     private static final int VIDEO_THRESHOLD = 3;
     private static final int SOUND_THRESHOLD = 3;
     private Bitmap reusableFrameBitmap = null;
+    private ExecutorService executorService;
     private Bitmap reusableScaledBitmap = null;
     private ByteBuffer reusableInputBuffer = null;
     private final Object lock = new Object(); // thread-safe olması için
@@ -77,25 +78,39 @@ public class Detection {
     private final List<Bitmap> photoList = new ArrayList<>();
     private static final int REQUEST_STORAGE_PERMISSION = 1001;
 
-    public Detection(Ai ai, Interpreter interpreter, Context context, int classId, float score, float x1, float y1, float x2, float y2, String label) {
+    public Detection(Ai ai, Interpreter interpreter, Context context/*, int classId, float score, float x1, float y1, float x2, float y2, String label*/) {
         this.ai = ai;
         this.interpreter = interpreter;
         this.context = context;
+        //process(this.incomingFrame);
+        /*
         this.classId = classId;
         this.score = score;
         this.x1 = x1; this.y1 = y1;
         this.x2 = x2; this.y2 = y2;
-        this.label = label;
+        this.label = label;*/
         // initiateDetection(ai, frame); // GEREKSİZ!
     }
+    public void process(Mat incomingFrame){
+        try {
+            this.incomingFrame = incomingFrame;
+            this.mapper = new TFLiteInputMapper(ai,incomingFrame,context);
+            this.preProcess =  new TFLiteInputPreprocessor(mapper);
+        } catch (Exception e) {
+            Log.e(TAG,"Error:" + e);
+            throw new RuntimeException(e);
+        }
 
+
+    }
+/*
     private void initiateDetection(Ai ai,Bitmap frame) {
         this.mapper = new TFLiteInputMapper(frame.getWidth(),frame.getHeight(),ai.getInputWidth(),ai.getInputHeight());
         this.preProcess =  new TFLiteInputPreprocessor(mapper);
     }
 
     public String getLabelName(int classId) {
-        String[] labels = {"person","bicycle","car", /* … */};
+        String[] labels = {"person","bicycle","car", *//* … *//*};
         if (classId >= 0 && classId < labels.length) return labels[classId];
         return "cls" + classId;
     }
@@ -110,9 +125,9 @@ public class Detection {
         return labels;
     }
     public List<Detection> parseDetections(float[][][] output) {
-        /**
+        *//**
          * Modelin float[][][] çıktısı → Detection listesi
-         */
+         *//*
         List<Detection> list = new ArrayList<>();
         if (output == null || output.length == 0 || output[0] == null) return list;
         for (float[] row : output[0]) {
@@ -189,13 +204,14 @@ public class Detection {
         float[][][][] inputTensor = TFLiteInputPreprocessor.bitmapToInputTensor(modelBitmap);
         if (inputTensor == null) return null;
 
-        // 4. Inference (Ai.java)
+*//*        // 4. Inference (Ai.java)
         ai.predictVideo(inputTensor, rawOutput -> {
+            Log.d(TAG, "prediction initiates...");
             // 5. Çıktı post-processing (parseDetections veya benzeri fonksiyon)
-            detections = parseDetections(rawOutput, ai);
+            detections = parseDetectionsScored(rawOutput,interpreter, ai);
             // 6. ToDo: UI update veya threading ile ana thread'e aktar
             // Threading.runOnUiThread(() -> ...);
-        });
+        });*//*
         return detections;
     }
     // --- UTIL: Mat to Bitmap ---
@@ -218,4 +234,5 @@ public class Detection {
         // float[][] raw = rawOutput[0]; ...
         return new ArrayList<>(); // ya da parse et
     }
+    */
 }
