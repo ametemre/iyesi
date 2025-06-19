@@ -30,6 +30,11 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 public class Detection {
+    public int classId;
+    public String label;
+    public float score;
+    public float x1, y1, x2, y2;
+
     public Mat incomingFrame;
     public Mat getIncomingFrame(){
         return incomingFrame;
@@ -85,10 +90,15 @@ public class Detection {
     private final List<Bitmap> photoList = new ArrayList<>();
     private static final int REQUEST_STORAGE_PERMISSION = 1001;
 
-    public Detection(Ai ai, Interpreter interpreter, Context context/*, int classId, float score, float x1, float y1, float x2, float y2, String label*/) {
+    public Detection(Ai ai, Interpreter interpreter, Context context, int classId, float score, float x1, float y1, float x2, float y2, String label) {
         this.ai = ai;
         this.interpreter = interpreter;
         this.context = context;
+        this.classId = classId;
+        this.label   = label;
+        this.score   = score;
+        this.x1 = x1; this.y1 = y1;
+        this.x2 = x2; this.y2 = y2;
     }
     public Mat process(Mat incomingFrame){
         try {
