@@ -18,6 +18,7 @@ import com.kurmez.iyesi.utilities.helper.Permissions;
 import com.kurmez.iyesi.R;
 
 import org.opencv.android.CameraBridgeViewBase;
+import org.opencv.android.Utils;
 import org.opencv.core.Mat;
 
 import android.graphics.Bitmap;
@@ -29,6 +30,7 @@ import android.util.Log;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowManager;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
@@ -42,6 +44,7 @@ import org.tensorflow.lite.Interpreter;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -52,6 +55,7 @@ import org.opencv.core.MatOfRect;
 import org.tensorflow.lite.support.label.Category;
 
 import java.util.ArrayList;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
 
@@ -65,12 +69,27 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
         IDLE, FACE_DETECTION, OBJECT_DETECTION, TRACKING, CAPTURE,TEST
     }
     public State currentState = State.IDLE;
-
+    // Sınıf alanına ekleyin
+    private ImageView processedView;
     private List<float[]> buffer = new ArrayList<>();
     private List<float[]> soundBuffer = new ArrayList<>();
     private List<float[][][]> videoBuffer = new ArrayList<>();
     private List<Bitmap> photoList = new ArrayList<>(); // List to store captured images
-
+    //----------------------------------------------------------------------------------------------Threading
+    int cpuCores = Runtime.getRuntime().availableProcessors();
+    ThreadPoolExecutor cpuExecutor = new ThreadPoolExecutor(
+            Math.max(1, cpuCores - 1),    // core havuz boyutu = toplam çekirdek-1
+            Math.max(1, cpuCores - 1),    // max havuz boyutu = toplam çekirdek-1
+            1, TimeUnit.SECONDS,          // keep-alive süresi
+            new ArrayBlockingQueue<>(2),  // küçük kuyruk, sıktığında yeni thread açar
+            new ThreadPoolExecutor.DiscardOldestPolicy()
+    );
+    ExecutorService gpuExecutor = Executors.newSingleThreadExecutor(r -> {
+        Thread t = new Thread(r, "GpuThread");
+        t.setPriority(Thread.MAX_PRIORITY);
+        return t;
+    });
+    //----------------------------------------------------------------------------------------------Threading
     // Sound labels for each species model (fill in actual labels)
     private static final String[] KEDI_SOUNDS  = {"meow", "purr"};
     private static final String[] KOPEK_SOUNDS = {"bark", "growl"};
@@ -104,13 +123,13 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
     private Actions actions;
     private VideoClassifier videoClassifier;
     private SoundClassifier soundClassifier;
-    ExecutorService executor = Executors.newSingleThreadExecutor();
     Threading threading = new Threading();
     //----------------------------------------------------------------------------------------------<<Creation
     //private boolean cleanUp = false;
     public boolean isPredicting = false;
     private boolean isRunning = false;
     private TextView labelText, statusText,cameraStatusText;
+    private LinearLayout linearLayout;
     public static final int CAMERA_PERMISSION_REQUEST_CODE = 100;
     private static final int REQUEST_IMAGE_CAPTURE = 1; // Request code for capturing a photo
     public static final int DETECTION_INPUT_SIZE = 640;  // 640→320
@@ -136,12 +155,13 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
         mAuth = FirebaseAuth.getInstance();
         // Keep screen on
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-
+        processedView = findViewById(R.id.processed_view);
         // UI elements
         labelText        = findViewById(R.id.label_text);
         cameraStatusText = findViewById(R.id.camera_status_text);
         fabMain         = findViewById(R.id.fab_main);
         fabAction         = findViewById(R.id.fab_Sound);
+        linearLayout = findViewById(R.id.detected_sounds_list);
         labelText.setText("init...");
         // 1) Ai ve pipeline başlat
         pipeline = new RTPipeline();
@@ -184,7 +204,7 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
                         //runOnUiThread(() -> Toast.makeText(this, "Önce bir seçenek seçin", Toast.LENGTH_SHORT).show());
                         return;
                     }
-                    executor.execute(() -> {
+                    gpuExecutor.execute(() -> {
                         // Model yüklemesi ve fallback güvenliği
                         try {
                             ai = actions.performSelectedAction(miniFabs.getSelectedFab());
@@ -300,61 +320,68 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
         threading.availableGPUThreads();
 
     }                                                         //done
+
+
     @Override
     public Mat onCameraFrame(CameraBridgeViewBase.CvCameraViewFrame inputFrame) {
-        // 1) RGBA frame’i yalnızca bir kez oku
-        Mat frame = inputFrame.rgba();
+        try {
+            this.rgba = inputFrame.rgba();
+        } catch (Exception e) {
+            Log.e(TAG,"İnputFrame : " + e);
+            throw new RuntimeException(e);
+        }
+        Mat display = rgba.clone();  // Ön izleme için güvenli klon
 
-        // 2) Eğer algılama modundaysa, background thread’e gönder
-        if (isPredicting && detectionRunner != null) {
-            // A) Frame’in bir kopyasını al
-            Mat backgroundFrame = frame.clone();
+        if (isPredicting && frameCount++ % SKIP_FRAMES == 0) {
 
-            executor.execute(() -> {
+            // İnferans ve çizim işleri için ayrı klonlar
+            Mat copyForProcess   = rgba.clone();
+            Mat copyForInference = rgba.clone();
+            if (ai == null || !isPredicting) return rgba;
+            Log.d(TAG,"İnputFrame : " + rgba.height() + "/" + rgba.width());
+            if (!gpuExecutor.isShutdown()) {
+            gpuExecutor.submit(() -> {
+                Log.d(TAG,"İnputFrame ai : " + ai.getInputHeight() + "/" + ai.getInputWidth());
                 try {
-                    // TODO: GC / reuse yönetimi (ModelIn, det, backgroundFrame)
-                    // TODO: ViewModel / servis ile frame’leri ve buffer’ları temizleme/yeniden kullanma
-                    //   1) Ön işlem
-                    Mat modelIn = detectionRunner.process(backgroundFrame);
-                    //   2) Inference
-                    List<float[]> raw = detectionRunner.runInference(modelIn);
-                    //   3) Detection + ROI gölgeleme
-                    Mat det = detectionRunner.drawDetections(backgroundFrame, raw);
-                    Mat overlaid = openCvUtil.overlay(det);
+                    // 1) Ön işlem
+                    Mat pre = detectionRunner.process(copyForProcess);
+                    Log.d(TAG,"İnputFrame rgb : " + pre.height() + "/" + pre.width());
 
-                    //   4) Sonucu kaydet
+                    // 2) İnferans
+                    buffer = detectionRunner.runInference(pre,this,linearLayout);
+                    Bitmap frameBitmap = detectionRunner.matToBitmap(pre);
+                    Log.d(TAG,"İnputFrame bitmap : " + frameBitmap.getHeight() + "/" + frameBitmap.getWidth());
+                    videoClassifier.classifyFrame(frameBitmap);
 
-                    // paylaşılan lastResult’a yaz
-                    synchronized (lock) {
-                        if (lastResult != null && !lastResult.empty()) {
-                            lastResult.release();
-                        }
-                        lastResult = openCvUtil.overlay(frame);
-                    }
-
-                    //   5) Kaynakları serbest bırak
-                    modelIn.release();
-                    det.release();
-                    backgroundFrame.release();
+                    List<float[]> dets = detectionRunner.runInference(copyForInference,this,linearLayout);
+                    // 3) Deteksiyon çizimi
+                    Mat drawn = detectionRunner.drawDetections(copyForProcess, dets);
+                    // 4) Overlay ve Bitmap’e çevirme
+                    Mat overlaidMat = openCvUtil.overlay(drawn);
+                    Bitmap bmp = detectionRunner.matToBitmapSafe(overlaidMat);
+                    // 5) UI thread’inde göster
+                    runOnUiThread(() -> processedView.setImageBitmap(frameBitmap));
+                    // Kaynak temizliği
+                    rgb.release();
+                    pre.release();
+                    drawn.release();
+                    overlaidMat.release();
                 } catch (Exception e) {
-                    Log.e(TAG, "Background processing error", e);
+                    Log.e(TAG, "Background inference error", e);
+                    // ToDo: Hatalı model yükleme veya AI tespit hatalarında otomatik fallback veya retry mekanizması ekle.
+
+                } finally {
+                    copyForProcess.release();
+                    copyForInference.release();
                 }
             });
-
-            // 2.c) hemen önceki sonucu ya da ham frame’i döndür
-            synchronized (lock) {
-                if (lastResult != null && !lastResult.empty()) {
-                    return lastResult;
-                } else {
-                    // ilk çalışmada henüz işlenmiş yoksa ROI + çerçeve uygula
-                    return openCvUtil.overlay(frame);
-                }
             }
         }
 
-        // 3) AI devrede değilse sadece ROI + çerçeve çiz
-        return openCvUtil.overlay(frame);
+        // Her zaman sağlam bir Mat döndür
+        return rgba;
     }
+
 
 
     protected void onResume() {
@@ -404,14 +431,14 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
 
 
         // Executor'ü düzgün kapat
-        if (executor != null) {
-            executor.shutdown();
+        if (gpuExecutor != null) {
+            gpuExecutor.shutdown();
             try {
-                if (!executor.awaitTermination(800, TimeUnit.MILLISECONDS)) {
-                    executor.shutdownNow();
+                if (!gpuExecutor.awaitTermination(800, TimeUnit.MILLISECONDS)) {
+                    gpuExecutor.shutdownNow();
                 }
             } catch (InterruptedException e) {
-                executor.shutdownNow();
+                gpuExecutor.shutdownNow();
                 Thread.currentThread().interrupt();
             }
         }
@@ -446,34 +473,8 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
         });
     }//Essential For Camera
     //--------------------------Creation
-    public void updateDetectionList(List<Category> detectedCategories) {
-        LinearLayout detectedSoundsLayout = findViewById(R.id.detected_sounds_list);
 
-        //detectedSoundsLayout.removeAllViews(); // Clear previous results
 
-        for (Category category : detectedCategories) {
-            float confidence = category.getScore();
-            if (confidence > 0.79) { // Only show confidence > 79%
-                TextView textView = new TextView(this);
-                textView.setText(category.getDisplayName() + "---" + category.getLabel() + " - " + String.format("%.2f", confidence * 100) + "%");
-                textView.setTextSize(16);
-                textView.setTextColor(Color.WHITE);
-                textView.setPadding(10, 10, 10, 10);
-
-                detectedSoundsLayout.addView(textView);
-            }
-        }
-
-        // If no high-confidence results, show "No strong detection"
-        if (detectedSoundsLayout.getChildCount() == 0) {
-            TextView noResultView = new TextView(this);
-            noResultView.setText("No strong detections");
-            noResultView.setTextSize(16);
-            noResultView.setTextColor(Color.CYAN);
-            noResultView.setPadding(10, 10, 10, 10);
-            detectedSoundsLayout.addView(noResultView);
-        }
-    }
     public boolean cameraState(Boolean state){
         if (state){
             if (mOpenCvCameraView != null) {

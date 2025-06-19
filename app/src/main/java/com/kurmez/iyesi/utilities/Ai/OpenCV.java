@@ -11,10 +11,13 @@ import org.opencv.imgproc.Imgproc;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public class OpenCV implements CameraBridgeViewBase.CvCameraViewListener2 {
     private static final String TAG = "OpenCV";
     private Rect roi;
+    ExecutorService executor = Executors.newSingleThreadExecutor();
 
     private void initROI(int width, int height) {
         int w = 200, h = 200;
@@ -38,40 +41,42 @@ public class OpenCV implements CameraBridgeViewBase.CvCameraViewListener2 {
     @Override
     public Mat onCameraFrame(CameraBridgeViewBase.CvCameraViewFrame inputFrame) {
         Mat frame = inputFrame.rgba();
+        Mat display = frame.clone();  // Çizimleri bu klona yap
 
-        // ROI vurgulama
-        if (roi != null) {
-            // Karartmalar
-            Imgproc.rectangle(frame, new Point(0,0),
-                    new Point(frame.cols(), roi.y),
-                    new Scalar(0,0,0,80), -1);
-            Imgproc.rectangle(frame, new Point(0, roi.y + roi.height),
+        executor.submit(() -> {
+            // ROI vurgulama
+            if (roi != null) {
+                // Karartmalar
+                Imgproc.rectangle(frame, new Point(0, 0),
+                        new Point(frame.cols(), roi.y),
+                        new Scalar(0, 0, 0, 80), -1);
+                Imgproc.rectangle(frame, new Point(0, roi.y + roi.height),
+                        new Point(frame.cols(), frame.rows()),
+                        new Scalar(0, 0, 0, 80), -1);
+                Imgproc.rectangle(frame, new Point(0, roi.y),
+                        new Point(roi.x, roi.y + roi.height),
+                        new Scalar(0, 0, 0, 80), -1);
+                Imgproc.rectangle(frame, new Point(roi.x + roi.width, roi.y),
+                        new Point(frame.cols(), roi.y + roi.height),
+                        new Scalar(0, 0, 0, 80), -1);
+
+                // ROI çerçevesi
+                Imgproc.rectangle(frame, roi.tl(), roi.br(),
+                        new Scalar(0, 255, 0), 3);
+            }
+
+            // Örnek şekiller
+            Imgproc.circle(frame, new Point(80, 80), 30,
+                    new Scalar(255, 0, 0), 3);
+            Imgproc.line(frame, new Point(0, 0),
                     new Point(frame.cols(), frame.rows()),
-                    new Scalar(0,0,0,80), -1);
-            Imgproc.rectangle(frame, new Point(0, roi.y),
-                    new Point(roi.x, roi.y + roi.height),
-                    new Scalar(0,0,0,80), -1);
-            Imgproc.rectangle(frame, new Point(roi.x + roi.width, roi.y),
-                    new Point(frame.cols(), roi.y + roi.height),
-                    new Scalar(0,0,0,80), -1);
-
-            // ROI çerçevesi
-            Imgproc.rectangle(frame, roi.tl(), roi.br(),
-                    new Scalar(0,255,0), 3);
-        }
-
-        // Örnek şekiller
-        Imgproc.circle(frame, new Point(80,80), 30,
-                new Scalar(255,0,0), 3);
-        Imgproc.line(frame, new Point(0,0),
-                new Point(frame.cols(), frame.rows()),
-                new Scalar(0,255,255), 2);
-        Imgproc.putText(frame, "OpenCV RealTime",
-                new Point(30, frame.rows()-30),
-                Imgproc.FONT_HERSHEY_SIMPLEX, 1.0,
-                new Scalar(255,255,255), 2);
-
-        return frame;
+                    new Scalar(0, 255, 255), 2);
+            Imgproc.putText(frame, "OpenCV RealTime",
+                    new Point(30, frame.rows() - 30),
+                    Imgproc.FONT_HERSHEY_SIMPLEX, 1.0,
+                    new Scalar(255, 255, 255), 2);
+        });
+        return display;
     }/*
     // OpenCV.java içinde
     public Mat overlay(Mat frame) {
@@ -139,10 +144,7 @@ public class OpenCV implements CameraBridgeViewBase.CvCameraViewListener2 {
 
 // OpenCV.java içinde, class sonuna doğru:
 
-    public void drawDetectionsOnMat_raw(
-            ArrayList<Detection> rawDetections,
-            Mat frame
-    ) {
+    public void drawDetectionsOnMat_raw(ArrayList<Detection> rawDetections, Mat frame) {
         List<DetectionResult> results = new ArrayList<>();
         for (Detection d : rawDetections) {
             results.add(new DetectionResult(
@@ -159,30 +161,3 @@ public class OpenCV implements CameraBridgeViewBase.CvCameraViewListener2 {
 
 }  // <-- ve burası sınıfın kapanışı
 
-/** Sadece sonuçları tutmak için basit POJO */
-class DetectionResult {
-    private final int    classId;
-    private final String label;
-    private final float  score;
-    private final float  x1, y1, x2, y2;
-
-    public DetectionResult(int classId,
-                           String label,
-                           float score,
-                           float x1, float y1,
-                           float x2, float y2) {
-        this.classId = classId;
-        this.label   = label;
-        this.score   = score;
-        this.x1 = x1; this.y1 = y1;
-        this.x2 = x2; this.y2 = y2;
-    }
-
-    public int    getClassId() { return classId; }
-    public String getLabel()   { return label; }
-    public float  getScore()   { return score; }
-    public float  getX1()      { return x1; }
-    public float  getY1()      { return y1; }
-    public float  getX2()      { return x2; }
-    public float  getY2()      { return y2; }
-}

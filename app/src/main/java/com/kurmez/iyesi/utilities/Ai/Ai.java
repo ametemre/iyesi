@@ -113,7 +113,6 @@ public class Ai implements AutoCloseable {
         if (modelPath == null || modelPath.isEmpty()) return null;
         try {
             this.modelBuffer = TFLiteModelInspector.loadModelFile(assets, modelPath);
-
             // Try GPU first
             try {
                 gpuDelegate = initGpuDelegate(context);

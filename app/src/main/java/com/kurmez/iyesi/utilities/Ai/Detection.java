@@ -1,14 +1,26 @@
 package com.kurmez.iyesi.utilities.Ai;
 
+import static com.kurmez.iyesi.utilities.delegate.Threading.runOnUiThread;
+
+import android.annotation.SuppressLint;
 import android.content.Context;
 import android.graphics.Bitmap;
+import android.graphics.Color;
 import android.util.Log;
+import android.view.View;
+import android.widget.LinearLayout;
+import android.widget.TextView;
 
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+
+import com.kurmez.iyesi.R;
 import com.kurmez.iyesi.kurmes.Kurmes;
 import com.kurmez.iyesi.utilities.delegate.TFLiteInputMapper;
 import com.kurmez.iyesi.utilities.delegate.TFLiteInputPreprocessor;
 
 import org.opencv.android.Utils;
+import org.opencv.core.CvType;
 import org.opencv.core.Mat;
 
 import org.opencv.core.Point;
@@ -21,9 +33,12 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
+import java.util.ListIterator;
 import java.util.Map;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
@@ -34,7 +49,7 @@ public class Detection {
     public String label;
     public float score;
     public float x1, y1, x2, y2;
-
+    private List<DetectionResult> d;
     public Mat incomingFrame;
     public Mat getIncomingFrame(){
         return incomingFrame;
@@ -99,6 +114,138 @@ public class Detection {
         this.score   = score;
         this.x1 = x1; this.y1 = y1;
         this.x2 = x2; this.y2 = y2;
+        this.d = new List<DetectionResult>() {
+            @Override
+            public int size() {
+                return 0;
+            }
+
+            @Override
+            public boolean isEmpty() {
+                return false;
+            }
+
+            @Override
+            public boolean contains(@Nullable Object o) {
+                return false;
+            }
+
+            @NonNull
+            @Override
+            public Iterator<DetectionResult> iterator() {
+                return null;
+            }
+
+            @NonNull
+            @Override
+            public Object[] toArray() {
+                return new Object[0];
+            }
+
+            @NonNull
+            @Override
+            public <T> T[] toArray(@NonNull T[] a) {
+                return null;
+            }
+
+            @Override
+            public boolean add(DetectionResult detectionResult) {
+                return false;
+            }
+
+            @Override
+            public boolean remove(@Nullable Object o) {
+                return false;
+            }
+
+            @Override
+            public boolean containsAll(@NonNull Collection<?> c) {
+                return false;
+            }
+
+            @Override
+            public boolean addAll(@NonNull Collection<? extends DetectionResult> c) {
+                return false;
+            }
+
+            @Override
+            public boolean addAll(int index, @NonNull Collection<? extends DetectionResult> c) {
+                return false;
+            }
+
+            @Override
+            public boolean removeAll(@NonNull Collection<?> c) {
+                return false;
+            }
+
+            @Override
+            public boolean retainAll(@NonNull Collection<?> c) {
+                return false;
+            }
+
+            @Override
+            public void clear() {
+
+            }
+
+            @Override
+            public boolean equals(@Nullable Object o) {
+                return false;
+            }
+
+            @Override
+            public int hashCode() {
+                return 0;
+            }
+
+            @Override
+            public DetectionResult get(int index) {
+                return null;
+            }
+
+            @Override
+            public DetectionResult set(int index, DetectionResult element) {
+                return null;
+            }
+
+            @Override
+            public void add(int index, DetectionResult element) {
+
+            }
+
+            @Override
+            public DetectionResult remove(int index) {
+                return null;
+            }
+
+            @Override
+            public int indexOf(@Nullable Object o) {
+                return 0;
+            }
+
+            @Override
+            public int lastIndexOf(@Nullable Object o) {
+                return 0;
+            }
+
+            @NonNull
+            @Override
+            public ListIterator<DetectionResult> listIterator() {
+                return null;
+            }
+
+            @NonNull
+            @Override
+            public ListIterator<DetectionResult> listIterator(int index) {
+                return null;
+            }
+
+            @NonNull
+            @Override
+            public List<DetectionResult> subList(int fromIndex, int toIndex) {
+                return Collections.emptyList();
+            }
+        };
     }
     public Mat process(Mat incomingFrame){
         try {
@@ -111,47 +258,202 @@ public class Detection {
         }
         return mapper.map();
     }
-    // Detection.java'ya yeni metod ekleyin
-    public List<float[]> runInference(Mat frame) {
-        try {
-            // 1. Giriş verisini hazırla
-            Bitmap inputBitmap = matToBitmap(frame);
-            ByteBuffer inputBuffer = convertBitmapToByteBuffer(inputBitmap);
+    public List<DetectionResult> createDetectionList(float[][] output2D, Mat inputFrame) {
+        List<DetectionResult> results = new ArrayList<>();
 
-            // 2. Çıktı tensörünün şeklini al ve uygun dizi oluştur
-            Tensor outputTensor = interpreter.getOutputTensor(0);
-            int[] outputShape = outputTensor.shape(); // [1, 84, 8400]
-            float[][][] outputArray = new float[outputShape[0]][outputShape[1]][outputShape[2]];
+        if (output2D == null || inputFrame == null) {
+            return results;
+        }
 
-            // 3. Modeli çalıştır
-            Map<Integer, Object> outputs = new HashMap<>();
-            outputs.put(0, outputArray);
-            interpreter.runForMultipleInputsOutputs(new Object[]{inputBuffer}, outputs);
+        int width = inputFrame.cols();
+        int height = inputFrame.rows();
 
-            // 4. Çıktıyı yeniden düzenle: [8400, 84] formatına getir
-            List<float[]> outputList = new ArrayList<>();
-            for (int i = 0; i < outputShape[2]; i++) { // 8400 nesne
-                float[] features = new float[outputShape[1]]; // 84 özellik
-                for (int j = 0; j < outputShape[1]; j++) {
-                    features[j] = outputArray[0][j][i];
-                }
-                outputList.add(features);
+        for (float[] features : output2D) {
+            if (features == null || features.length < 5) {
+                continue;
             }
 
-            // Log kontrolü (isteğe bağlı)
-            Log.d(TAG, "Toplam tespit: " + outputList.size());
-            return outputList;
+            // 1) En iyi sınıfı ve skorunu bul
+            int bestClass = -1;
+            float bestScore = 0f;
+            for (int c = 4; c < features.length; c++) {
+                if (features[c] > bestScore) {
+                    bestScore = features[c];
+                    bestClass = c - 4;
+                }
+            }
+
+            // 2) Eşik kontrolü
+            if (bestScore > CONFIDENCE_THRESHOLD) {
+                // 3) Box koordinatlarını orijinal frame boyutuna ölçekle
+                float xCenter = features[0] * width;
+                float yCenter = features[1] * height;
+                float boxW = features[2] * width;
+                float boxH = features[3] * height;
+
+                // 4) Detection nesnesini oluştur
+                DetectionResult det = new DetectionResult(
+                        bestClass,
+                        getClassName(bestClass),
+                        bestScore,
+                        xCenter - boxW / 2, // x1
+                        yCenter - boxH / 2, // y1
+                        xCenter + boxW / 2, // x2
+                        yCenter + boxH / 2  // y2
+                );
+
+                results.add(det);
+            }
+        }
+        fetchDetections(results);
+        return results;
+    }
+    private void fetchDetections(List<DetectionResult> detectedCategories) {
+        List<DetectionResult> results = new ArrayList<>();
+        for (DetectionResult d : detectedCategories) {
+            //d.label;
+        }
+    }
+    // Detection.java'ya yeni metod ekleyin
+    public List<DetectionResult> runInference(Mat frame, Context context, LinearLayout layout) {
+        int width = frame.cols();
+        int height = frame.rows();
+        List<DetectionResult> detectionList = new ArrayList<>();
+
+        try {
+            Bitmap inputBitmap = matToBitmap(frame);
+            ByteBuffer inputBuffer = convertBitmapToByteBuffer(inputBitmap);
+            Tensor outputTensor = interpreter.getOutputTensor(0);
+            int[] outputShape = outputTensor.shape();
+
+            if (outputShape.length == 2) {
+                float[][] output2D = new float[outputShape[0]][outputShape[1]];
+                interpreter.run(inputBuffer, output2D);
+
+                for (float[] features : output2D) {
+                    DetectionResult det = parseDetection(features, width, height);
+                    if (det != null) detectionList.add(det);
+                }
+            }
+            else if (outputShape.length == 3) {
+                float[][][] output3D = new float[outputShape[0]][outputShape[1]][outputShape[2]];
+                Map<Integer, Object> outputs = new HashMap<>();
+                outputs.put(0, output3D);
+                interpreter.runForMultipleInputsOutputs(new Object[]{inputBuffer}, outputs);
+
+                for (int obj = 0; obj < outputShape[2]; obj++) {
+                    float[] features = new float[outputShape[1]];
+                    for (int feat = 0; feat < outputShape[1]; feat++) {
+                        features[feat] = output3D[0][feat][obj];
+                    }
+                    DetectionResult det = parseDetection(features, width, height);
+                    if (det != null) detectionList.add(det);
+                }
+            }
+            else if (outputShape.length == 4) {
+                float[][][][] output4D = new float[outputShape[0]][outputShape[1]][outputShape[2]][outputShape[3]];
+                Map<Integer, Object> outputs = new HashMap<>();
+                outputs.put(0, output4D);
+                interpreter.runForMultipleInputsOutputs(new Object[]{inputBuffer}, outputs);
+
+                for (int obj = 0; obj < outputShape[3]; obj++) {
+                    float[] features = new float[outputShape[1]];
+                    for (int feat = 0; feat < outputShape[1]; feat++) {
+                        features[feat] = output4D[0][feat][0][obj];
+                    }
+                    DetectionResult det = parseDetection(features, width, height);
+                    if (det != null) detectionList.add(det);
+                }
+            }
+
+            runOnUiThread(() -> updateDetectionList(detectionList, layout, context), context);
+            return detectionList;
         } catch (Exception e) {
             Log.e(TAG, "Inference error: " + e.getMessage());
             return new ArrayList<>();
         }
     }
 
+    // Yardımcı metod: Ham çıktıyı DetectionResult'a dönüştürür
+    private DetectionResult parseDetection(float[] features, int width, int height) {
+        // En yüksek skorlu sınıfı bul
+        int bestClass = -1;
+        float bestScore = 0f;
+        for (int c = 4; c < features.length; c++) {
+            if (features[c] > bestScore) {
+                bestScore = features[c];
+                bestClass = c - 4; // İlk 4 eleman box koordinatları
+            }
+        }
+
+        // Güven eşiğini kontrol et
+        if (bestScore < CONFIDENCE_THRESHOLD) {
+            return null;
+        }
+
+        // Bounding box koordinatlarını hesapla
+        float xCenter = features[0] * width;
+        float yCenter = features[1] * height;
+        float boxW = features[2] * width;
+        float boxH = features[3] * height;
+
+        return new DetectionResult(
+                bestClass,
+                getClassName(bestClass), // Sınıf adını al
+                bestScore,
+                xCenter - boxW / 2, // x1
+                yCenter - boxH / 2, // y1
+                xCenter + boxW / 2, // x2
+                yCenter + boxH / 2  // y2
+        );
+    }
+    public Bitmap matToBitmapSafe(Mat src) {
+        // 1) Girişin boyutlarını ve tipini kontrol edin
+        if (src.empty()) {
+            throw new IllegalArgumentException("Boş Mat gelmiş!");
+        }
+
+        // 2) RGBA 8-bit’e çevirin (src.channels()==3 ise; eğer zaten 4 ise klon alın)
+        Mat rgba = new Mat();
+        if (src.channels() == 4 && src.type() == CvType.CV_8UC4) {
+            src.copyTo(rgba);
+        } else if (src.channels() == 3) {
+            Imgproc.cvtColor(src, rgba, Imgproc.COLOR_BGR2RGBA);
+        } else if (src.channels() == 1) {
+            Imgproc.cvtColor(src, rgba, Imgproc.COLOR_GRAY2RGBA);
+        } else {
+            throw new IllegalArgumentException("Beklenmeyen kanal sayısı: " + src.channels());
+        }
+
+        // 3) Bitmap oluşturup doldurun
+        Bitmap bmp = Bitmap.createBitmap(rgba.cols(), rgba.rows(), Bitmap.Config.ARGB_8888);
+        Utils.matToBitmap(rgba, bmp);
+        return bmp;
+    }
+
     // Yardımcı metod: Mat -> Bitmap dönüşümü
-    public Bitmap matToBitmap(Mat mat) {
-        Bitmap bitmap = Bitmap.createBitmap(mat.cols(), mat.rows(), Bitmap.Config.ARGB_8888);
-        Utils.matToBitmap(mat, bitmap);
-        return bitmap;
+    public Bitmap matToBitmap(Mat src) {
+        // 1) Girişin boyutlarını ve tipini kontrol edin
+        if (src.empty()) {
+            throw new IllegalArgumentException("Boş Mat gelmiş!");
+        }
+
+        // 2) RGBA 8-bit’e çevirin (src.channels()==3 ise; eğer zaten 4 ise klon alın)
+        Mat rgba = new Mat();
+        if (src.channels() == 4 && src.type() == CvType.CV_8UC4) {
+            src.copyTo(rgba);
+        } else if (src.channels() == 3) {
+            Imgproc.cvtColor(src, rgba, Imgproc.COLOR_BGR2RGBA);
+        } else if (src.channels() == 1) {
+            Imgproc.cvtColor(src, rgba, Imgproc.COLOR_GRAY2RGBA);
+        } else {
+            throw new IllegalArgumentException("Beklenmeyen kanal sayısı: " + src.channels());
+        }
+
+        // 3) Bitmap oluşturup doldurun
+        Bitmap bmp = Bitmap.createBitmap(rgba.cols(), rgba.rows(), Bitmap.Config.ARGB_8888);
+        Utils.matToBitmap(rgba, bmp);
+        return bmp;
     }
 
     // Yardımcı metod: Bitmap -> ByteBuffer dönüşümü
@@ -170,7 +472,7 @@ public class Detection {
         }
         return inputBuffer;
     }
-    public Mat drawDetections(Mat originalFrame, List<float[]> detections) {
+    public Mat drawDetections(Mat originalFrame, List<DetectionResult> detections) {
         // Orijinal çerçevenin kopyasını oluştur
         Mat resultFrame = originalFrame.clone();
 
@@ -178,58 +480,36 @@ public class Detection {
         int width = resultFrame.cols();
         int height = resultFrame.rows();
 
-        for (float[] detection : detections) {
-            // En yüksek skorlu sınıfı bul
-            int classId = -1;
-            float maxConfidence = 0f;
-            for (int i = 4; i < detection.length; i++) {
-                if (detection[i] > maxConfidence) {
-                    maxConfidence = detection[i];
-                    classId = i - 4;
-                }
-            }
+        for (DetectionResult detection : detections) {
+            if (detection.getScore() < CONFIDENCE_THRESHOLD) continue;
 
-            // Güven skoru eşik değerini geçiyorsa
-            if (maxConfidence > CONFIDENCE_THRESHOLD) {
-                // Bounding box koordinatlarını hesapla
-                float x_center = detection[0] * width;
-                float y_center = detection[1] * height;
-                float box_width = detection[2] * width;
-                float box_height = detection[3] * height;
+            // Koordinatları al
+            int x = (int) detection.getX1();
+            int y = (int) detection.getY1();
+            int right = (int) detection.getX2();
+            int bottom = (int) detection.getY2();
 
-                // Sol üst köşe koordinatları
-                int x = (int) (x_center - box_width / 2);
-                int y = (int) (y_center - box_height / 2);
+            // Dikdörtgen çiz
+            Imgproc.rectangle(
+                    resultFrame,
+                    new Point(x, y),
+                    new Point(right, bottom),
+                    GREEN,
+                    BOX_THICKNESS
+            );
 
-                // Koordinatları görüntü sınırlarına kırp
-                x = Math.max(0, Math.min(x, width - 1));
-                y = Math.max(0, Math.min(y, height - 1));
-                int right = Math.max(0, Math.min(x + (int)box_width, width - 1));
-                int bottom = Math.max(0, Math.min(y + (int)box_height, height - 1));
-
-                // Yeşil dikdörtgen çiz
-                Imgproc.rectangle(
-                        resultFrame,
-                        new Point(x, y),
-                        new Point(right, bottom),
-                        GREEN,
-                        BOX_THICKNESS
-                );
-
-                // Sınıf bilgisi ve güven skorunu yazdır (isteğe bağlı)
-                String label = String.format("%s: %.2f", getClassName(classId), maxConfidence);
-                Imgproc.putText(
-                        resultFrame,
-                        label,
-                        new Point(x, y - 5),
-                        Imgproc.FONT_HERSHEY_SIMPLEX,
-                        0.5,
-                        GREEN,
-                        1
-                );
-            }
+            // Etiket yazdır
+            String label = String.format("%s: %.2f", detection.getLabel(), detection.getScore());
+            Imgproc.putText(
+                    resultFrame,
+                    label,
+                    new Point(x, y - 5),
+                    Imgproc.FONT_HERSHEY_SIMPLEX,
+                    0.5,
+                    GREEN,
+                    1
+            );
         }
-
         return resultFrame;
     }
 
@@ -252,4 +532,59 @@ public class Detection {
                 ? classNames[classId]
                 : "Unknown";
     }
+
+    @SuppressLint("SetTextI18n")
+    public void updateDetectionList(List<DetectionResult> detectedCategories, LinearLayout detectedSoundsLayout,Context context) {
+
+        detectedSoundsLayout.removeAllViews(); // Clear previous results
+
+        for (DetectionResult category : detectedCategories) {
+            float confidence = category.getScore();
+            if (confidence > 0.79) { // Only show confidence > 79%
+                TextView textView = new TextView(context);
+                textView.setText(category.getScore() + "---" + category.getClassId() + "---" + category.getLabel() + " - " + String.format("%.2f", confidence * 100) + "%");
+                textView.setTextSize(16);
+                textView.setTextColor(Color.WHITE);
+                textView.setPadding(10, 10, 10, 10);
+
+                detectedSoundsLayout.addView(textView);
+            }
+        }
+
+        // If no high-confidence results, show "No strong detection"
+        if (detectedSoundsLayout.getChildCount() == 0) {
+            TextView noResultView = new TextView(context);
+            noResultView.setText("No strong detections");
+            noResultView.setTextSize(16);
+            noResultView.setTextColor(Color.CYAN);
+            noResultView.setPadding(10, 10, 10, 10);
+            detectedSoundsLayout.addView(noResultView);
+        }
+    }
+}
+/** Sadece sonuçları tutmak için basit POJO */
+class DetectionResult {
+    public int    classId;
+    public String label;
+    public float  score;
+    public float  x1, y1, x2, y2;
+
+    public DetectionResult(int classId, String label, float score,
+                           float x1, float y1, float x2, float y2) {
+        this.classId = classId;
+        this.label = label;
+        this.score = score;
+        this.x1 = x1;
+        this.y1 = y1;
+        this.x2 = x2;
+        this.y2 = y2;
+    }
+
+    public int    getClassId() { return classId; }
+    public String getLabel()   { return label; }
+    public float  getScore()   { return score; }
+    public float  getX1()      { return x1; }
+    public float  getY1()      { return y1; }
+    public float  getX2()      { return x2; }
+    public float  getY2()      { return y2; }
 }
