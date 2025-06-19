@@ -49,7 +49,8 @@ public class Detection {
     public String label;
     public float score;
     public float x1, y1, x2, y2;
-    private List<DetectionResult> d;
+    public List<DetectionResult> d;
+
     public Mat incomingFrame;
     public Mat getIncomingFrame(){
         return incomingFrame;
@@ -114,138 +115,7 @@ public class Detection {
         this.score   = score;
         this.x1 = x1; this.y1 = y1;
         this.x2 = x2; this.y2 = y2;
-        this.d = new List<DetectionResult>() {
-            @Override
-            public int size() {
-                return 0;
-            }
-
-            @Override
-            public boolean isEmpty() {
-                return false;
-            }
-
-            @Override
-            public boolean contains(@Nullable Object o) {
-                return false;
-            }
-
-            @NonNull
-            @Override
-            public Iterator<DetectionResult> iterator() {
-                return null;
-            }
-
-            @NonNull
-            @Override
-            public Object[] toArray() {
-                return new Object[0];
-            }
-
-            @NonNull
-            @Override
-            public <T> T[] toArray(@NonNull T[] a) {
-                return null;
-            }
-
-            @Override
-            public boolean add(DetectionResult detectionResult) {
-                return false;
-            }
-
-            @Override
-            public boolean remove(@Nullable Object o) {
-                return false;
-            }
-
-            @Override
-            public boolean containsAll(@NonNull Collection<?> c) {
-                return false;
-            }
-
-            @Override
-            public boolean addAll(@NonNull Collection<? extends DetectionResult> c) {
-                return false;
-            }
-
-            @Override
-            public boolean addAll(int index, @NonNull Collection<? extends DetectionResult> c) {
-                return false;
-            }
-
-            @Override
-            public boolean removeAll(@NonNull Collection<?> c) {
-                return false;
-            }
-
-            @Override
-            public boolean retainAll(@NonNull Collection<?> c) {
-                return false;
-            }
-
-            @Override
-            public void clear() {
-
-            }
-
-            @Override
-            public boolean equals(@Nullable Object o) {
-                return false;
-            }
-
-            @Override
-            public int hashCode() {
-                return 0;
-            }
-
-            @Override
-            public DetectionResult get(int index) {
-                return null;
-            }
-
-            @Override
-            public DetectionResult set(int index, DetectionResult element) {
-                return null;
-            }
-
-            @Override
-            public void add(int index, DetectionResult element) {
-
-            }
-
-            @Override
-            public DetectionResult remove(int index) {
-                return null;
-            }
-
-            @Override
-            public int indexOf(@Nullable Object o) {
-                return 0;
-            }
-
-            @Override
-            public int lastIndexOf(@Nullable Object o) {
-                return 0;
-            }
-
-            @NonNull
-            @Override
-            public ListIterator<DetectionResult> listIterator() {
-                return null;
-            }
-
-            @NonNull
-            @Override
-            public ListIterator<DetectionResult> listIterator(int index) {
-                return null;
-            }
-
-            @NonNull
-            @Override
-            public List<DetectionResult> subList(int fromIndex, int toIndex) {
-                return Collections.emptyList();
-            }
-        };
+        this.d = new ArrayList<>();
     }
     public Mat process(Mat incomingFrame){
         try {
@@ -314,11 +184,81 @@ public class Detection {
             //d.label;
         }
     }
+    public List<float[]> runInference(Mat frame, Context context, LinearLayout layout) {
+        int width = frame.cols(); // Orijinal frame genişliği
+        int height = frame.rows(); // Orijinal frame yüksekliği
+        List<float[]> outputList = new ArrayList<>();
+        d = new ArrayList<>();
+        try {
+            // 2. Çıktı tensörünün şeklini al
+
+            // 1. Giriş verisini hazırla
+            Bitmap inputBitmap = matToBitmap(frame);
+            ByteBuffer inputBuffer = convertBitmapToByteBuffer(inputBitmap);
+            // 2. Çıktı tensörünün şeklini al ve uygun dizi oluştur
+            Tensor outputTensor = interpreter.getOutputTensor(0);
+            int[] outputShape = outputTensor.shape(); // [1, 84, 8400]
+            // 3) Boyuta göre inferans
+            int a = 0;
+            if (outputShape.length == 2) {
+                // 2D çıktı: [batch, features]
+                float[][] output2D = new float[outputShape[0]][outputShape[1]];
+                interpreter.run(inputBuffer, output2D);
+
+                for (float[] features : output2D) {
+                    DetectionResult det = parseDetection(features, width, height);
+                    if (det != null) d.add(det);
+                }
+
+            } else if (outputShape.length == 3) {
+                // 3D çıktı: [batch, featureCount, objectCount]
+                float[][][] output3D = new float[outputShape[0]][outputShape[1]][outputShape[2]];
+                Map<Integer, Object> outputs = new HashMap<>();
+                outputs.put(0, output3D);
+                interpreter.runForMultipleInputsOutputs(new Object[]{inputBuffer}, outputs);
+
+                // [featureCount, objectCount] → Listeye çevir
+                // ... (önceki kodlar)
+                for (int obj = 0; obj < outputShape[2]; obj++) {
+                    float[] features = new float[outputShape[1]];
+                    for (int feat = 0; feat < outputShape[1]; feat++) {
+                        features[feat] = output3D[0][feat][obj];
+                    }
+                    DetectionResult det = parseDetection(features, width, height);
+                    if (det != null) d.add(det);
+                }
+
+            } else if (outputShape.length == 4) {
+                // 3D çıktı: [batch, featureCount, objectCount]
+                float[][][][] output4D = new float[outputShape[0]][outputShape[1]][outputShape[2]][outputShape[3]];
+                Map<Integer, Object> outputs = new HashMap<>();
+                outputs.put(0, output4D);
+                interpreter.runForMultipleInputsOutputs(new Object[]{inputBuffer}, outputs);
+
+                // [featureCount, objectCount] → Listeye çevir
+                for (int obj = 0; obj < outputShape[3]; obj++) {
+                    float[] features = new float[outputShape[1]];
+                    for (int feat = 0; feat < outputShape[1]; feat++) {
+                        features[feat] = output4D[0][feat][0][obj]; // Düzeltildi
+                    }
+                    DetectionResult det = parseDetection(features, width, height);
+                    if (det != null) d.add(det);
+                }
+            }
+
+            // UI güncellemesi
+            runOnUiThread(() -> updateDetectionList(d, layout, context), context);
+            return outputList;
+        } catch (Exception e) {
+            Log.e(TAG, "Inference error: " + e.getMessage());
+            return new ArrayList<>();
+        }
+    }
     // Detection.java'ya yeni metod ekleyin
-    public List<DetectionResult> runInference(Mat frame, Context context, LinearLayout layout) {
+    public List<DetectionResult> runInferenceDet(Mat frame, Context context, LinearLayout layout) {
         int width = frame.cols();
         int height = frame.rows();
-        List<DetectionResult> detectionList = new ArrayList<>();
+        d = new ArrayList<>();
 
         try {
             Bitmap inputBitmap = matToBitmap(frame);
@@ -332,7 +272,7 @@ public class Detection {
 
                 for (float[] features : output2D) {
                     DetectionResult det = parseDetection(features, width, height);
-                    if (det != null) detectionList.add(det);
+                    if (det != null) d.add(det);
                 }
             }
             else if (outputShape.length == 3) {
@@ -347,7 +287,7 @@ public class Detection {
                         features[feat] = output3D[0][feat][obj];
                     }
                     DetectionResult det = parseDetection(features, width, height);
-                    if (det != null) detectionList.add(det);
+                    if (det != null) d.add(det);
                 }
             }
             else if (outputShape.length == 4) {
@@ -362,12 +302,12 @@ public class Detection {
                         features[feat] = output4D[0][feat][0][obj];
                     }
                     DetectionResult det = parseDetection(features, width, height);
-                    if (det != null) detectionList.add(det);
+                    if (det != null) d.add(det);
                 }
             }
 
-            runOnUiThread(() -> updateDetectionList(detectionList, layout, context), context);
-            return detectionList;
+            runOnUiThread(() -> updateDetectionList(d, layout, context), context);
+            return d;
         } catch (Exception e) {
             Log.e(TAG, "Inference error: " + e.getMessage());
             return new ArrayList<>();
@@ -471,6 +411,12 @@ public class Detection {
             }
         }
         return inputBuffer;
+    }
+    public List<DetectionResult> getDets(@Nullable DetectionResult det) {
+        if (det != null) {
+            d.add(det);
+        }
+        return d;
     }
     public Mat drawDetections(Mat originalFrame, List<DetectionResult> detections) {
         // Orijinal çerçevenin kopyasını oluştur

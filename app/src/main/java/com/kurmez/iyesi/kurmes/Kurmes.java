@@ -355,7 +355,7 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
 
                     List<float[]> dets = detectionRunner.runInference(copyForInference,this,linearLayout);
                     // 3) Deteksiyon çizimi
-                    Mat drawn = detectionRunner.drawDetections(copyForProcess, dets);
+                    Mat drawn = detectionRunner.drawDetections(copyForProcess, detectionRunner.getDets(null));
                     // 4) Overlay ve Bitmap’e çevirme
                     Mat overlaidMat = openCvUtil.overlay(drawn);
                     Bitmap bmp = detectionRunner.matToBitmapSafe(overlaidMat);
