@@ -54,7 +54,7 @@ public class TFLiteInputMapper {
 
             throw new RuntimeException(e);
         }
-        Log.i(TAG, "TFLiteInputMapper initialized...");
+        //Log.i(TAG, "TFLiteInputMapper initialized...");
         this.inputHeight = ai.getInputHeight();
         this.inputWidth = ai.getInputWidth();
         this.frameHeight = frame.height();

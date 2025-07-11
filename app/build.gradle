@@ -56,8 +56,8 @@ dependencies {
     implementation libs.firebase.auth
 
     // core
-    implementation 'org.tensorflow:tensorflow-lite:2.12.0'  // Core TFLite
-    implementation 'org.tensorflow:tensorflow-lite-gpu:2.12.0'  // GPU delegate
+    implementation 'org.tensorflow:tensorflow-lite:2.15.0'  // Core TFLite
+    implementation 'org.tensorflow:tensorflow-lite-gpu:2.15.0'// GPU delegate
     implementation 'org.tensorflow:tensorflow-lite-gpu-api:2.12.0'  // GPU API
     implementation 'org.tensorflow:tensorflow-lite-select-tf-ops:2.12.0'
     implementation "org.tensorflow:tensorflow-lite-support:0.4.3"

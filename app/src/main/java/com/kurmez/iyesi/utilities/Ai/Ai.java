@@ -1,6 +1,7 @@
 package com.kurmez.iyesi.utilities.Ai;
 
 import static com.kurmez.iyesi.utilities.delegate.Threading.initGpuDelegate;
+import static com.kurmez.iyesi.utilities.delegate.Threading.setInferencePrefMethod;
 
 import android.content.Context;
 import android.content.res.AssetManager;
@@ -20,6 +21,7 @@ import org.tensorflow.lite.gpu.GpuDelegate;
 import org.tensorflow.lite.support.common.FileUtil;
 
 import java.io.IOException;
+import java.lang.reflect.Field;
 import java.nio.MappedByteBuffer;
 import java.nio.charset.Charset;
 import java.util.Arrays;
@@ -110,6 +112,18 @@ public class Ai implements AutoCloseable {
         return length;
     }
     private Interpreter initModel(AssetManager assets, String modelPath, Interpreter.Options baseOptions, Context context) {
+        // Ai.java içinde - initModel metodunda
+        GpuDelegate.Options options = new GpuDelegate.Options();
+        options.setQuantizedModelsAllowed(true);
+        options.setPrecisionLossAllowed(true); // FP16 hesaplamaya izin ver
+
+// INFERENCE_PREFERENCE_FAST_SINGLE_ANSWER kullanın
+        try {
+            Field fastAnswerField = GpuDelegate.Options.class.getField("INFERENCE_PREFERENCE_FAST_SINGLE_ANSWER");
+            setInferencePrefMethod.invoke(options, fastAnswerField.getInt(null));
+        } catch (Exception e) {
+            // Fallback
+        }
         if (modelPath == null || modelPath.isEmpty()) return null;
         try {
             this.modelBuffer = TFLiteModelInspector.loadModelFile(assets, modelPath);
@@ -125,11 +139,23 @@ public class Ai implements AutoCloseable {
                     return interpreter;
                 }
             } catch (Exception e) {
-                Log.w(TAG, "GPU delegate failed, try NNAPI", e);
+                Log.w(TAG, "GPU failed, trying NNAPI",e);
                 if (gpuDelegate != null) gpuDelegate.close();
+                try {
+                    Interpreter.Options nnapiOptions = new Interpreter.Options();
+                    nnapiOptions.setUseNNAPI(true);
+                    return new Interpreter(modelBuffer, nnapiOptions);
+                } catch (Exception nnapiEx) {
+                    Log.w(TAG, "NNAPI failed, using CPU");
+                    return new Interpreter(modelBuffer, baseOptions);
+                }
+                //Log.w(TAG, "GPU delegate failed, try NNAPI"+e.getLocalizedMessage(), e);
+                //Log.w(TAG, "GPU delegate failed, try NNAPI"+e.getMessage(), e);
+                //Log.w(TAG, "GPU delegate failed, try NNAPI", e.getCause());
             }
 
             // Try NNAPI
+/*
             try {
                 Interpreter.Options nnapiOptions = new Interpreter.Options();
                 nnapiOptions.setUseNNAPI(true);
@@ -140,7 +166,7 @@ public class Ai implements AutoCloseable {
             } catch (Exception e) {
                 Log.w(TAG, "NNAPI failed, try CPU", e);
             }
-
+*/
             // Last resort: CPU
             try {
                 interpreter = new Interpreter(modelBuffer, baseOptions);

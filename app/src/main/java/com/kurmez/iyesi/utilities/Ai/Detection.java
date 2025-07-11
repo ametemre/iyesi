@@ -250,7 +250,7 @@ public class Detection {
             runOnUiThread(() -> updateDetectionList(d, layout, context), context);
             return outputList;
         } catch (Exception e) {
-            Log.e(TAG, "Inference error: " + e.getMessage());
+            Log.e(TAG, "Inference error 253: " + e.getMessage());
             return new ArrayList<>();
         }
     }
@@ -309,7 +309,7 @@ public class Detection {
             runOnUiThread(() -> updateDetectionList(d, layout, context), context);
             return d;
         } catch (Exception e) {
-            Log.e(TAG, "Inference error: " + e.getMessage());
+            Log.e(TAG, "Inference error 312: " + e.getMessage());
             return new ArrayList<>();
         }
     }

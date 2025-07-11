@@ -8,6 +8,7 @@ import android.graphics.PorterDuff;
 import android.graphics.drawable.Drawable;
 import android.os.Bundle;
 import android.util.Log;
+import android.view.GestureDetector;
 import android.view.MotionEvent;
 import android.view.VelocityTracker;
 import android.view.View;
@@ -25,6 +26,7 @@ import android.widget.Toast;
 import androidx.annotation.NonNull;
 import androidx.fragment.app.FragmentActivity;
 
+import com.google.android.gms.maps.model.LatLng;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.google.maps.android.data.geojson.GeoJsonLayer;
 import com.kurmez.iyesi.R;
@@ -34,6 +36,13 @@ import com.kurmez.iyesi.utilities.MiniFabs;
 import com.kurmez.iyesi.utilities.helper.Actions;
 
 import java.util.List;
+import android.view.GestureDetector;
+import android.view.MotionEvent;
+import android.view.View;
+import android.graphics.Point;
+import android.view.GestureDetector;
+import android.view.MotionEvent;
+import android.view.View;
 
 public class SokakActivity extends FragmentActivity {
     private FloatingActionButton selectedFab = null; // Track the selected FAB
@@ -48,8 +57,8 @@ public class SokakActivity extends FragmentActivity {
     private final int DRAG_THRESHOLD = 20; // Minimum movement to consider a drag
     private MiniFabs miniFabs;
     private FloatingActionButton mainFab, beslemeFab, bolgeFab, nakilFab, soundFab;
-    private FrameLayout rootLayout;
-    private Spinner spinner1, spinner2, spinner3, spinner4, spinner5;
+    private GestureDetector gestureDetector;
+    private View touchOverlay;    private Spinner spinner1, spinner2, spinner3, spinner4, spinner5;
     private ImageButton clear1, clear2, clear3, clear4, clear5;
     private ImageButton toggle1, toggle2, toggle3, toggle4, toggle5;
     private GeoJsonLayer layerCountry, layerProvince, layerDistrict;
@@ -57,17 +66,9 @@ public class SokakActivity extends FragmentActivity {
     // Harita işlemlerini devredecek Harita nesnesi
     private Harita harita;
     // SokakActivity içine, class-level’da:
-    private boolean isFabOpen = false;
+    private boolean isFabOpen,isMarkerActive = false;
     private Animation fabOpenAnim, fabCloseAnim, rotateForwardAnim, rotateBackwardAnim;
-    @Override
-    public boolean dispatchTouchEvent(MotionEvent ev) {
-        // Eğer miniFabs boş değil ve dokunmayı işlediyse, burada false yerine true dönün:
-        if (miniFabs != null && miniFabs.handleOutsideTouch(ev)) {
-            return true;   // Event burada tüketildi
-        }
-        // Aksi takdirde normal akışı devam ettir
-        return super.dispatchTouchEvent(ev);
-    }
+    @SuppressLint("ClickableViewAccessibility")
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -77,6 +78,15 @@ public class SokakActivity extends FragmentActivity {
         initializeFABs();
         // Yalnızca harita ile ilgili başlatmayı Harita sınıfına devret
         harita = new Harita(this);
+    }
+    @Override
+    public boolean dispatchTouchEvent(MotionEvent ev) {
+        // Eğer miniFabs boş değil ve dokunmayı işlediyse, burada false yerine true dönün:
+        if (miniFabs != null && miniFabs.handleOutsideTouch(ev)) {
+            return true;   // Event burada tüketildi
+        }
+        // Aksi takdirde normal akışı devam ettir
+        return super.dispatchTouchEvent(ev);
     }
     private void initializeSpinners() {
         // Satırları saran LinearLayout referansları

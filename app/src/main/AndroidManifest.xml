@@ -43,7 +43,7 @@
         <!-- Google Maps API anahtarı -->
         <meta-data
             android:name="com.google.android.geo.API_KEY"
-            android:value="AIzaSyBPKyBmzbqUIt1xV6N-ygZc5U3d5yKcAr8" />
+            android:value="AIzaSyBP4FOeMzLyIXiSu7EGO6xjV7P-Sz_4KFs" />
 
         <!-- Aktiviteler -->
         <activity android:name=".sokak.SokakActivity" android:exported="false" />

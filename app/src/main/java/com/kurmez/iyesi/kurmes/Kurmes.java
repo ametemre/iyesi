@@ -40,10 +40,15 @@ import com.kurmez.iyesi.utilities.MiniFabs;
 import org.opencv.android.CameraActivity;
 import org.opencv.android.OpenCVLoader;
 
+import org.opencv.core.Scalar;
+import org.opencv.core.Size;
 import org.tensorflow.lite.Interpreter;
 
+import java.util.ArrayDeque;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.List;
+import java.util.Queue;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -61,7 +66,7 @@ import java.util.concurrent.TimeUnit;
 
 public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
     private static final String TAG = "Kurmes";
-    public Mat rgba;
+    public Mat rgba,drawn;
     private final Object lock = new Object();
     private volatile Mat lastResult = null;
     public enum State {
@@ -77,11 +82,25 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
     private List<Bitmap> photoList = new ArrayList<>(); // List to store captured images
     //----------------------------------------------------------------------------------------------Threading
     int cpuCores = Runtime.getRuntime().availableProcessors();
+
+
+    /*
     ThreadPoolExecutor cpuExecutor = new ThreadPoolExecutor(
             Math.max(1, cpuCores - 1),    // core havuz boyutu = toplam çekirdek-1
             Math.max(1, cpuCores - 1),    // max havuz boyutu = toplam çekirdek-1
             1, TimeUnit.SECONDS,          // keep-alive süresi
             new ArrayBlockingQueue<>(2),  // küçük kuyruk, sıktığında yeni thread açar
+            new ThreadPoolExecutor.DiscardOldestPolicy()
+    );
+    */
+
+
+    // Üst sınıf veya Activity içinde
+    private final ThreadPoolExecutor executor = new ThreadPoolExecutor(
+            1,
+            Runtime.getRuntime().availableProcessors(),
+            1, TimeUnit.SECONDS,
+            new ArrayBlockingQueue<>(4),
             new ThreadPoolExecutor.DiscardOldestPolicy()
     );
     ExecutorService gpuExecutor = Executors.newSingleThreadExecutor(r -> {
@@ -95,7 +114,6 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
     private static final String[] KOPEK_SOUNDS = {"bark", "growl"};
     private static final String[] KURT_SOUNDS  = {"howl", "snarl"};
     private static final String[] KARGA_SOUNDS = {"caw", "squawk"};
-
     public void SetLabelText(String s){
         if (labelText != null) {
             labelText.setText(s);
@@ -156,13 +174,17 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
         // Keep screen on
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         processedView = findViewById(R.id.processed_view);
+        //processedView.setScaleX(0.2f);
+        //processedView.setScaleY(0.2f);
+        //processedView.getBaselineAlignBottom();
+        //processedView.setLeftTopRightBottom();
         // UI elements
         labelText        = findViewById(R.id.label_text);
         cameraStatusText = findViewById(R.id.camera_status_text);
         fabMain         = findViewById(R.id.fab_main);
         fabAction         = findViewById(R.id.fab_Sound);
         linearLayout = findViewById(R.id.detected_sounds_list);
-        labelText.setText("init...");
+        SetLabelText("init...");
         // 1) Ai ve pipeline başlat
         pipeline = new RTPipeline();
         //openCV = new OpenCV();
@@ -182,7 +204,7 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
         miniFabs.applyDefaultColors();
 
         actions = new Actions(miniFabs, this, this);
-        labelText.setText("fabs...");
+        SetLabelText("fabs...");
         // ----------------------------------------------------------------------------------------Instantiate MiniFabs helper and keep as field
 
         for (FloatingActionButton fab : miniFabs.getFabs()) {
@@ -191,11 +213,10 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
                 // Highlight selection
             });
         }
-
-        labelText.setText("ready...");
+        SetLabelText("ready...");
         // fabAction: başlat/durdur
         fabAction.setOnClickListener(v -> {
-            labelText.setText("standby...");
+            SetLabelText("standby...");
 //            new Thread(() -> {
                 if (!isRunning) {
                     // Kullanıcı model seçmeden başlatmak isterse
@@ -217,14 +238,14 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
                                     getApplicationContext(),
                                     ai.getPath(),
                                     0.3f,
-                                    result -> runOnUiThread(() -> labelText.setText(result))
+                                    result -> runOnUiThread(() -> SetLabelText(result))
                             );
                             videoClassifier = new VideoClassifier(
                                     getApplicationContext(),
                                     ai,
                                     ai.getPath(),
                                     0.25f,  // probability threshold
-                                    result -> runOnUiThread(() -> labelText.setText(result))
+                                    result -> runOnUiThread(() -> SetLabelText(result))
                             );
                             interpreter = ai.getVideoInterpreter();
 
@@ -254,7 +275,10 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
                     });
                 } else {
                     // 1. Önce AI tahminlerini kapat
-                    isPredicting = false;/*
+                    isPredicting = false;
+
+
+
                     // 2. Executor’ü kapat ve bitmesini bekle
                     if (!executor.isShutdown()) {
                         executor.shutdown();
@@ -265,7 +289,10 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
                         } catch (InterruptedException e) {
                             executor.shutdownNow();
                         }
-                    }*/
+                    }
+
+
+
                     // 3. En son kamera kısmını kapat
                     //cameraState(false);
                     if (terminator != null) terminator.shutdown();
@@ -287,7 +314,6 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
         gray = new Mat();
         rects = new MatOfRect();
         openCvUtil.onCameraViewStarted(width, height);
-        //labelText.setText("Camera Started");
         //mRgba = new Mat(height, width, CvType.CV_8UC4);
         Log.i(TAG, "Camera view started: " + width + "x" + height);
         updateCameraStatus("Camera Started.");
@@ -322,64 +348,131 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
     }                                                         //done
 
 
+    // Kurmes sınıfına ek alanlar
+    private final MatPool matPool = new MatPool(3); // 3 Mat nesnesi havuzu
+    private Bitmap reusableBitmap = null;
+
     @Override
     public Mat onCameraFrame(CameraBridgeViewBase.CvCameraViewFrame inputFrame) {
         try {
             this.rgba = inputFrame.rgba();
         } catch (Exception e) {
-            Log.e(TAG,"İnputFrame : " + e);
-            throw new RuntimeException(e);
+            Log.e(TAG, "InputFrame error: " + e);
+            return new Mat(); // Hata durumunda boş Mat döndür
         }
-        Mat display = rgba.clone();  // Ön izleme için güvenli klon
 
-        if (isPredicting && frameCount++ % SKIP_FRAMES == 0) {
+        // Görüntüleme için klon (havuz kullanmıyoruz, OpenCV bu Mat'i yönetiyor)
+        Mat display = rgba.clone();
 
-            // İnferans ve çizim işleri için ayrı klonlar
-            Mat copyForProcess   = rgba.clone();
-            Mat copyForInference = rgba.clone();
-            if (ai == null || !isPredicting) return rgba;
-            Log.d(TAG,"İnputFrame : " + rgba.height() + "/" + rgba.width());
-            if (!gpuExecutor.isShutdown()) {
+        if (rgba.empty() || executor.isShutdown() || !isPredicting || (frameCount++ % SKIP_FRAMES != 0)) {
+            return display;
+        }
+
+        // Havuzdan Mat nesnelerini al
+        Mat copyForProcess = matPool.acquire(rgba.size(), rgba.type());
+        Mat copyForInference = matPool.acquire(rgba.size(), rgba.type());
+
+        // Kameradan gelen veriyi kopyala
+        rgba.copyTo(copyForProcess);
+        rgba.copyTo(copyForInference);
+
+        if (!gpuExecutor.isShutdown()) {
             gpuExecutor.submit(() -> {
-                Log.d(TAG,"İnputFrame ai : " + ai.getInputHeight() + "/" + ai.getInputWidth());
+                Mat pre = null;
+                Mat drawn = null;
+                Mat overlaidMat = null;
+
                 try {
                     // 1) Ön işlem
-                    Mat pre = detectionRunner.process(copyForProcess);
-                    Log.d(TAG,"İnputFrame rgb : " + pre.height() + "/" + pre.width());
+                    pre = detectionRunner.process(copyForProcess);
 
                     // 2) İnferans
-                    buffer = detectionRunner.runInference(pre,this,linearLayout);
-                    Bitmap frameBitmap = detectionRunner.matToBitmap(pre);
-                    Log.d(TAG,"İnputFrame bitmap : " + frameBitmap.getHeight() + "/" + frameBitmap.getWidth());
-                    videoClassifier.classifyFrame(frameBitmap);
+                    List<float[]> buffer = detectionRunner.runInference(pre, this, linearLayout);
 
-                    List<float[]> dets = detectionRunner.runInference(copyForInference,this,linearLayout);
-                    // 3) Deteksiyon çizimi
-                    Mat drawn = detectionRunner.drawDetections(copyForProcess, detectionRunner.getDets(null));
-                    // 4) Overlay ve Bitmap’e çevirme
-                    Mat overlaidMat = openCvUtil.overlay(drawn);
-                    Bitmap bmp = detectionRunner.matToBitmapSafe(overlaidMat);
-                    // 5) UI thread’inde göster
-                    runOnUiThread(() -> processedView.setImageBitmap(frameBitmap));
-                    // Kaynak temizliği
-                    rgb.release();
-                    pre.release();
-                    drawn.release();
-                    overlaidMat.release();
+                    // 3) Bitmap için yeniden boyutlandırma ve dönüşüm
+                    if (reusableBitmap == null ||
+                            reusableBitmap.getWidth() != pre.cols() ||
+                            reusableBitmap.getHeight() != pre.rows()) {
+
+                        if (reusableBitmap != null) {
+                            reusableBitmap.recycle();
+                        }
+                        reusableBitmap = Bitmap.createBitmap(pre.cols(), pre.rows(), Bitmap.Config.ARGB_8888);
+                    }
+                    Utils.matToBitmap(pre, reusableBitmap);
+
+                    // 4) Video sınıflandırma
+                    videoClassifier.classifyFrame(reusableBitmap);
+
+                    // 5) Tespit çizimleri
+
+                    drawn = detectionRunner.drawDetections(copyForProcess, detectionRunner.getDets(null));
+
+                    // 6) Overlay uygula
+                    overlaidMat = openCvUtil.overlay(drawn);
+
+                    // 7) UI güncellemesi
+                    runOnUiThread(() -> processedView.setImageBitmap(reusableBitmap));
+
                 } catch (Exception e) {
                     Log.e(TAG, "Background inference error", e);
-                    // ToDo: Hatalı model yükleme veya AI tespit hatalarında otomatik fallback veya retry mekanizması ekle.
-
                 } finally {
-                    copyForProcess.release();
-                    copyForInference.release();
+                    // Tüm kaynakları serbest bırak ve havuza geri ver
+                    if (pre != null) matPool.release(pre);
+                    if (drawn != null) matPool.release(drawn);
+                    if (overlaidMat != null) matPool.release(overlaidMat);
+
+                    matPool.release(copyForProcess);
+                    matPool.release(copyForInference);
                 }
             });
+        }
+        return display;
+    }
+
+    // Mat havuzu sınıfı
+    private static class MatPool {
+        private final Queue<Mat> availableMats = new ArrayDeque<>();
+        private final int maxSize;
+
+        public MatPool(int maxSize) {
+            this.maxSize = maxSize;
+        }
+
+        public synchronized Mat acquire(Size size, int type) {
+            // Havuzda uygun Mat var mı kontrol et
+            for (Iterator<Mat> it = availableMats.iterator(); it.hasNext();) {
+                Mat mat = it.next();
+                if (mat.size().equals(size) && mat.type() == type) {
+                    it.remove();
+                    return mat;
+                }
+            }
+
+            // Havuz boşsa veya uygun boyutta yoksa yeni oluştur
+            return new Mat(size, type);
+        }
+
+        public synchronized void release(Mat mat) {
+            if (mat == null) return;
+
+            // Mat'i sıfırla ve havuza ekle
+            mat.setTo(new Scalar(0));
+
+            if (availableMats.size() < maxSize) {
+                availableMats.offer(mat);
+            } else {
+                // Havuz doluysa direkt serbest bırak
+                mat.release();
             }
         }
 
-        // Her zaman sağlam bir Mat döndür
-        return rgba;
+        public synchronized void clear() {
+            for (Mat mat : availableMats) {
+                mat.release();
+            }
+            availableMats.clear();
+        }
     }
 
 
@@ -428,7 +521,11 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
             aiKarga.close();
             aiKarga = null;
         }*/
-
+        matPool.clear();
+        if (reusableBitmap != null) {
+            reusableBitmap.recycle();
+            reusableBitmap = null;
+        }
 
         // Executor'ü düzgün kapat
         if (gpuExecutor != null) {

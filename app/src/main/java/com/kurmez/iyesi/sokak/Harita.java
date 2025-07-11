@@ -3,7 +3,10 @@ package com.kurmez.iyesi.sokak;
 import android.Manifest;
 import android.content.Context;
 import android.content.pm.PackageManager;
+import android.graphics.Bitmap;
+import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.drawable.Drawable;
 import android.location.Address;
 import android.location.Geocoder;
 import android.location.Location;
@@ -11,14 +14,17 @@ import android.util.Log;
 import android.view.View;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
+import android.widget.ImageView;
 import android.widget.ProgressBar;
 import android.widget.Spinner;
 import android.widget.Toast;
 
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
+import androidx.annotation.DrawableRes;
 import androidx.annotation.NonNull;
 import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
 import androidx.fragment.app.FragmentActivity;
 
 import com.google.maps.android.data.geojson.GeoJsonFeature;
@@ -39,6 +45,7 @@ import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.MapStyleOptions;
 import com.google.maps.android.data.geojson.GeoJsonLayer;
 import com.google.maps.android.data.geojson.GeoJsonPolygonStyle;
+import com.google.maps.android.ui.IconGenerator;
 import com.kurmez.iyesi.R;
 import com.kurmez.iyesi.utilities.Progress;
 
@@ -47,10 +54,13 @@ import org.json.JSONObject;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
 import okhttp3.Call;
 import okhttp3.Callback;
@@ -58,6 +68,41 @@ import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.Response;
 import okhttp3.ResponseBody;
+import com.google.android.gms.maps.GoogleMap;
+import com.google.android.gms.maps.model.LatLng;
+import com.google.android.gms.maps.model.Marker;
+import com.google.android.gms.maps.model.MarkerOptions;
+import com.google.android.gms.maps.model.BitmapDescriptor;
+import com.google.android.gms.maps.model.BitmapDescriptorFactory;
+import android.graphics.Point;
+import android.view.GestureDetector;
+import android.view.MotionEvent;
+import org.json.JSONArray;
+import org.json.JSONObject;
+import org.json.JSONException;
+import android.widget.Toast;
+import androidx.appcompat.app.AlertDialog;
+import android.content.Context;
+import android.app.Activity;
+import android.app.Activity;
+import android.content.Context;
+import android.graphics.Point;
+import android.view.GestureDetector;
+import android.view.MotionEvent;
+import android.widget.Toast;
+
+import androidx.appcompat.app.AlertDialog;
+
+import com.google.android.gms.maps.GoogleMap;
+import com.google.android.gms.maps.model.BitmapDescriptor;
+import com.google.android.gms.maps.model.BitmapDescriptorFactory;
+import com.google.android.gms.maps.model.LatLng;
+import com.google.android.gms.maps.model.Marker;
+import com.google.android.gms.maps.model.MarkerOptions;
+
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
 
 /**
  * Harita sınıfı:
@@ -69,14 +114,26 @@ import okhttp3.ResponseBody;
  * - Çizim işlemi GeoSon.filterAndDraw metoduna devredilmiştir.
  */
 public class Harita implements OnMapReadyCallback {
-
+    private static final float ICON_SIZE_DP = 32f;
+    private static final float MARKER_DP = 48f;
+    private static final float ICON_DP   = 24f;
     private static final String TAG = "Harita";
     private String currentCountryCode2,currentCountryCode3;
     private final List<String> levelOptions = Arrays.asList("ADM5", "ADM4", "ADM3", "ADM2", "ADM1", "ADM0", "OSM");
     private static final String GITHUB_BASE =""; //"https://github.com/wmgeolab/geoBoundaries/raw/refs/heads/main/releaseData/gbOpen/";// “main” branch altındaki releaseData klasörü (raw GitHub URL)
-
+    private Marker draggableMarker;
+    private GestureDetector gestureDetector;
     private GoogleMap mMap;
     private GeoJsonLayer layerCountry,layerProvince,layerDistrict;
+    private final FragmentActivity activity;
+    private Marker tempMarker;
+    private final FusedLocationProviderClient locationClient;
+    private final ActivityResultLauncher<String[]> permissionLauncher;
+    private Spinner spinnerLevels;
+    private boolean mapReady,countryResolved,ready = false;
+    private LatLng centerPoint;
+    private final double radiusMeters = 50000; // Örneğin 50 km
+    private static final Map<String, BitmapDescriptor> iconCache = new HashMap<>();
     @Override
     public void onMapReady(@NonNull GoogleMap googleMap) {
         mMap = googleMap;
@@ -107,15 +164,40 @@ public class Harita implements OnMapReadyCallback {
         } else {
             getUserLocationAndLoadInitial();
         }
+// 1) Uzun basma ile "geçici" draggable marker ekle
+        mMap.setOnMapLongClickListener(latLng -> {
+            //if (!canUserPlaceMarker()) return;   // sadece Ülgen yetkiliyse
+            // Daha önce eklenmiş geçici marker varsa kaldır
+            if (tempMarker != null) tempMarker.remove();
+
+            tempMarker = mMap.addMarker(new MarkerOptions()
+                    .position(latLng)
+                    .draggable(true)
+                    .title("Yeni Konum")
+                    .icon(getCustomIcon("Besleme"))  // default icon, dialog’da güncellenecek
+            );
+            Toast.makeText(activity, "Marker’ı istediğin yere sürükle ve bırak", Toast.LENGTH_SHORT).show();
+        });
+
+// 2) Sürükleme bittiğinde açılır dialog ve onay
+        mMap.setOnMarkerDragListener(new GoogleMap.OnMarkerDragListener() {
+            @Override
+            public void onMarkerDragStart(Marker marker) { /* boş */ }
+
+            @Override
+            public void onMarkerDrag(Marker marker) { /* boş */ }
+
+            @Override
+            public void onMarkerDragEnd(Marker marker) {
+                // sadece geçici marker için çalışsın
+                if (marker.equals(tempMarker)) {
+                    openMarkerTypeSelectionDialog(marker);
+                    tempMarker = null;
+                }
+            }
+        });
     }
-    private final FragmentActivity activity;
-    // Harita sınıfı içinde, field olarak:
-    private final FusedLocationProviderClient locationClient;
-    private final ActivityResultLauncher<String[]> permissionLauncher;
-    private Spinner spinnerLevels;
-    private boolean mapReady,countryResolved,ready = false;
-    private LatLng centerPoint;
-    private final double radiusMeters = 50000; // Örneğin 50 km
+
     public Harita(FragmentActivity activity) {
         this.activity = activity;
 
@@ -146,8 +228,6 @@ public class Harita implements OnMapReadyCallback {
         // 4. Spinner’ı bul ve adapter’ı ayarla
         initSpinner();
     }
-    // 1) Harita sınıfına şu yardımcı metodları ekleyin:
-
     private boolean hasLocalGeoJson(String fileName) {
         try {
             // assets/maps klasöründeki dosyaları listeliyoruz
@@ -189,7 +269,6 @@ public class Harita implements OnMapReadyCallback {
             //loadFromGitHub(iso3, admLevel);
         }
     }
-
     private void initSpinner() {
         spinnerLevels = activity.findViewById(R.id.spinner_level_1);
         ArrayAdapter<String> adapter = new ArrayAdapter<>(
@@ -216,7 +295,8 @@ public class Harita implements OnMapReadyCallback {
             }
             @Override public void onNothingSelected(AdapterView<?> parent) { }
         });
-    }    /**
+    }
+    /**
      * Spinner’ı (dropdown) kullanıcı arayüzünden bulur, seçenekleri atar ve seçim olayını dinler.
      */
     public boolean isReady() { return ready && countryResolved; }
@@ -270,7 +350,8 @@ public class Harita implements OnMapReadyCallback {
                 Toast.makeText(activity, "Konum alınamadı.", Toast.LENGTH_SHORT).show();
             }
         });
-    }    /**
+    }
+    /**
      * Kullanıcının konumunu alır, ülke kodlarını çözer ve spinner’daki seçime göre
      * GeoBoundaries → OSM yüklemesini tetikler.
      */
@@ -316,7 +397,8 @@ public class Harita implements OnMapReadyCallback {
                 }
             }
         });
-    }    /**
+    }
+    /**
      * GitHub raw üzerinden GeoBoundaries “admLevel” dosyasını çeker.
      * Eğer 404 veya ağ hatası/düzgün JSON dönmezse fallbackToNext ile bir sonraki adıma geçer.
      */
@@ -343,7 +425,8 @@ public class Harita implements OnMapReadyCallback {
             default:
                 Toast.makeText(activity, "Sınır verisi bulunamadı.", Toast.LENGTH_SHORT).show();
         }
-    }    /**
+    }
+    /**
      * GeoBoundaries sıralaması: ADM5 → ADM4 → ADM3 → ADM2 → ADM1 → ADM0 → OSM
      */
     private void loadFromOSM(String countryIso2) {
@@ -387,7 +470,8 @@ public class Harita implements OnMapReadyCallback {
                 }
             }
         });
-    }    /**
+    }
+    /**
      * OSM fallback: Ülke ISO2 koduna göre polygon verisini alır.
      */
     public void loadLayer(int levelIndex, String admLevel) {
@@ -409,7 +493,6 @@ public class Harita implements OnMapReadyCallback {
         }
         fetchGeoJson(levelIndex, admLevel, url);
     }
-
     private void fetchGeoJson(int levelIndex, String admLevel, String url) {
         OkHttpClient client = new OkHttpClient.Builder()
                 .addNetworkInterceptor(chain -> {
@@ -528,14 +611,194 @@ public class Harita implements OnMapReadyCallback {
     /**
      * Haritaya tıklayınca besleme noktası eklemek için kullanılan metot.
      */
-    public void enableBeslemeMode() {
-        if (mMap != null) {
-            mMap.setOnMapClickListener(latLng -> {
-                mMap.addMarker(new com.google.android.gms.maps.model.MarkerOptions()
-                        .position(latLng)
-                        .title("Beslenme Noktası"));
-                mMap.setOnMapClickListener(null);
-            });
+
+
+    public void enableMarkerPlacementForUlgen() {
+        gestureDetector = new GestureDetector(activity, new GestureDetector.SimpleOnGestureListener() {
+            @Override
+            public void onLongPress(MotionEvent e) {
+                LatLng location = mMap.getProjection().fromScreenLocation(
+                        new Point((int) e.getX(), (int) e.getY())
+                );
+                placeDraggableMarker(location);
+            }
+
+            @Override
+            public boolean onDoubleTap(MotionEvent e) {
+                if (draggableMarker != null) {
+                    confirmMarkerLocation();
+                    return true;
+                }
+                return false;
+            }
+        });
+
+        mMap.setOnMapClickListener(null); // Normal click listener temizlenir.
+
+        mMap.setOnMapLongClickListener(null); // Long click yerine gesture kullanıyoruz.
+
+    }
+    public LatLng screenPointToLatLng(Point point) {
+        return mMap.getProjection().fromScreenLocation(point);
+    }
+    // JSON yükleme
+    private JSONObject loadMarkersFromLocalJSON() {
+        try {
+            InputStream is = activity.openFileInput("markers.json");
+            int size = is.available();
+            byte[] buffer = new byte[size];
+            is.read(buffer);
+            is.close();
+            String json = new String(buffer, "UTF-8");
+            return new JSONObject(json);
+        } catch (Exception e) {
+            return new JSONObject();
         }
     }
+
+    // JSON Kaydetme
+    private void saveJSONToFile(JSONObject json) {
+        try {
+            OutputStream os = activity.openFileOutput("markers.json", Context.MODE_PRIVATE);
+            os.write(json.toString().getBytes("UTF-8"));
+            os.close();
+        } catch (Exception e) {
+            Log.e(TAG, "saveJSONToFile error: " + e.getMessage());
+        }
+    }
+
+    public void placeDraggableMarker(LatLng location) {
+        if (draggableMarker != null) draggableMarker.remove();
+
+        draggableMarker = mMap.addMarker(new MarkerOptions()
+                .position(location)
+                .title("Yeni Konum")
+                .draggable(true)
+                .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_CYAN))
+        );
+
+        Toast.makeText(activity, "Marker'ı sürükleyip çift dokunarak sabitleyin.", Toast.LENGTH_LONG).show();
+    }
+
+    public void confirmMarkerLocation() {
+        draggableMarker.setDraggable(false);
+        openMarkerTypeSelectionDialog(draggableMarker);
+        draggableMarker = null;
+    }
+    private void openMarkerTypeSelectionDialog(Marker marker) {
+        String[] types = {"Besleme", "Yuva", "Barınak" , "Default"};
+        new AlertDialog.Builder(activity)
+                .setTitle("Konum Türü Seçiniz")
+                .setItems(types, (dialog, which) -> {
+                    String selectedType = types[which];
+                    marker.setTitle(selectedType + " Noktası");
+                    marker.setIcon(getCustomIcon(selectedType));
+
+
+                    // backend kaydı (şimdilik yerel veya JSON)
+                    saveMarker(marker, selectedType);
+                })
+                .setCancelable(false)
+                .show();
+    }
+
+
+    private BitmapDescriptor getCustomIcon(String type) {
+        if (iconCache.containsKey(type)) {
+            return iconCache.get(type);
+        }
+
+        @DrawableRes int iconRes;
+        switch (type) {
+            case "Besleme":
+                iconRes = R.drawable.icon_besleme;
+                break;
+            case "Yuva":
+                iconRes = R.drawable.icon_yuva;
+                break;
+            case "Barınak":
+                iconRes = R.drawable.icon_barinak;
+                break;
+            default:
+                BitmapDescriptor def = BitmapDescriptorFactory.defaultMarker();
+                iconCache.put(type, def);
+                return def;
+        }
+        // IconGenerator ile pin + iç ikon
+        IconGenerator gen = new IconGenerator(activity);
+        gen.setStyle(IconGenerator.STYLE_DEFAULT);
+        // Balondaki padding'i azalt
+        int pad = (int)(4 * activity.getResources().getDisplayMetrics().density + .5f);
+        gen.setContentPadding(pad, pad, pad, pad);
+
+        ImageView iv = new ImageView(activity);
+        iv.setImageResource(iconRes);
+        gen.setContentView(iv);
+
+        // 1) Önce büyük pin + ikon bitmap'ini al
+        Bitmap fullBmp = gen.makeIcon();
+
+        // 2) Bunu DP cinsinden daha küçük bir boyuta ölçekle (örneğin 32dp)
+        float d = activity.getResources().getDisplayMetrics().density;
+        int sizePx = (int)(32 * d + .5f);
+        Bitmap smallBmp = Bitmap.createScaledBitmap(fullBmp, sizePx, sizePx, false);
+
+        BitmapDescriptor bd = BitmapDescriptorFactory.fromBitmap(smallBmp);
+        iconCache.put(type, bd);
+        return bd;
+    }
+    private void saveMarker(Marker marker, String type) {
+        JSONObject json = loadMarkersFromLocalJSON(); // mevcut JSON
+
+        JSONArray markersArray = json.optJSONArray("markers");
+        JSONObject newMarker = null;
+        try {
+            if (markersArray == null) {
+                markersArray = new JSONArray();
+                json.put("markers", markersArray);
+            }
+
+            newMarker = new JSONObject();
+            newMarker.put("type", type);
+            newMarker.put("lat", marker.getPosition().latitude);
+            newMarker.put("lng", marker.getPosition().longitude);
+            newMarker.put("title", marker.getTitle());
+        } catch (JSONException e) {
+            Log.e(TAG, "Marker kaydı sırasında hata: " + e.getMessage());
+            Toast.makeText(activity, "Marker kaydedilemedi.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        markersArray.put(newMarker);
+
+        saveJSONToFile(json);
+    }
+    public void loadNearbyMarkers() {
+        JSONObject json = loadMarkersFromLocalJSON();
+
+        JSONArray markersArray = json.optJSONArray("markers");
+        if (markersArray == null) return;
+
+        for (int i = 0; i < markersArray.length(); i++) {
+            LatLng latLng = null;
+            String type = null;
+            String title = null;
+            try {
+                JSONObject markerObj = markersArray.getJSONObject(i);
+                latLng = new LatLng(markerObj.getDouble("lat"), markerObj.getDouble("lng"));
+                type = markerObj.getString("type");
+                title = markerObj.getString("title");
+            } catch (JSONException e) {
+                Log.e(TAG, "JSON parse hatası: " + e.getMessage());
+                continue; // Hatalı marker'ı atlayarak devam et.
+            }
+
+            mMap.addMarker(new MarkerOptions()
+                    .position(latLng)
+                    .title(title)
+                    .icon(getCustomIcon(type))
+            );
+        }
+    }
+
 }

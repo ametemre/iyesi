@@ -13,6 +13,7 @@ import android.opengl.GLES20;
 import android.opengl.GLES31;
 import android.util.Log;
 
+import org.tensorflow.lite.Interpreter;
 import org.tensorflow.lite.gpu.CompatibilityList;
 import org.tensorflow.lite.gpu.GpuDelegate;
 
@@ -27,6 +28,24 @@ public class Threading {
     private static final String TAG = "Threading";
     private static final Handler mainHandler = new Handler(Looper.getMainLooper());
 
+
+    //---------------------------------------------------------------------------------------------- Önbelleklenmiş reflection (sınıf yüklendiğinde bir kereliğe)
+    private static Method setPrecisionMethod;
+    public static Method setInferencePrefMethod;
+    private static Field sustainedSpeedField;
+    static {
+        try {
+            setPrecisionMethod = GpuDelegate.Options.class.getMethod("setPrecisionLossAllowed", boolean.class);
+            setInferencePrefMethod = GpuDelegate.Options.class.getMethod("setInferencePreference", int.class);
+            sustainedSpeedField = GpuDelegate.Options.class.getField("INFERENCE_PREFERENCE_SUSTAINED_SPEED");
+        } catch (NoSuchMethodException | NoSuchFieldException e) {
+            Log.d(TAG, "Advanced GPU options not available, using defaults");
+        } catch (Exception e) {
+            Log.e(TAG, "Reflection Failed",e);
+        }
+    }
+    //---------------------------------------------------------------------------------------------- Önbelleklenmiş reflection (sınıf yüklendiğinde bir kereliğe)
+
     // --- GPU Delegate Init ---
     public static GpuDelegate initGpuDelegate(Context context) {
         try {
@@ -39,23 +58,42 @@ public class Threading {
                 Log.w(TAG, "GPU delegate not supported on this device");
                 return null;
             }
+/*            if (!compatList.isOperationSupportedOnDevice("TRANSPOSE", CompatibilityList.DEVICE_GPU)) {
+                Log.w(TAG, "Transpose op not GPU-compatible, skipping GPU");
+                return null;
+            }
+ */
             GpuDelegate.Options options = new GpuDelegate.Options();
             options.setQuantizedModelsAllowed(true);
+            //--------------------------------------------------------------------------------------OpenGL desteklenmiyorsa OpenCL kullan{
+            try {
+                Method setGlBackend = GpuDelegate.Options.class.getMethod("setGlBackend", int.class);
+                Field glBackendField = GpuDelegate.Options.class.getField("GL");
+                setGlBackend.invoke(options, glBackendField.getInt(null));
+            } catch (Exception e) {
+                Log.d(TAG, "GL backend setting not available");
+            }
+            //--------------------------------------------------------------------------------------OpenGL desteklenmiyorsa OpenCL kullan}
             // Try advanced options (reflective)
             try {
-                Method setPrecisionMethod = GpuDelegate.Options.class.getMethod("setPrecisionLossAllowed", boolean.class);
                 setPrecisionMethod.invoke(options, true);
-                Method setInferencePrefMethod = GpuDelegate.Options.class.getMethod("setInferencePreference", int.class);
-                Field sustainedSpeedField = GpuDelegate.Options.class.getField("INFERENCE_PREFERENCE_SUSTAINED_SPEED");
                 setInferencePrefMethod.invoke(options, sustainedSpeedField.getInt(null));
-            } catch (NoSuchMethodException | NoSuchFieldException e) {
-                Log.d(TAG, "Advanced GPU options not available, using defaults");
-            } catch (Exception e) {
+            }
+            catch (Exception e) {
                 Log.w(TAG, "Error setting GPU options", e);
             }
             GpuDelegate delegate = new GpuDelegate(options);
-            Log.i(TAG, "GPU delegate initialized successfully");
-            return delegate;
+            try {
+                Log.i(TAG, "GPU delegate initialized successfully");
+                Interpreter.Options interpreterOptions = new Interpreter.Options();
+                interpreterOptions.addDelegate(delegate);
+                // Test with a tiny model if possible
+                return delegate;
+            } catch (Exception testException) {
+                delegate.close();
+                Log.w(TAG, "GPU delegate failed basic test", testException);
+                return null;
+            }
         } catch (Exception e) {
             Log.w(TAG, "GPU acceleration unavailable", e);
             return null;
@@ -73,9 +111,6 @@ public class Threading {
     public static void runOnUiThread(Runnable r, Context context) {
         if (context instanceof Activity) ((Activity)context).runOnUiThread(r);
         else mainHandler.post(r);
-    }
-    public static void runOnUi(Runnable task) {
-        mainHandler.post(task);
     }
     // --- Hardware Introspection ---
     public static int getSuggestedGPUThreadCount() {
