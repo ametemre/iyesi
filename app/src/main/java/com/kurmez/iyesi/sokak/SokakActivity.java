@@ -1,48 +1,28 @@
 package com.kurmez.iyesi.sokak;
 
-import android.animation.ValueAnimator;
 import android.annotation.SuppressLint;
-import android.content.res.ColorStateList;
-import android.graphics.Color;
-import android.graphics.PorterDuff;
-import android.graphics.drawable.Drawable;
 import android.os.Bundle;
-import android.util.Log;
 import android.view.GestureDetector;
 import android.view.MotionEvent;
 import android.view.VelocityTracker;
 import android.view.View;
 import android.view.animation.Animation;
 import android.view.animation.AnimationUtils;
-import android.view.animation.DecelerateInterpolator;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
-import android.widget.FrameLayout;
 import android.widget.ImageButton;
 import android.widget.LinearLayout;
 import android.widget.Spinner;
 import android.widget.Toast;
 
-import androidx.annotation.NonNull;
 import androidx.fragment.app.FragmentActivity;
 
-import com.google.android.gms.maps.model.LatLng;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.google.maps.android.data.geojson.GeoJsonLayer;
 import com.kurmez.iyesi.R;
 import com.kurmez.iyesi.kurmes.Kurmes;
-import com.kurmez.iyesi.utilities.Ai.Detection;
 import com.kurmez.iyesi.utilities.MiniFabs;
 import com.kurmez.iyesi.utilities.helper.Actions;
-
-import java.util.List;
-import android.view.GestureDetector;
-import android.view.MotionEvent;
-import android.view.View;
-import android.graphics.Point;
-import android.view.GestureDetector;
-import android.view.MotionEvent;
-import android.view.View;
 
 public class SokakActivity extends FragmentActivity {
     private FloatingActionButton selectedFab = null; // Track the selected FAB

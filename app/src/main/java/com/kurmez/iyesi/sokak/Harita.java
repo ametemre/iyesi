@@ -9,7 +9,6 @@ import android.graphics.Color;
 import android.graphics.drawable.Drawable;
 import android.location.Address;
 import android.location.Geocoder;
-import android.location.Location;
 import android.util.Log;
 import android.view.View;
 import android.widget.AdapterView;
@@ -43,14 +42,9 @@ import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.SupportMapFragment;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.MapStyleOptions;
-import com.google.maps.android.data.geojson.GeoJsonLayer;
-import com.google.maps.android.data.geojson.GeoJsonPolygonStyle;
 import com.google.maps.android.ui.IconGenerator;
 import com.kurmez.iyesi.R;
 import com.kurmez.iyesi.utilities.Progress;
-
-import org.json.JSONException;
-import org.json.JSONObject;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -68,8 +62,7 @@ import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.Response;
 import okhttp3.ResponseBody;
-import com.google.android.gms.maps.GoogleMap;
-import com.google.android.gms.maps.model.LatLng;
+
 import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
 import com.google.android.gms.maps.model.BitmapDescriptor;
@@ -78,31 +71,8 @@ import android.graphics.Point;
 import android.view.GestureDetector;
 import android.view.MotionEvent;
 import org.json.JSONArray;
-import org.json.JSONObject;
-import org.json.JSONException;
-import android.widget.Toast;
-import androidx.appcompat.app.AlertDialog;
-import android.content.Context;
-import android.app.Activity;
-import android.app.Activity;
-import android.content.Context;
-import android.graphics.Point;
-import android.view.GestureDetector;
-import android.view.MotionEvent;
-import android.widget.Toast;
 
 import androidx.appcompat.app.AlertDialog;
-
-import com.google.android.gms.maps.GoogleMap;
-import com.google.android.gms.maps.model.BitmapDescriptor;
-import com.google.android.gms.maps.model.BitmapDescriptorFactory;
-import com.google.android.gms.maps.model.LatLng;
-import com.google.android.gms.maps.model.Marker;
-import com.google.android.gms.maps.model.MarkerOptions;
-
-import org.json.JSONArray;
-import org.json.JSONException;
-import org.json.JSONObject;
 
 /**
  * Harita sınıfı:
@@ -114,9 +84,10 @@ import org.json.JSONObject;
  * - Çizim işlemi GeoSon.filterAndDraw metoduna devredilmiştir.
  */
 public class Harita implements OnMapReadyCallback {
-    private static final float ICON_SIZE_DP = 32f;
-    private static final float MARKER_DP = 48f;
-    private static final float ICON_DP   = 24f;
+    private static final float MARKER_WIDTH_DP  = 48f;
+    private static final float ICON_DP          = 20f;
+    private static final float ICON_OFFSET_Y_DP = 13f;   // yukarı kaydırma
+    private static final float ICON_OFFSET_X_DP = 1f;   // sağa kaydırma
     private static final String TAG = "Harita";
     private String currentCountryCode2,currentCountryCode3;
     private final List<String> levelOptions = Arrays.asList("ADM5", "ADM4", "ADM3", "ADM2", "ADM1", "ADM0", "OSM");
@@ -708,44 +679,58 @@ public class Harita implements OnMapReadyCallback {
             return iconCache.get(type);
         }
 
-        @DrawableRes int iconRes;
+        int fgRes;
         switch (type) {
-            case "Besleme":
-                iconRes = R.drawable.icon_besleme;
-                break;
-            case "Yuva":
-                iconRes = R.drawable.icon_yuva;
-                break;
-            case "Barınak":
-                iconRes = R.drawable.icon_barinak;
-                break;
-            default:
+            case "Besleme": fgRes = R.drawable.icon_besleme; break;
+            case "Yuva":    fgRes = R.drawable.icon_yuva;    break;
+            case "Barınak":  fgRes = R.drawable.icon_barinak; break;
+            default: {
                 BitmapDescriptor def = BitmapDescriptorFactory.defaultMarker();
                 iconCache.put(type, def);
                 return def;
+            }
         }
-        // IconGenerator ile pin + iç ikon
-        IconGenerator gen = new IconGenerator(activity);
-        gen.setStyle(IconGenerator.STYLE_DEFAULT);
-        // Balondaki padding'i azalt
-        int pad = (int)(4 * activity.getResources().getDisplayMetrics().density + .5f);
-        gen.setContentPadding(pad, pad, pad, pad);
 
-        ImageView iv = new ImageView(activity);
-        iv.setImageResource(iconRes);
-        gen.setContentView(iv);
-
-        // 1) Önce büyük pin + ikon bitmap'ini al
-        Bitmap fullBmp = gen.makeIcon();
-
-        // 2) Bunu DP cinsinden daha küçük bir boyuta ölçekle (örneğin 32dp)
-        float d = activity.getResources().getDisplayMetrics().density;
-        int sizePx = (int)(32 * d + .5f);
-        Bitmap smallBmp = Bitmap.createScaledBitmap(fullBmp, sizePx, sizePx, false);
-
-        BitmapDescriptor bd = BitmapDescriptorFactory.fromBitmap(smallBmp);
+        BitmapDescriptor bd = createCompositeDescriptor(
+                R.drawable.ic_map_marker,  // VectorAsset olarak eklediğin default pin
+                fgRes
+        );
         iconCache.put(type, bd);
         return bd;
+    }
+
+    private BitmapDescriptor createCompositeDescriptor(@DrawableRes int bgRes,
+                                                       @DrawableRes int fgRes) {
+        float d = activity.getResources().getDisplayMetrics().density;
+
+        // DP → PX
+        int markerWidthPx  = (int)(MARKER_WIDTH_DP   * d + .5f);
+        int iconPx         = (int)(ICON_DP           * d + .5f);
+        int offsetYPx      = (int)(ICON_OFFSET_Y_DP  * d + .5f);
+        int offsetXPx      = (int)(ICON_OFFSET_X_DP  * d + .5f);
+
+        // Arka planı orijinal oranında boyutlandır
+        Drawable bg = ContextCompat.getDrawable(activity, bgRes);
+        int iw = bg.getIntrinsicWidth(), ih = bg.getIntrinsicHeight();
+        float aspect = (float) ih / iw;
+        int markerHeightPx = (int)(markerWidthPx * aspect + .5f);
+        bg.setBounds(0, 0, markerWidthPx, markerHeightPx);
+
+        // Oluşturulacak bitmap & canvas
+        Bitmap bmp = Bitmap.createBitmap(markerWidthPx, markerHeightPx, Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(bmp);
+
+        // 1) Pin arka plan
+        bg.draw(canvas);
+
+        // 2) İç ikon — önceden ortalanan koordinata ek olarak X ve Y ofseti uygula
+        Drawable fg = ContextCompat.getDrawable(activity, fgRes);
+        int left = (markerWidthPx - iconPx) / 2 + offsetXPx;
+        int top  = (markerHeightPx - iconPx) / 2 - offsetYPx;
+        fg.setBounds(left, top, left + iconPx, top + iconPx);
+        fg.draw(canvas);
+
+        return BitmapDescriptorFactory.fromBitmap(bmp);
     }
     private void saveMarker(Marker marker, String type) {
         JSONObject json = loadMarkersFromLocalJSON(); // mevcut JSON
@@ -800,5 +785,4 @@ public class Harita implements OnMapReadyCallback {
             );
         }
     }
-
 }
