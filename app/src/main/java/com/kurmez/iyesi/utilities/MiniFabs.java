@@ -3,8 +3,10 @@ package com.kurmez.iyesi.utilities;
 import android.animation.ValueAnimator;
 import android.annotation.SuppressLint;
 import android.app.Activity;
+import android.content.Context;
 import android.content.Intent;
 import android.content.res.ColorStateList;
+import android.graphics.Bitmap;
 import android.graphics.Color;
 import android.graphics.PorterDuff;
 import android.graphics.drawable.Drawable;
@@ -14,6 +16,8 @@ import android.view.View;
 import android.view.MotionEvent;
 import androidx.interpolator.view.animation.FastOutSlowInInterpolator;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
+import com.google.firebase.Firebase;
+import com.google.firebase.auth.FirebaseAuth;
 import com.google.maps.android.data.geojson.GeoJsonLayer;
 import com.kurmez.iyesi.Login;
 import com.kurmez.iyesi.kurmes.Kurmes;
@@ -38,6 +42,7 @@ import android.widget.Spinner;
  * and selection highlighting.
  */
 public class MiniFabs {
+    FirebaseAuth mAuth;
     private final Activity activity;
     private final FloatingActionButton mainFab;
     private final FloatingActionButton soundFab;
@@ -304,9 +309,22 @@ public class MiniFabs {
     public FloatingActionButton[] getFabs() {
         return miniFabs;
     }
-
+    public void takeSnapshot(Bitmap bmp) {
+        if (snapshotListener != null && bmp != null) {
+            snapshotListener.onSnapshot(bmp.copy(bmp.getConfig(), false));
+        }
+    }
+    private MiniFabs.OnSnapshotListener snapshotListener;
+    public interface OnSnapshotListener {
+        void onSnapshot(Bitmap bitmap);
+    }
+    public void setOnSnapshotListener(MiniFabs.OnSnapshotListener listener) {
+        this.snapshotListener = listener;
+    }
     @SuppressLint("ClickableViewAccessibility")
-    public void setupDraggableFAB(MiniFabs miniFabs, FloatingActionButton fabDraggable) {
+    public void setupDraggableFAB(Context context, MiniFabs miniFabs, FloatingActionButton fabDraggable) {
+        mAuth = FirebaseAuth.getInstance();
+        Kurmes kurmes = (Kurmes) context;
         fabDraggable.setOnTouchListener((v, event) -> {
             switch (event.getActionMasked()) {
                 case MotionEvent.ACTION_DOWN:
@@ -354,10 +372,15 @@ public class MiniFabs {
                         long pressDuration = System.currentTimeMillis() - pressStartTime;
                         if (pressDuration < LONG_PRESS_THRESHOLD) {
                             // Kısa tıklama: miniFAB menüsünü toggle et
-                            miniFabs.toggle();
+                            if (kurmes.getCurrentState() != Kurmes.State.IDLE && kurmes.reusableBitmap != null) {
+                                // cameraView’den snapshot alıp listener'a ileten metodun:
+                                miniFabs.takeSnapshot(kurmes.reusableBitmap);
+                            } else {
+                                handleLongClick(context,fabDraggable);
+                            }
                         } else {
                             // Uzun basış
-                            handleLongClick();
+                            miniFabs.toggle();
                         }
                     } else {
                         // Sürükleme sonrası momentumlu animasyon
@@ -373,13 +396,13 @@ public class MiniFabs {
         });
     }
 
-    private void handleLongClick() {/*
-        animateButtonPress();
+    private void handleLongClick(Context context,FloatingActionButton fabDraggable) {
+        animateButtonPress(fabDraggable);
         if (mAuth.getCurrentUser() != null) {
-            startActivity(new Intent(Kurmes.this, Welcome.class));
+            context.startActivity(new Intent(context, Welcome.class));
         } else {
-            startActivity(new Intent(Kurmes.this, Login.class));
-        }*/
+            context.startActivity(new Intent(context, Login.class));
+        }
     }
     /**
      * @return Şu anda seçili olan FloatingActionButton,

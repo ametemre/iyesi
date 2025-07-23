@@ -1,18 +1,10 @@
-package com.kurmez.iyesi.utilities.delegate;
+package com.kurmez.iyesi.utilities.Ai.delegate;
 
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
-import android.graphics.RectF;
 
-import org.opencv.core.CvType;
-import org.opencv.core.Mat;
-import org.opencv.core.Size;
-import org.opencv.imgproc.Imgproc;
 import org.tensorflow.lite.Interpreter;
-
-import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
 
 public class TFLiteInputPreprocessor {
     private TFLiteInputMapper mapper;

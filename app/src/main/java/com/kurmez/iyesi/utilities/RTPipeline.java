@@ -17,7 +17,7 @@ import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
-import com.kurmez.iyesi.utilities.delegate.TFLiteInputPreprocessor;
+import com.kurmez.iyesi.utilities.Ai.delegate.TFLiteInputPreprocessor;
 import com.kurmez.iyesi.utilities.Ai.Ai;
 import com.kurmez.iyesi.utilities.Ai.Detection;
 

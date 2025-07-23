@@ -11,7 +11,7 @@ import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.kurmez.iyesi.R;
 import com.kurmez.iyesi.sokak.SokakActivity;
 import com.kurmez.iyesi.utilities.Ai.Ai;
-import com.kurmez.iyesi.utilities.delegate.Threading;
+import com.kurmez.iyesi.utilities.Ai.threading.Threading;
 import com.kurmez.iyesi.utilities.Helpers;
 import com.kurmez.iyesi.utilities.MiniFabs;
 
@@ -94,7 +94,6 @@ public class Actions {
             return null;
         }
 
-        Threading threading = new Threading();
         int id = selectedFab.getId();
         try {
             if (id == R.id.fab_9) {

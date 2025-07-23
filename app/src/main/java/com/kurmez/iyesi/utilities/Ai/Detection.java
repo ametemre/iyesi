@@ -1,23 +1,19 @@
 package com.kurmez.iyesi.utilities.Ai;
 
-import static com.kurmez.iyesi.utilities.delegate.Threading.runOnUiThread;
-
+import com.kurmez.iyesi.utilities.Ai.threading.ThreadService;
 import android.annotation.SuppressLint;
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.Color;
 import android.util.Log;
-import android.view.View;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
-import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
-import com.kurmez.iyesi.R;
 import com.kurmez.iyesi.kurmes.Kurmes;
-import com.kurmez.iyesi.utilities.delegate.TFLiteInputMapper;
-import com.kurmez.iyesi.utilities.delegate.TFLiteInputPreprocessor;
+import com.kurmez.iyesi.utilities.Ai.delegate.TFLiteInputMapper;
+import com.kurmez.iyesi.utilities.Ai.delegate.TFLiteInputPreprocessor;
 
 import org.opencv.android.Utils;
 import org.opencv.core.CvType;
@@ -32,13 +28,8 @@ import org.tensorflow.lite.Tensor;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
-import java.util.ListIterator;
 import java.util.Map;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
@@ -246,8 +237,8 @@ public class Detection {
                 }
             }
 
-            // UI güncellemesi
-            runOnUiThread(() -> updateDetectionList(d, layout, context), context);
+            // UI güncellemesi via ThreadService
+            ThreadService.getInstance().runOnMainThread(() -> updateDetectionList(d, layout, context));
             return outputList;
         } catch (Exception e) {
             Log.e(TAG, "Inference error 253: " + e.getMessage());
@@ -306,7 +297,7 @@ public class Detection {
                 }
             }
 
-            runOnUiThread(() -> updateDetectionList(d, layout, context), context);
+            ThreadService.getInstance().runOnMainThread(() -> updateDetectionList(d, layout, context));
             return d;
         } catch (Exception e) {
             Log.e(TAG, "Inference error 312: " + e.getMessage());

@@ -50,7 +50,7 @@ public class Sahiplendirme extends AppCompatActivity {
             return;
         }
 
-        PetCompanion pet = new PetCompanion(
+        Soul pet = new Soul(
                 name,
                 etSpecies.getText().toString().trim(),
                 etBreed.getText().toString().trim(),

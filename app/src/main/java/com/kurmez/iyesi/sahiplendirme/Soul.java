@@ -9,7 +9,7 @@ import java.util.List;
  * PetCompanion hem sahiplendirme hem de sosyal akış verilerini taşıyan model sınıfıdır.
  * Delicate (hassas) bilgiler Firestore'a yazılırken @Exclude ile gizlenebilir.
  */
-public class PetCompanion implements Serializable {
+public class Soul implements Serializable {
 
     // -----------------------------
     // Adoption (Sahiplendirme) Fields
@@ -90,7 +90,7 @@ public class PetCompanion implements Serializable {
      * Boş constructor Firestore mapping için gereklidir.
      * mediaUrls listesini ve isLost bayrağını başlatır.
      */
-    public PetCompanion() {
+    public Soul() {
         this.mediaUrls = new ArrayList<>();
         this.isLost    = false;
     }
@@ -110,7 +110,7 @@ public class PetCompanion implements Serializable {
      * @param finderName     Kayıt yapan UID
      * @param timestamp      Oluşturulma zamanı
      */
-    public PetCompanion(
+    public Soul(
             String name,
             String species,
             String breed,
@@ -146,7 +146,7 @@ public class PetCompanion implements Serializable {
      * @param createdAt  Oluşturulma zamanı
      * @param mediaUrls  Medya URL listesi
      */
-    public PetCompanion(
+    public Soul(
             String postId,
             String content,
             String authorUid,

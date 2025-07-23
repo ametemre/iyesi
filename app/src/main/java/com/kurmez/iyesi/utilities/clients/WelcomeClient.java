@@ -7,7 +7,7 @@ import android.widget.Toast;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.auth.GetTokenResult;
-import com.kurmez.iyesi.sahiplendirme.PetCompanion;
+import com.kurmez.iyesi.sahiplendirme.Soul;
 
 import org.json.JSONObject;
 
@@ -28,7 +28,7 @@ public class WelcomeClient {
 
     private String idToken;
     // Diğer gerekli değişkenler (adapter, companions vb.)
-    private final List<PetCompanion> companions = new ArrayList<>();
+    private final List<Soul> companions = new ArrayList<>();
     // Optimize edilmiş HTTP istemcisi
     private final OkHttpClient httpClient = new OkHttpClient.Builder()
             .connectTimeout(10, TimeUnit.SECONDS)

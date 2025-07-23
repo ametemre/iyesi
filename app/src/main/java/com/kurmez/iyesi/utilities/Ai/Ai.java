@@ -1,7 +1,6 @@
 package com.kurmez.iyesi.utilities.Ai;
 
-import static com.kurmez.iyesi.utilities.delegate.Threading.initGpuDelegate;
-import static com.kurmez.iyesi.utilities.delegate.Threading.setInferencePrefMethod;
+//import static com.kurmez.iyesi.utilities.threading.Threading.setInferencePrefMethod;
 
 import android.content.Context;
 import android.content.res.AssetManager;
@@ -13,16 +12,19 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.util.Consumer;
 
-import com.kurmez.iyesi.utilities.delegate.TFLiteModelInspector;
+import com.kurmez.iyesi.utilities.Ai.delegate.TFLiteModelInspector;
+import com.kurmez.iyesi.utilities.Ai.threading.Threading;
+import com.kurmez.iyesi.utilities.Ai.threading.ThreadService;
 
+import org.tensorflow.lite.Delegate;
 import org.tensorflow.lite.Interpreter;
 import org.tensorflow.lite.Tensor;
 import org.tensorflow.lite.gpu.GpuDelegate;
+import org.tensorflow.lite.nnapi.NnApiDelegate;
 import org.tensorflow.lite.support.common.FileUtil;
 
 import java.io.IOException;
-import java.lang.reflect.Field;
-import java.nio.MappedByteBuffer;
+        import java.nio.MappedByteBuffer;
 import java.nio.charset.Charset;
 import java.util.Arrays;
 import java.util.List;
@@ -34,6 +36,7 @@ public class Ai implements AutoCloseable {
     private MappedByteBuffer modelBuffer;
     private Interpreter videoInterpreter;
     private GpuDelegate gpuDelegate;
+    private NnApiDelegate nnApiDelegate;
     private float[][][] outputBuffer;          // Örn: new float[...][...][...]
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     //private final ExecutorService executor;
@@ -98,6 +101,7 @@ public class Ai implements AutoCloseable {
         this.labels = FileUtil.loadLabels(context.getAssets().open(labelFile), Charset.forName("UTF-8"));
         this.scoreThreshold = MODEL_THRESHOLDS.getOrDefault(videoModelPath, 0.5f);
         this.labelsPath = labelsPath;
+
     }
 
     private Interpreter.Options createInterpreterOptions(GpuDelegate delegate) {
@@ -112,74 +116,47 @@ public class Ai implements AutoCloseable {
         return length;
     }
     private Interpreter initModel(AssetManager assets, String modelPath, Interpreter.Options baseOptions, Context context) {
-        // Ai.java içinde - initModel metodunda
-        GpuDelegate.Options options = new GpuDelegate.Options();
-        options.setQuantizedModelsAllowed(true);
-        options.setPrecisionLossAllowed(true); // FP16 hesaplamaya izin ver
-
-// INFERENCE_PREFERENCE_FAST_SINGLE_ANSWER kullanın
-        try {
-            Field fastAnswerField = GpuDelegate.Options.class.getField("INFERENCE_PREFERENCE_FAST_SINGLE_ANSWER");
-            setInferencePrefMethod.invoke(options, fastAnswerField.getInt(null));
-        } catch (Exception e) {
-            // Fallback
-        }
         if (modelPath == null || modelPath.isEmpty()) return null;
         try {
             this.modelBuffer = TFLiteModelInspector.loadModelFile(assets, modelPath);
-            // Try GPU first
-            try {
-                gpuDelegate = initGpuDelegate(context);
-                if (gpuDelegate != null) {
-                    Interpreter.Options gpuOptions = new Interpreter.Options();
-                    gpuOptions.addDelegate(gpuDelegate);
-                    interpreter = new Interpreter(modelBuffer, gpuOptions);
-                    lastUsedDelegate = "GPU";
-                    Log.i(TAG, "Model loaded with GPU delegate");
-                    return interpreter;
-                }
-            } catch (Exception e) {
-                Log.w(TAG, "GPU failed, trying NNAPI",e);
-                if (gpuDelegate != null) gpuDelegate.close();
+
+            // Try delegate initialization
+            // Delegate oluşturmayı ThreadService’e devret
+            Delegate delegate = ThreadService.getInstance().getOrCreateDelegate(modelPath, context);            Interpreter.Options options = new Interpreter.Options().setNumThreads(Math.max(1, Runtime.getRuntime().availableProcessors() - 1));
+
+            if (delegate instanceof GpuDelegate) {
+                gpuDelegate = (GpuDelegate) delegate;
+                options.addDelegate(gpuDelegate);
+                interpreter = new Interpreter(modelBuffer, options);
+                lastUsedDelegate = "GPU";
+                Log.i(TAG, "Model loaded with GPU delegate");
+                return interpreter;
+
+            } else if (delegate instanceof NnApiDelegate) {
+                nnApiDelegate = (NnApiDelegate) delegate;
+                options.addDelegate(nnApiDelegate);
                 try {
-                    Interpreter.Options nnapiOptions = new Interpreter.Options();
-                    nnapiOptions.setUseNNAPI(true);
-                    return new Interpreter(modelBuffer, nnapiOptions);
-                } catch (Exception nnapiEx) {
-                    Log.w(TAG, "NNAPI failed, using CPU");
-                    return new Interpreter(modelBuffer, baseOptions);
+                    interpreter = new Interpreter(modelBuffer, options);
+                    lastUsedDelegate = "NNAPI";
+                    Log.i(TAG, "Model loaded with NNAPI delegate");
+                    return interpreter;
+                } catch (IllegalArgumentException e) {
+                    Log.e(TAG, "NNAPI delegate failed: " + e.getMessage());
+                    if (nnApiDelegate != null) nnApiDelegate.close();
+                    nnApiDelegate = null;
+                    throw new IllegalStateException("No supported delegate available, CPU is not allowed");
                 }
-                //Log.w(TAG, "GPU delegate failed, try NNAPI"+e.getLocalizedMessage(), e);
-                //Log.w(TAG, "GPU delegate failed, try NNAPI"+e.getMessage(), e);
-                //Log.w(TAG, "GPU delegate failed, try NNAPI", e.getCause());
             }
 
-            // Try NNAPI
-/*
-            try {
-                Interpreter.Options nnapiOptions = new Interpreter.Options();
-                nnapiOptions.setUseNNAPI(true);
-                interpreter = new Interpreter(modelBuffer, nnapiOptions);
-                lastUsedDelegate = "NNAPI";
-                Log.i(TAG, "Model loaded with NNAPI delegate");
-                return interpreter;
-            } catch (Exception e) {
-                Log.w(TAG, "NNAPI failed, try CPU", e);
-            }
-*/
-            // Last resort: CPU
-            try {
-                interpreter = new Interpreter(modelBuffer, baseOptions);
-                lastUsedDelegate = "CPU";
-                Log.i(TAG, "Model loaded with CPU");
-                return interpreter;
-            } catch (Exception e) {
-                Log.e(TAG, "CPU load failed", e);
-                return null;
-            }
+            // No CPU fallback - throw exception if no delegate works
+            Log.e(TAG, "No suitable delegate (GPU or NNAPI) found, CPU is not allowed");
+            throw new IllegalStateException("No supported delegate available, CPU is not allowed");
+
         } catch (Exception e) {
-            Log.e(TAG, "Asset load failed", e);
-            return null;
+            Log.e(TAG, "Model initialization failed", e);
+            if (gpuDelegate != null) gpuDelegate.close();
+            if (nnApiDelegate != null) nnApiDelegate.close();
+            throw new IllegalStateException("Model initialization failed, CPU is not allowed", e);
         }
     }
 
@@ -281,21 +258,6 @@ public class Ai implements AutoCloseable {
     // Kaynak temizliği
     @Override
     public void close() {
-        /*
-        // Executor'u güvenli şekilde kapat
-        if (executor != null && !executor.isShutdown()) {
-            executor.shutdown();
-            try {
-                if (!executor.awaitTermination(800, TimeUnit.MILLISECONDS)) {
-                    executor.shutdownNow();
-                }
-            } catch (InterruptedException e) {
-                executor.shutdownNow();
-                Thread.currentThread().interrupt();
-            }
-        }
-*/
-        // Model interpreter’ları kapat
         try {
             if (videoInterpreter != null) videoInterpreter.close();
         } catch (Exception e) {
@@ -306,19 +268,11 @@ public class Ai implements AutoCloseable {
         } catch (Exception e) {
             Log.w(TAG, "soundInterpreter kapatılamadı", e);
         }
-        try {
-            if (gpuDelegate != null) gpuDelegate.close();
-        } catch (Exception e) {
-            Log.w(TAG, "gpuDelegate kapatılamadı", e);
-        }
-
-        // Tüm referansları null’la
-        // (Bunlar opsiyonel ama erişim hatalarını azaltır)
-        // executor = null;
-        // videoInterpreter = null;
-        // soundInterpreter = null;
-        // gpuDelegate = null;
-
+        // Delegate’leri ThreadService üzerinden bırak
+        ThreadService.getInstance().releaseDelegate(path);
+        ThreadService.getInstance().releaseDelegate(path + "_nnapi");
+        // Eğer artık hiç AI servisine ihtiyacın yoksa tüm ThreadService’i kapat
+        ThreadService.getInstance().shutdown();
         Log.i(TAG, "Resources released");
     }
     private String lastUsedDelegate = "NONE";

@@ -1,11 +1,11 @@
-package com.kurmez.iyesi.utilities.delegate;
+package com.kurmez.iyesi.utilities.Ai.delegate;
 
 import android.content.Context;
 import android.graphics.Bitmap;
-import android.graphics.RectF;
 import android.util.Log;
 
 import com.kurmez.iyesi.utilities.Ai.Ai;
+import com.kurmez.iyesi.utilities.Ai.threading.Threading;
 
 import org.opencv.android.Utils;
 import org.opencv.core.Core;

@@ -1,6 +1,7 @@
 package com.kurmez.iyesi.sokak;
 
 import android.annotation.SuppressLint;
+import android.graphics.Point;
 import android.os.Bundle;
 import android.view.GestureDetector;
 import android.view.MotionEvent;
@@ -17,6 +18,7 @@ import android.widget.Toast;
 
 import androidx.fragment.app.FragmentActivity;
 
+import com.google.android.gms.maps.model.LatLng;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.google.maps.android.data.geojson.GeoJsonLayer;
 import com.kurmez.iyesi.R;
@@ -27,6 +29,9 @@ import com.kurmez.iyesi.utilities.helper.Actions;
 public class SokakActivity extends FragmentActivity {
     private FloatingActionButton selectedFab = null; // Track the selected FAB
     public Kurmes kurmes;
+    private boolean isMarkerModeActive = false;
+    private boolean isMarkerMode = false;
+    private float startX, startY;
     private VelocityTracker velocityTracker = null;
     private FloatingActionButton fabDraggable, fabSound;
     private float dX, dY;
@@ -58,15 +63,87 @@ public class SokakActivity extends FragmentActivity {
         initializeFABs();
         // Yalnızca harita ile ilgili başlatmayı Harita sınıfına devret
         harita = new Harita(this);
+        touchOverlay = findViewById(R.id.map_overlay);
+        gestureDetector = new GestureDetector(this, new GestureDetector.SimpleOnGestureListener() {
+            @Override
+            public boolean onDown(MotionEvent e) {
+                return true;
+            }
+
+            @Override
+            public void onLongPress(MotionEvent e) {
+                if (!isMarkerModeActive) {
+                    Point point = new Point((int) e.getX(), (int) e.getY());
+                    LatLng location = harita.screenPointToLatLng(point);
+                    harita.placeDraggableMarker(location);
+                    isMarkerModeActive = true;
+                }
+            }
+
+            @Override
+            public boolean onDoubleTap(MotionEvent e) {
+                if (isMarkerModeActive && harita.isMarkerActive()) {
+                    harita.confirmMarkerLocation();
+                    isMarkerModeActive = false;
+                    return true;
+                }
+                return false;
+            }
+
+            @Override
+            public boolean onSingleTapConfirmed(MotionEvent e) {
+                if (isMarkerModeActive && harita.isMarkerActive()) {
+                    harita.cancelMarkerPlacement();
+                    isMarkerModeActive = false;
+                    return true;
+                }
+                return false;
+            }
+        });
+
+        touchOverlay.setOnTouchListener((v, event) -> {
+            gestureDetector.onTouchEvent(event);
+
+            // Marker modu aktifse dokunma olayını tüketme (harita hareketlerine izin ver)
+            return false;
+        });
     }
-    @Override
-    public boolean dispatchTouchEvent(MotionEvent ev) {
-        // Eğer miniFabs boş değil ve dokunmayı işlediyse, burada false yerine true dönün:
-        if (miniFabs != null && miniFabs.handleOutsideTouch(ev)) {
-            return true;   // Event burada tüketildi
+    private void handleMapTouch(MotionEvent event) {
+        int action = event.getActionMasked();
+
+        switch (action) {
+            case MotionEvent.ACTION_DOWN:
+                startX = event.getX();
+                startY = event.getY();
+                break;
+
+            case MotionEvent.ACTION_MOVE:
+                // Marker modu aktifken harita hareketlerini engelle
+                if (isMarkerModeActive) return;
+
+                // ... hareket algılama kodu ...
+                break;
+
+            case MotionEvent.ACTION_UP:
+                if (!isMarkerMode) {
+                    gestureDetector.onTouchEvent(event);
+                }
+                break;
         }
-        // Aksi takdirde normal akışı devam ettir
-        return super.dispatchTouchEvent(ev);
+    }
+
+    @Override
+    public boolean dispatchTouchEvent(MotionEvent event) {
+        // 1. Önce mini FAB'ları kontrol et
+        if (miniFabs != null && miniFabs.handleOutsideTouch(event)) {
+            return true;
+        }
+
+        // 2. GestureDetector'ı çalıştır
+        gestureDetector.onTouchEvent(event);
+
+        // 3. Haritaya dokunma olayını ilet
+        return super.dispatchTouchEvent(event);
     }
     private void initializeSpinners() {
         // Satırları saran LinearLayout referansları
@@ -183,7 +260,7 @@ public class SokakActivity extends FragmentActivity {
             }
         });
         miniFabs.applyDefaultColors();
-        miniFabs.setupDraggableFAB(miniFabs,mainFab);
+        miniFabs.setupDraggableFAB(this,miniFabs,mainFab);
         // Wire each miniFAB to call selectFab() + your onFabClick logic
         for (FloatingActionButton fab : miniFabs.getFabs()) {
             fab.setOnClickListener(v -> {

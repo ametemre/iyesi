@@ -1,6 +1,7 @@
 //Companion.java
 package com.kurmez.iyesi.sahiplendirme;
 
+import android.annotation.SuppressLint;
 import android.os.Bundle;
 import android.widget.ImageView;
 import android.widget.TextView;
@@ -9,7 +10,38 @@ import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.bumptech.glide.Glide;
+import com.google.firebase.database.DataSnapshot;
+import com.google.firebase.database.DatabaseError;
+import com.google.firebase.database.DatabaseReference;
+import com.google.firebase.database.FirebaseDatabase;
+import com.google.firebase.database.ValueEventListener;
 import com.kurmez.iyesi.R;
+import android.provider.Settings;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.Call;
+import okhttp3.Callback;
+import okhttp3.Response;
+
+import org.json.JSONException;
+import org.json.JSONObject;
+import java.io.IOException;
+import android.provider.Settings;
+import android.widget.Toast;
+
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.Call;
+import okhttp3.Callback;
+import okhttp3.Response;
+import org.json.JSONObject;
+import java.io.IOException;
+// Silinecekler:
+import com.google.firebase.database.DataSnapshot;
+import com.google.firebase.database.DatabaseError;
+import com.google.firebase.database.DatabaseReference;
+import com.google.firebase.database.FirebaseDatabase;
+import com.google.firebase.database.ValueEventListener;
 
 public class Companion extends AppCompatActivity {
     private String species;
@@ -17,49 +49,80 @@ public class Companion extends AppCompatActivity {
     private String foundPlace;
     private String photoUrl;
     private String profileId;
+    private String requestKey;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_companion);
 
-        // Retrieve data from the Intent
-        species = getIntent().getStringExtra("species");
-        foundDate = getIntent().getStringExtra("foundDate");
-        foundPlace = getIntent().getStringExtra("foundPlace");
-        photoUrl = getIntent().getStringExtra("photoUrl");
-        profileId = getIntent().getStringExtra("profileId");
+        // 1. intent parametrelerini al
+        String deviceId = getIntent().getStringExtra("deviceId");
+        String node = getIntent().getStringExtra("node");
+        if (deviceId == null) {
+            @SuppressLint("HardwareIds")
+            String fallbackDeviceId = Settings.Secure.getString(getContentResolver(), Settings.Secure.ANDROID_ID);
+            deviceId = fallbackDeviceId;
+        }
+        if (node == null) node = "soul_inneed";
 
-        // Populate the UI elements with the retrieved data
-        populateUI();
+        String url = "https://us-central1-iyesi-a651a.cloudfunctions.net/getCompanionByDevice?deviceId=" + deviceId + "&node=" + node;
 
-        // Show a waiting popup for Ülgen's response
-        showWaitingPopup();
+        // 3. Veri çek
+        new OkHttpClient().newCall(new Request.Builder().url(url).build())
+                .enqueue(new Callback() {
+                    @Override
+                    public void onFailure(Call call, IOException e) {
+                        runOnUiThread(() -> Toast.makeText(Companion.this,
+                                "Sunucuya bağlanılamadı", Toast.LENGTH_LONG).show());
+                    }
+
+                    @Override
+                    public void onResponse(Call call, Response response) throws IOException {
+                        if (!response.isSuccessful()) return;
+
+                        try {
+                            JSONObject j = new JSONObject(response.body().string());
+
+                            final String species   = j.optString("species");
+                            final String foundDate = j.optString("foundDate");
+                            final String foundPlace= j.optString("foundLocation");
+                            final String photoUrl  = j.optString("imageResId");
+                            final String profileId = j.optString("finderName");
+                            final boolean approved = j.optBoolean("approved", false);
+
+                            runOnUiThread(() -> {
+                                populateUI(species, foundDate, foundPlace, photoUrl, profileId);
+                                if (!approved) showWaitingPopup();
+                            });
+
+                        } catch (JSONException e) {
+                            runOnUiThread(() -> Toast.makeText(Companion.this,
+                                    "Veri çözülemedi", Toast.LENGTH_SHORT).show());
+                        }
+                    }
+                });
     }
-
-    private void populateUI() {
-        // Get references to the UI elements
+    private void populateUI(String species, String foundDate, String foundPlace, String photoUrl, String profileId) {
         ImageView companionImage = findViewById(R.id.companion_image);
-        TextView soulCompanion = findViewById(R.id.soul_companion);
-        TextView foundDateView = findViewById(R.id.found_Date);
-        TextView foundPlaceView = findViewById(R.id.found_place);
-        TextView ulgenView = findViewById(R.id.veterineary_ulgen);
+        TextView soulCompanion   = findViewById(R.id.soul_companion);
+        TextView foundDateView   = findViewById(R.id.found_Date);
+        TextView foundPlaceView  = findViewById(R.id.found_place);
+        TextView ulgenView       = findViewById(R.id.veterineary_ulgen);
 
-        // Set the data to the UI elements
         soulCompanion.setText(species != null ? species : "N/A");
         foundDateView.setText(foundDate != null ? foundDate : "N/A");
         foundPlaceView.setText(foundPlace != null ? foundPlace : "N/A");
         ulgenView.setText(profileId != null ? profileId : "N/A");
 
-        // Load the companion's image using Glide
         if (photoUrl != null && !photoUrl.isEmpty()) {
             Glide.with(this)
                     .load(photoUrl)
-                    .placeholder(R.drawable.holder) // Placeholder image while loading
-                    .error(R.drawable.star) // Error image if loading fails
+                    .placeholder(R.drawable.holder)
+                    .error(R.drawable.star)
                     .into(companionImage);
         } else {
-            companionImage.setImageResource(R.drawable.holder); // Fallback image
+            companionImage.setImageResource(R.drawable.holder);
         }
     }
 

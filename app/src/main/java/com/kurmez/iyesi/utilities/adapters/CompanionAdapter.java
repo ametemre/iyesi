@@ -10,12 +10,12 @@ import android.widget.ImageView;
 import android.widget.TextView;
 
 import com.bumptech.glide.Glide;
-import com.kurmez.iyesi.sahiplendirme.PetCompanion;
+import com.kurmez.iyesi.sahiplendirme.Soul;
 import com.kurmez.iyesi.R;
 
 import java.util.List;
-public class CompanionAdapter extends ArrayAdapter<PetCompanion> {
-    public CompanionAdapter(Context context, List<PetCompanion> companions) {
+public class CompanionAdapter extends ArrayAdapter<Soul> {
+    public CompanionAdapter(Context context, List<Soul> companions) {
         super(context, 0, companions);
     }
     @Override
@@ -26,7 +26,7 @@ public class CompanionAdapter extends ArrayAdapter<PetCompanion> {
         }
 
         // Get the current companion
-        PetCompanion companion = getItem(position);
+        Soul companion = getItem(position);
 
         // Get references to UI elements
         ImageView petImage = convertView.findViewById(R.id.pet_image);

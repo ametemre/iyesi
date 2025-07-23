@@ -51,7 +51,7 @@ public class WelcomeDummy extends AppCompatActivity {
     // Liste görüntülemek için ListView ve adapter
     private ListView listView;
     private CompanionAdapter adapter;
-    private final List<PetCompanion> companions = new ArrayList<>();
+    private final List<Soul> companions = new ArrayList<>();
 
     // HTTP istekleri için OkHttpClient
     private final OkHttpClient httpClient = new OkHttpClient.Builder()
@@ -175,7 +175,7 @@ public class WelcomeDummy extends AppCompatActivity {
                 Toast.makeText(WelcomeDummy.this, "Henüz hayvan listesi boş.", Toast.LENGTH_SHORT).show();
                 return;
             }
-            PetCompanion first = companions.get(0);
+            Soul first = companions.get(0);
             //sendMessage(first.getFinderName(), "Merhaba!", 42);
         });
 
@@ -276,7 +276,7 @@ public class WelcomeDummy extends AppCompatActivity {
                 String finderName    = item.optString("finderName");
                 long   timestamp     = item.optLong("timestamp");
 
-                PetCompanion pc = new PetCompanion(
+                Soul pc = new Soul(
                         name,
                         species,
                         breed,

@@ -1,4 +1,4 @@
-package com.kurmez.iyesi.utilities.delegate;
+package com.kurmez.iyesi.utilities.Ai.delegate;
 
 // TFLiteModelInspector.java
 

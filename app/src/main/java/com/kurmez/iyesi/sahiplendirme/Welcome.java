@@ -20,6 +20,7 @@ import com.google.firebase.auth.FirebaseUser;
 import com.kurmez.iyesi.Login;
 import com.kurmez.iyesi.R;
 import com.kurmez.iyesi.social.Explore;
+import com.kurmez.iyesi.social.ExplorePrivate;
 import com.kurmez.iyesi.social.Messaging;
 import com.kurmez.iyesi.utilities.adapters.CompanionAdapter;
 
@@ -47,17 +48,15 @@ public class Welcome extends AppCompatActivity {
     private ListView listView;
     private String idToken;
     private CompanionAdapter adapter;
-    private final List<PetCompanion> companions = new ArrayList<>();
-    private final OkHttpClient httpClient = new OkHttpClient.Builder()
-            .addInterceptor(chain -> {
+    private final List<Soul> companions = new ArrayList<>();
+    private final OkHttpClient httpClient = new OkHttpClient.Builder().addInterceptor(chain -> {
                 Request req = chain.request();
                 Log.d("HTTP-REQ", req.method() + " " + req.url());
                 for (String name : req.headers().names()) {
                     Log.d("HTTP-REQ", name + ": " + req.header(name));
                 }
                 return chain.proceed(req);
-            })
-            .build();
+            }).build();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -154,7 +153,7 @@ public class Welcome extends AppCompatActivity {
         });
 
         imgWelcome.setOnLongClickListener(v -> {
-            // TODO: Sahiplendirme formunu açma
+            startActivity(new Intent(this, ExplorePrivate.class));
             return true;
         });
 
@@ -164,7 +163,7 @@ public class Welcome extends AppCompatActivity {
         });
         listView.setOnItemClickListener((parent, view, position, id) -> {
             // Get the selected companion
-            PetCompanion selectedCompanion = companions.get(position);
+            Soul selectedCompanion = companions.get(position);
             Toast.makeText(this, "Selected: " + selectedCompanion.getBreed(), Toast.LENGTH_SHORT).show();
 
             // Navigate to Companion activity with the selected item's data
@@ -250,7 +249,13 @@ public class Welcome extends AppCompatActivity {
     private void parsePriorityPets(String json) {
         try {
             JSONObject root   = new JSONObject(json);
-            JSONArray arr     = root.getJSONArray("petCompanions");
+            // check success flag
+            if (!root.optBoolean("success",false)) {
+                Toast.makeText(this, root.optString("message","Sunucu hatası"), Toast.LENGTH_SHORT).show();
+                return;
+            }
+            // grab the new key
+                    JSONArray arr     = root.optJSONArray("pets");
             companions.clear();
 
             for (int i = 0; i < arr.length(); i++) {
@@ -262,26 +267,27 @@ public class Welcome extends AppCompatActivity {
                 String health        = item.optString("health");
                 String foundDate     = item.optString("foundDate");
                 String foundLocation = item.optString("foundLocation");
-                String imageResId    = item.optString("imageResId");
-                String finderName    = item.optString("finderName");
-                long   timestamp     = item.optLong("timestamp");
+                // Cloud function now returns "imageUrl"
+                String imageResId    = item.optString("imageUrl");
+                // there is no longer a finderName in this payload
+                String finderName    = "";
+                long   timestamp     = item.optLong("timestamp", System.currentTimeMillis());
 
-                PetCompanion pc = new PetCompanion(
-                        name,
-                        species,
-                        breed,
-                        "",
-                        health,
-                        foundDate,
-                        foundLocation,
-                        "",
-                        imageResId,
-                        finderName,
-                        timestamp
+                Soul pc = new Soul(
+                        /*name=*/name,
+                        /*species=*/species,
+                        /*breed=*/breed,
+                        /*age=*/"",
+                        /*health=*/health,
+                        /*foundDate=*/foundDate,
+                        /*foundLocation=*/foundLocation,
+                        /*veterinary=*/"",
+                        /*imageResId=*/imageResId,
+                        /*finderName=*/finderName,
+                        /*timestamp=*/timestamp
                 );
                 companions.add(pc);
             }
-
             runOnUiThread(adapter::notifyDataSetChanged);
         } catch (Exception e) {
             e.printStackTrace();

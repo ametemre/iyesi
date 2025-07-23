@@ -84,6 +84,7 @@ import androidx.appcompat.app.AlertDialog;
  * - Çizim işlemi GeoSon.filterAndDraw metoduna devredilmiştir.
  */
 public class Harita implements OnMapReadyCallback {
+    private boolean isMarking = false;
     private static final float MARKER_WIDTH_DP  = 48f;
     private static final float ICON_DP          = 20f;
     private static final float ICON_OFFSET_Y_DP = 13f;   // yukarı kaydırma
@@ -110,7 +111,9 @@ public class Harita implements OnMapReadyCallback {
         mMap = googleMap;
         ready = true;
         mapReady = true;
-
+        // Harita ayarlarını yapılandır
+        mMap.getUiSettings().setAllGesturesEnabled(true);
+        mMap.getUiSettings().setScrollGesturesEnabledDuringRotateOrZoom(true);
         // Harita stilini uygula
         try {
             boolean success = mMap.setMapStyle(
@@ -135,38 +138,6 @@ public class Harita implements OnMapReadyCallback {
         } else {
             getUserLocationAndLoadInitial();
         }
-// 1) Uzun basma ile "geçici" draggable marker ekle
-        mMap.setOnMapLongClickListener(latLng -> {
-            //if (!canUserPlaceMarker()) return;   // sadece Ülgen yetkiliyse
-            // Daha önce eklenmiş geçici marker varsa kaldır
-            if (tempMarker != null) tempMarker.remove();
-
-            tempMarker = mMap.addMarker(new MarkerOptions()
-                    .position(latLng)
-                    .draggable(true)
-                    .title("Yeni Konum")
-                    .icon(getCustomIcon("Besleme"))  // default icon, dialog’da güncellenecek
-            );
-            Toast.makeText(activity, "Marker’ı istediğin yere sürükle ve bırak", Toast.LENGTH_SHORT).show();
-        });
-
-// 2) Sürükleme bittiğinde açılır dialog ve onay
-        mMap.setOnMarkerDragListener(new GoogleMap.OnMarkerDragListener() {
-            @Override
-            public void onMarkerDragStart(Marker marker) { /* boş */ }
-
-            @Override
-            public void onMarkerDrag(Marker marker) { /* boş */ }
-
-            @Override
-            public void onMarkerDragEnd(Marker marker) {
-                // sadece geçici marker için çalışsın
-                if (marker.equals(tempMarker)) {
-                    openMarkerTypeSelectionDialog(marker);
-                    tempMarker = null;
-                }
-            }
-        });
     }
 
     public Harita(FragmentActivity activity) {
@@ -442,173 +413,6 @@ public class Harita implements OnMapReadyCallback {
             }
         });
     }
-    /**
-     * OSM fallback: Ülke ISO2 koduna göre polygon verisini alır.
-     */
-    public void loadLayer(int levelIndex, String admLevel) {
-        SokakActivity act = (SokakActivity) activity;
-        act.runOnUiThread(() -> {
-            ProgressBar pb = act.findViewById(R.id.progress_bar);
-            pb.setVisibility(View.VISIBLE);
-            pb.setProgress(0);
-        });
-
-        String url;
-        if (!"OSM".equals(admLevel)) {
-            String iso3 = currentCountryCode3;
-            String file = String.format("geoBoundaries-%s-%s.geojson", iso3, admLevel);
-            url = GITHUB_BASE + iso3 + "/" + admLevel + "/" + file;
-        } else {
-            url = "https://polygons.openstreetmap.fr/get_geojson.py?id="
-                    + currentCountryCode2 + "&params=0";
-        }
-        fetchGeoJson(levelIndex, admLevel, url);
-    }
-    private void fetchGeoJson(int levelIndex, String admLevel, String url) {
-        OkHttpClient client = new OkHttpClient.Builder()
-                .addNetworkInterceptor(chain -> {
-                    okhttp3.Response original = chain.proceed(chain.request());
-                    ResponseBody body = original.body();
-                    if (body == null) return original;
-                    Progress.ProgressResponseBody prb = new Progress.ProgressResponseBody(body, fraction -> {
-                        SokakActivity act = (SokakActivity) activity;
-                        act.runOnUiThread(() -> {
-                            ProgressBar pb = act.findViewById(R.id.progress_bar);
-                            pb.setProgress((int)(fraction * 100));
-                        });
-                    });
-                    return original.newBuilder().body(prb).build();
-                })
-                .build();
-
-        Request req = new Request.Builder().url(url).build();
-        client.newCall(req).enqueue(new Callback() {
-            @Override public void onFailure(@NonNull Call call, @NonNull IOException e) {
-                SokakActivity act = (SokakActivity) activity;
-                act.runOnUiThread(() -> {
-                    Toast.makeText(activity, admLevel + " yükleme başarısız", Toast.LENGTH_SHORT).show();
-                    act.findViewById(R.id.progress_bar).setVisibility(View.GONE);
-                });
-            }
-            @Override
-            public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
-                String json = response.body().string();
-
-                // 1) JSON'u parse et
-                final JSONObject obj;
-                try {
-                    obj = new JSONObject(json);
-                } catch (org.json.JSONException ex) {
-                    onFailure(call, new IOException("Geçersiz JSON", ex));
-                    return;
-                }
-
-                SokakActivity act = (SokakActivity) activity;
-                act.runOnUiThread(() -> {
-                    GeoJsonLayer layer;
-                    try {
-                        layer = new GeoJsonLayer(mMap, obj);
-                    } catch (Exception ex) {
-                        Toast.makeText(activity, "Katman oluşturma hatası", Toast.LENGTH_SHORT).show();
-                        ProgressBar pbErr = act.findViewById(R.id.progress_bar);
-                        pbErr.setVisibility(View.GONE);
-                        return;
-                    }
-
-                    // 2) O anki lokasyonunuzu alın (örneğin Harita içinde tutuluyorsa):
-                    //    Harita sınıfınızda bir getter varsa:
-                    //    LatLng currentLocation = harita.getCurrentLocation();
-                    //    Eğer yoksa, kameranın ortasını da geçici olarak alabilirsiniz:
-                    LatLng currentLocation = mMap.getCameraPosition().target;
-
-                    // 3) GeoJSON içindeki her feature'ı kontrol et
-                    for (GeoJsonFeature feature : layer.getFeatures()) {
-                        boolean containsPoint = false;
-
-                        // Eğer feature bir Polygon ise:
-                        if (feature.getGeometry() instanceof GeoJsonPolygon) {
-                            GeoJsonPolygon polygon = (GeoJsonPolygon) feature.getGeometry();
-                            // Dış halkasını al:
-                            List<LatLng> outerBoundary = polygon.getCoordinates().get(0);
-                            if (com.google.maps.android.PolyUtil.containsLocation(currentLocation, outerBoundary, false)) {
-                                containsPoint = true;
-                            }
-                        }
-                        // Eğer feature bir MultiPolygon ise:
-                        else if (feature.getGeometry() instanceof GeoJsonMultiPolygon) {
-                            GeoJsonMultiPolygon multi = (GeoJsonMultiPolygon) feature.getGeometry();
-                            for (GeoJsonPolygon polygon : multi.getPolygons()) {
-                                List<LatLng> outer = polygon.getCoordinates().get(0);
-                                if (com.google.maps.android.PolyUtil.containsLocation(currentLocation, outer, false)) {
-                                    containsPoint = true;
-                                    break;
-                                }
-                            }
-                        }
-
-                        // 4) Eğer içinde ise belirgin renkle, değilse neredeyse şeffaf yap
-                        GeoJsonPolygonStyle style = new GeoJsonPolygonStyle();
-                        if (containsPoint) {
-                            // İçindeyseniz: mavi %20 alfa, kalın kenarlık
-                            style.setFillColor(Color.argb(51, 0, 0, 255));
-                            style.setStrokeColor(Color.BLUE);
-                            style.setStrokeWidth(2f);
-                        } else {
-                            // İçinde değilse: mavi çok düşük alfa (ör. alfa=10), ince kenarlık
-                            style.setFillColor(Color.argb(10, 0, 0, 255));
-                            style.setStrokeColor(Color.argb(10, 0, 0, 255));
-                            style.setStrokeWidth(1f);
-                        }
-                        feature.setPolygonStyle(style);
-                    }
-
-                    // 5) Filtrelenmiş katmanı haritaya ekle
-                    layer.addLayerToMap();
-
-                    // 6) Referansı sakla (toggle/clear için ileride kullanabilirsiniz)
-                    if (levelIndex == 0) layerCountry = layer;
-                    else if (levelIndex == 1) layerProvince = layer;
-                    else layerDistrict = layer;
-
-                    // 7) ProgressBar'ı %100 yap ve gizle
-                    ProgressBar pb = act.findViewById(R.id.progress_bar);
-                    pb.setProgress(100);
-                    pb.setVisibility(View.GONE);
-                });
-            }
-
-        });
-    }
-    /**
-     * Haritaya tıklayınca besleme noktası eklemek için kullanılan metot.
-     */
-
-
-    public void enableMarkerPlacementForUlgen() {
-        gestureDetector = new GestureDetector(activity, new GestureDetector.SimpleOnGestureListener() {
-            @Override
-            public void onLongPress(MotionEvent e) {
-                LatLng location = mMap.getProjection().fromScreenLocation(
-                        new Point((int) e.getX(), (int) e.getY())
-                );
-                placeDraggableMarker(location);
-            }
-
-            @Override
-            public boolean onDoubleTap(MotionEvent e) {
-                if (draggableMarker != null) {
-                    confirmMarkerLocation();
-                    return true;
-                }
-                return false;
-            }
-        });
-
-        mMap.setOnMapClickListener(null); // Normal click listener temizlenir.
-
-        mMap.setOnMapLongClickListener(null); // Long click yerine gesture kullanıyoruz.
-
-    }
     public LatLng screenPointToLatLng(Point point) {
         return mMap.getProjection().fromScreenLocation(point);
     }
@@ -637,9 +441,10 @@ public class Harita implements OnMapReadyCallback {
             Log.e(TAG, "saveJSONToFile error: " + e.getMessage());
         }
     }
-
     public void placeDraggableMarker(LatLng location) {
-        if (draggableMarker != null) draggableMarker.remove();
+        if (draggableMarker != null) {
+            draggableMarker.remove();
+        }
 
         draggableMarker = mMap.addMarker(new MarkerOptions()
                 .position(location)
@@ -648,13 +453,40 @@ public class Harita implements OnMapReadyCallback {
                 .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_CYAN))
         );
 
-        Toast.makeText(activity, "Marker'ı sürükleyip çift dokunarak sabitleyin.", Toast.LENGTH_LONG).show();
+        mMap.setOnMarkerDragListener(new GoogleMap.OnMarkerDragListener() {
+            @Override
+            public void onMarkerDragStart(Marker marker) {
+                mMap.getUiSettings().setScrollGesturesEnabled(false);
+            }
+
+            @Override
+            public void onMarkerDragEnd(Marker marker) {
+                mMap.getUiSettings().setScrollGesturesEnabled(true);
+            }
+
+            @Override
+            public void onMarkerDrag(Marker marker) {
+            }
+        });
+    }
+    // Yeni metodlar ekle
+    public boolean isMarkerActive() {
+        return draggableMarker != null;
+    }
+
+    public void cancelMarkerPlacement() {
+        if (draggableMarker != null) {
+            draggableMarker.remove();
+            draggableMarker = null;
+        }
     }
 
     public void confirmMarkerLocation() {
-        draggableMarker.setDraggable(false);
-        openMarkerTypeSelectionDialog(draggableMarker);
-        draggableMarker = null;
+        if (draggableMarker != null) {
+            draggableMarker.setDraggable(false);
+            openMarkerTypeSelectionDialog(draggableMarker);
+            draggableMarker = null;
+        }
     }
     private void openMarkerTypeSelectionDialog(Marker marker) {
         String[] types = {"Besleme", "Yuva", "Barınak" , "Default"};
@@ -672,8 +504,6 @@ public class Harita implements OnMapReadyCallback {
                 .setCancelable(false)
                 .show();
     }
-
-
     private BitmapDescriptor getCustomIcon(String type) {
         if (iconCache.containsKey(type)) {
             return iconCache.get(type);
@@ -757,32 +587,5 @@ public class Harita implements OnMapReadyCallback {
         markersArray.put(newMarker);
 
         saveJSONToFile(json);
-    }
-    public void loadNearbyMarkers() {
-        JSONObject json = loadMarkersFromLocalJSON();
-
-        JSONArray markersArray = json.optJSONArray("markers");
-        if (markersArray == null) return;
-
-        for (int i = 0; i < markersArray.length(); i++) {
-            LatLng latLng = null;
-            String type = null;
-            String title = null;
-            try {
-                JSONObject markerObj = markersArray.getJSONObject(i);
-                latLng = new LatLng(markerObj.getDouble("lat"), markerObj.getDouble("lng"));
-                type = markerObj.getString("type");
-                title = markerObj.getString("title");
-            } catch (JSONException e) {
-                Log.e(TAG, "JSON parse hatası: " + e.getMessage());
-                continue; // Hatalı marker'ı atlayarak devam et.
-            }
-
-            mMap.addMarker(new MarkerOptions()
-                    .position(latLng)
-                    .title(title)
-                    .icon(getCustomIcon(type))
-            );
-        }
     }
 }
