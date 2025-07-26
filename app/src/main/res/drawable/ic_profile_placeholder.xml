@@ -1,0 +1,14 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="44dp"
+    android:height="44dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- Kafa -->
+    <path
+        android:fillColor="#CCCCCC"
+        android:pathData="M12,8a4,4 0 1,0 0.001,0"/>
+    <!-- Omuzlar / gövde -->
+    <path
+        android:fillColor="#CCCCCC"
+        android:pathData="M4,20c0-4,8-4,8-4s8,0,8,4v1H4v-1z"/>
+</vector>

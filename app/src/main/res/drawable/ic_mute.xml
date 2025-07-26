@@ -1,0 +1,18 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+
+    <!-- Hoparlör şekli -->
+    <path
+        android:fillColor="#B0B0B0"
+        android:pathData="M7 9v6h4l5 5V4l-5 5H7z"/>
+
+    <!-- Sessize alma çizgisi -->
+    <path
+        android:strokeColor="#B0B0B0"
+        android:strokeWidth="2"
+        android:fillColor="@android:color/transparent"
+        android:pathData="M21 3L3 21"/>
+</vector>

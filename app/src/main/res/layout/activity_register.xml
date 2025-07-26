@@ -118,7 +118,7 @@
             app:cardCornerRadius="8dp">
 
             <EditText
-                android:id="@+id/phone_number"
+                android:id="@+id/phone_register"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:hint="Phone Number"

@@ -4,6 +4,8 @@ import android.content.Intent;
 import android.graphics.Bitmap;
 import android.os.Bundle;
 import android.os.Handler;
+import android.provider.Settings;
+import android.widget.EditText;
 import android.widget.ImageButton;
 import android.widget.Toast;
 
@@ -16,12 +18,27 @@ import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.zxing.BarcodeFormat;
 import com.google.zxing.WriterException;
 import com.journeyapps.barcodescanner.BarcodeEncoder;
+import com.kurmez.iyesi.kurmes.Kurmes;
 import com.kurmez.iyesi.sahiplendirme.Welcome;
 
+import java.util.HashMap;
 import java.util.UUID;
+// Mevcut import’ların en altına ekleyin:
+import com.google.firebase.functions.FirebaseFunctions;
+import com.google.firebase.functions.HttpsCallableResult;
+import java.util.Collections;
+import com.google.android.gms.tasks.OnSuccessListener;
+import com.google.android.gms.tasks.OnFailureListener;
+import com.google.firebase.firestore.ListenerRegistration;  // ★ takip için
+import com.google.firebase.functions.FirebaseFunctions;      // ★ ekledik
+import com.google.firebase.functions.HttpsCallableResult;     // ★ ekledik
+import java.util.Map;                                         // ★ ekledik
+import java.util.Collections;                                // ★ ekledik
+// Sınıfın en üstünde, diğer field’ların yanına ekleyin:
 
 public class MainActivity extends AppCompatActivity {
     private static final int MAX_CLICKS = 20; // Number of clicks for QR scanner access
+    private FirebaseFunctions functions;         // CF çağrıları için
     private int clickCounter = 0; // Counter for detecting 20 clicks
     private boolean isRegistered = false; // Replace with actual logic to check user registration
     private Handler handler = new Handler(); // To manage the delayed camera start
@@ -38,23 +55,15 @@ public class MainActivity extends AppCompatActivity {
         // Initialize Firebase instances
         db = FirebaseFirestore.getInstance();
         mAuth = FirebaseAuth.getInstance();
-
+        functions = FirebaseFunctions.getInstance();   // ← burayı ekleyin
         // Find the ImageButton
         ImageButton patiEnterButton = findViewById(R.id.pati_enter);
 
         // Set click listener for the button
         patiEnterButton.setOnClickListener(v -> {
-            clickCounter++;
-
-            // Reset and cancel any existing camera-starting task
-            if (startCameraRunnable != null) {
-                handler.removeCallbacks(startCameraRunnable);
-            }
-
-            // If clicked 20 times, open the QR Scanner
-            if (clickCounter == MAX_CLICKS) {
-                clickCounter = 0; // Reset the counter
-                openQRScannerForRegistration(); // Open QR scanner
+            clickCounter = (clickCounter + 1) % MAX_CLICKS;
+            if (clickCounter == 0) {
+                openQRScannerForRegistration();
             } else {
                 // Schedule the camera start after 2 seconds
                 startCameraRunnable = this::openCameraWithDelay;
@@ -79,10 +88,38 @@ public class MainActivity extends AppCompatActivity {
             handler.removeCallbacksAndMessages(null);
         }
     }
+
     private void openQRScannerForRegistration() {
-        Toast.makeText(this, "Accessing QR Scanner for Registration...", Toast.LENGTH_SHORT).show();
+        // Sadece QR Scanner’ı başlatıyoruz
         Intent intent = new Intent(this, QRScannerActivity.class);
         startActivityForResult(intent, SCAN_QR_REQUEST_CODE);
+    }
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == SCAN_QR_REQUEST_CODE && resultCode == RESULT_OK) {
+            // Taranan davet eden cihaz ID’si
+            String inviterDeviceId = data.getStringExtra(QRScannerActivity.EXTRA_SCANNED_DATA);
+            // Kayıt işlemini başlat
+            Map<String, Object> payload = new HashMap<>();
+            payload.put("deviceId", inviterDeviceId);
+            // profile objesini uygun şekilde oluşturun (örneğin kullanıcı adı vs.)
+                    Map<String,Object> profile = new HashMap<>();
+            EditText usernameInput = findViewById(R.id.username_register);
+            String username = usernameInput.getText().toString().trim();
+            profile.put("username", username);
+            payload.put("profile", profile);
+                    functions
+                            .getHttpsCallable("completeRegistration")
+                    .call(payload)
+                    .addOnSuccessListener(result -> {
+                        Toast.makeText(this, "Registration completed on-chain", Toast.LENGTH_SHORT).show();
+                navigateToWelcome();
+                    })
+                    .addOnFailureListener(e -> {
+                        Toast.makeText(this, "Registration failed: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                    });
+        }
     }
     /**
      * Opens the appropriate activity based on the registration status.
@@ -106,7 +143,7 @@ public class MainActivity extends AppCompatActivity {
      * Opens the Kurmes activity for real-time image recognition if the user is unregistered.
      */
     private void navigateToKurmes() {
-        Intent intent = new Intent(this, com.kurmez.iyesi.kurmes.Kurmes.class); // Navigate to Kurmes activity
+        Intent intent = new Intent(this, Kurmes.class); // Navigate to Kurmes activity
         startActivity(intent);
         finish();
     }
@@ -115,27 +152,22 @@ public class MainActivity extends AppCompatActivity {
      * Also listens for database changes and navigates accordingly.
      */
     private void handleLongClickForQRCode() {
-        String deviceId = getDeviceSpecificId();
-        generatedQRCode = deviceId; // Save the generated QR code
-
+        generatedQRCode = Settings.Secure.getString(this.getContentResolver(), Settings.Secure.ANDROID_ID); // Save the generated QR code
         // Check user authentication status
         if (mAuth.getCurrentUser() != null) {
             // User is authenticated, navigate to Welcome
             navigateToWelcome();
         } else {
             // Listen for changes in the database for the generated QR code
-            listenForDatabaseChanges(deviceId);
+            //listenForDatabaseChanges(generatedQRCode);
 
             // Show the QR code in a popup
-            showQRCodePopup(deviceId);
+            showQRCodePopup(generatedQRCode);
+            //while(true){
+                // ToDo:WaitingResponse
+                // ToDo:onResponse(startActivity);
+            //}
         }
-    }
-    /**
-     * Generates a unique identifier for the device (you can replace UUID with other device info).
-     */
-    private String getDeviceSpecificId() {
-        // Replace this logic with actual unique device-specific logic if needed
-        return UUID.randomUUID().toString();
     }
     /**
      * Listens for changes in the Firestore database for the generated QR code.

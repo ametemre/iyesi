@@ -10,9 +10,9 @@ android {
         applicationId "com.kurmez.iyesi"
         minSdk 30
         //noinspection EditedTargetSdkVersion
-        targetSdk 35
-        versionCode 2
-        versionName "0.5"
+        targetSdk 36
+        versionCode 3
+        versionName "Cat"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -67,7 +67,7 @@ dependencies {
     implementation "com.google.android.gms:play-services-tflite-impl:16.1.0"
     // GPU delegate
     implementation "com.google.android.gms:play-services-tflite-gpu:16.2.0"
-    // Support kitaplığı (isteğe bağlı ama genellikle tavsiye edilir)
+    implementation 'com.google.firebase:firebase-functions-ktx:20.2.0'
     implementation "com.google.android.gms:play-services-tflite-support:16.1.0"
     implementation libs.firebase.database
     annotationProcessor 'com.github.bumptech.glide:compiler:4.16.0'

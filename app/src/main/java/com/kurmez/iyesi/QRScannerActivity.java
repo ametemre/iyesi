@@ -1,21 +1,29 @@
 package com.kurmez.iyesi;
 
+import android.annotation.SuppressLint;
 import android.content.Intent;
 import android.os.Bundle;
+import android.provider.Settings;
 import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 
+import com.google.firebase.functions.FirebaseFunctions;
 import com.google.zxing.integration.android.IntentIntegrator;
 import com.google.zxing.integration.android.IntentResult;
 
-public class QRScannerActivity extends AppCompatActivity {
+import java.util.Map;
 
+public class QRScannerActivity extends AppCompatActivity {
+    public static String EXTRA_SCANNED_DATA;
+    protected String HostID;
+    protected String GuestID;
+    @SuppressLint("HardwareIds")
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_qr_scanner);
-
+        HostID = Settings.Secure.getString(this.getContentResolver(), Settings.Secure.ANDROID_ID);
         // Start QR scanning when the activity is created
         initiateQRScan();
     }
@@ -46,13 +54,24 @@ public class QRScannerActivity extends AppCompatActivity {
         if (result != null) {
             if (result.getContents() != null) {
                 // QR data successfully scanned
-                String scannedData = result.getContents();
-                // Pass the scanned QR data back to the calling activity
+                GuestID = result.getContents();
                 Intent intent = new Intent();
-                intent.putExtra("scanned_data", scannedData);
-                setResult(RESULT_OK, intent);
-                // Display a toast for feedback
-                Toast.makeText(this, "QR Scanned: " + scannedData, Toast.LENGTH_SHORT).show();
+                intent.putExtra("scanned_data", GuestID);
+                FirebaseFunctions.getInstance()
+                        .getHttpsCallable("createBlock")
+                        .call(Map.of(
+                                "inviterDeviceId", HostID,
+                                "deviceId",        GuestID
+                        ))
+                        .addOnSuccessListener(r -> {
+
+                            setResult(RESULT_OK, intent);
+                            // Display a toast for feedback
+                            Toast.makeText(this, "QR Scanned: " + GuestID, Toast.LENGTH_SHORT).show();
+                        })
+                        .addOnFailureListener(e ->{
+                            Toast.makeText(this, "Registration failed: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                        });
                 finish();
             } else {
                 // No QR data scanned

@@ -1,93 +1,81 @@
 package com.kurmez.iyesi.social;
 
-import android.app.Dialog;
-import android.content.Intent;
-import android.os.Bundle;
-import android.provider.MediaStore;
-import android.widget.Button;
-import android.widget.EditText;
-import android.widget.ImageView;
-import android.widget.TextView;
+/**
+ * Profile model class representing a user in Firestore.
+ */
+public class Profile {
+    private String uid;         // Composite UID: FirebaseUID_deviceID
+    private String username;
+    private String email;
+    private String location;    // İl/İlçe/Mahalle
+    private String phone;
+    private String role;
 
-import androidx.appcompat.app.AppCompatActivity;
-
-import com.kurmez.iyesi.R;
-
-public class Profile extends AppCompatActivity {
-
-    private static final int REQUEST_IMAGE_PICK = 1;
-    private static final int REQUEST_IMAGE_CAPTURE = 2;
-
-    @Override
-    protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_profile);
-
-        // Profile components
-        ImageView profileImage = findViewById(R.id.profile_image);
-        TextView username = findViewById(R.id.profile_username);
-        TextView bio = findViewById(R.id.profile_bio);
-
-        // Click to open edit profile popup
-        findViewById(R.id.icon_notification).setOnClickListener(v -> openEditProfilePopup());
-
-        // Profile image actions
-        profileImage.setOnClickListener(v -> openLocalStorage());
-        profileImage.setOnLongClickListener(v -> {
-            openCamera();
-            return true;
-        });
+    /**
+     * Public no-args constructor required for Firestore deserialization
+     */
+    public Profile() {
     }
 
-    private void openEditProfilePopup() {
-        Dialog dialog = new Dialog(this);
-        dialog.setContentView(R.layout.layout_edit_profile);
-
-        // Initialize popup components
-        ImageView editProfileImage = dialog.findViewById(R.id.edit_profile_image);
-        EditText editUsername = dialog.findViewById(R.id.edit_profile_username);
-        EditText editBio = dialog.findViewById(R.id.edit_profile_bio);
-        Button saveButton = dialog.findViewById(R.id.save_button);
-
-        // Pre-fill fields with current profile info
-        editUsername.setText("John Doe"); // Replace with actual user data
-        editBio.setText("Bio goes here"); // Replace with actual user data
-
-        // Save button action
-        saveButton.setOnClickListener(v -> {
-            // Save changes
-            String newUsername = editUsername.getText().toString().trim();
-            String newBio = editBio.getText().toString().trim();
-
-            // Update profile details (save to database or backend)
-            // Example: Update UI with new data
-            TextView username = findViewById(R.id.profile_username);
-            TextView bio = findViewById(R.id.profile_bio);
-            username.setText(newUsername);
-            bio.setText(newBio);
-
-            dialog.dismiss();
-        });
-
-        // Profile image actions in popup
-        editProfileImage.setOnClickListener(v -> openLocalStorage());
-        editProfileImage.setOnLongClickListener(v -> {
-            openCamera();
-            return true;
-        });
-
-        dialog.show();
+    /**
+     * Full constructor for creating a Profile instance.
+     */
+    public Profile(String uid, String username, String email,
+                   String location, String phone, String role) {
+        this.uid = uid;
+        this.username = username;
+        this.email = email;
+        this.location = location;
+        this.phone = phone;
+        this.role = role;
     }
 
-    private void openLocalStorage() {
-        Intent intent = new Intent(Intent.ACTION_PICK, MediaStore.Images.Media.EXTERNAL_CONTENT_URI);
-        startActivityForResult(intent, REQUEST_IMAGE_PICK);
+    // Getter & Setter methods
+    public String getUid() {
+        return uid;
     }
 
-    private void openCamera() {
-        Intent intent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
-        if (intent.resolveActivity(getPackageManager()) != null) {
-            startActivityForResult(intent, REQUEST_IMAGE_CAPTURE);
-        }
+    public void setUid(String uid) {
+        this.uid = uid;
+    }
+
+    public String getUsername() {
+        return username;
+    }
+
+    public void setUsername(String username) {
+        this.username = username;
+    }
+
+    public String getEmail() {
+        return email;
+    }
+
+    public void setEmail(String email) {
+        this.email = email;
+    }
+
+    public String getLocation() {
+        return location;
+    }
+
+    public void setLocation(String location) {
+        this.location = location;
+    }
+
+    public String getPhone() {
+        return phone;
+    }
+
+    public void setPhone(String phone) {
+        this.phone = phone;
+    }
+
+    public String getRole() {
+        return role;
+    }
+
+    public void setRole(String role) {
+        this.role = role;
     }
 }

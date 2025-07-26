@@ -1,0 +1,20 @@
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:gravity="end"
+    android:orientation="horizontal"
+    android:paddingEnd="8dp"
+    android:paddingStart="56dp"
+    android:paddingTop="4dp"
+    android:paddingBottom="4dp">
+
+    <TextView
+        android:id="@+id/tvMessageOutgoing"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:background="@drawable/bg_message_outgoing"
+        android:textColor="#F1F1F1"
+        android:textSize="16sp"
+        android:padding="12dp"
+        android:maxWidth="280dp"/>
+</LinearLayout>

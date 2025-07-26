@@ -1,0 +1,18 @@
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <item
+        android:id="@+id/action_block"
+        android:title="Engelle"
+        android:icon="@drawable/ic_block"/>
+    <item
+        android:id="@+id/action_mute"
+        android:title="Sessize Al"
+        android:icon="@drawable/ic_mute"/>
+    <item
+        android:id="@+id/action_delete"
+        android:title="Mesajları Sil"
+        android:icon="@drawable/ic_delete"/>
+    <item
+        android:id="@+id/action_follow"
+        android:title="Takip Et/Takibi Bırak"
+        android:icon="@drawable/ic_follow"/>
+</menu>

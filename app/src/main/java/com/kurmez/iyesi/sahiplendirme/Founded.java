@@ -78,6 +78,7 @@ public class Founded extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_founded);
         photoList = new ArrayList<>();
+        checkPendingCompanionAndRedirect();
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             if (checkSelfPermission(android.Manifest.permission.READ_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
                 requestPermissions(new String[]{Manifest.permission.READ_EXTERNAL_STORAGE}, REQUEST_READ_EXTERNAL_STORAGE);
@@ -173,6 +174,7 @@ public class Founded extends AppCompatActivity {
                     });
         }
     }
+
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
@@ -404,5 +406,40 @@ public class Founded extends AppCompatActivity {
             e.printStackTrace();
         }
         return image;
+    }
+    private void checkPendingCompanionAndRedirect() {
+        String deviceId = Settings.Secure.getString(getContentResolver(), Settings.Secure.ANDROID_ID);
+        String checkUrl = "https://us-central1-iyesi-a651a.cloudfunctions.net/checkPendingCompanion?deviceId=" + deviceId;
+
+        new OkHttpClient().newCall(new Request.Builder().url(checkUrl).get().build())
+                .enqueue(new Callback() {
+                    @Override
+                    public void onResponse(Call call, Response response) throws IOException {
+                        String body = response.body().string();
+                        if (body.trim().equals("false")) return;
+
+                        try {
+                            JSONObject json = new JSONObject(body);
+                            JSONObject companion = json.getJSONObject("companion");
+
+                            Intent intent = new Intent(Founded.this, Companion.class);
+                            intent.putExtra("deviceId", deviceId);
+                            intent.putExtra("species", companion.optString("species"));
+                            intent.putExtra("foundDate", companion.optString("foundDate"));
+                            intent.putExtra("foundLocation", companion.optString("foundLocation"));
+                            intent.putExtra("imageResId", companion.optString("imageResId"));
+                            intent.putExtra("node", "soul_inneed");
+                            startActivity(intent);
+                            finish();
+                        } catch (JSONException e) {
+                            Log.e("Founded", "Parse error: " + e.getMessage());
+                        }
+                    }
+
+                    @Override
+                    public void onFailure(Call call, IOException e) {
+                        Log.e("Founded", "Connection error: " + e.getMessage());
+                    }
+                });
     }
 }

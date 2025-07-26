@@ -12,190 +12,140 @@ import androidx.appcompat.app.AppCompatActivity;
 
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
-import com.google.firebase.firestore.FirebaseFirestore;
+import com.google.firebase.functions.FirebaseFunctions;
+import com.google.firebase.functions.HttpsCallableResult;
 import com.kurmez.iyesi.sahiplendirme.Welcome;
 
 import java.util.HashMap;
 import java.util.Map;
-import android.app.Dialog;
-import android.content.res.Configuration;
-import android.os.Handler;
-import android.widget.CheckBox;
-import android.widget.TextView;
 
-
-
-import java.util.Locale;
 public class Register extends AppCompatActivity {
 
-    // Firebase instances
+    // Firebase
     private FirebaseAuth mAuth;
-    private FirebaseFirestore db;
+    private FirebaseFunctions functions;
 
-    // Input fields
-    private EditText usernameField, emailField, passwordField, addressField, phoneField;
+    // UI
+    private EditText usernameField;
+    private EditText emailField;
+    private EditText passwordField;
+    private EditText locationField;
+    private EditText phoneField;
+    private ImageView  registerButton;
+
+    // Cihaz ID’si (MainActivity’den intent ile gelmeli)
+    private String deviceId;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_register);
-        showMissionVisionPopup();
-        // Initialize Firebase
-        mAuth = FirebaseAuth.getInstance();
-        db = FirebaseFirestore.getInstance();
 
-        // Find input fields
-        usernameField = findViewById(R.id.username_register);
-        emailField = findViewById(R.id.e_mail_register);
-        passwordField = findViewById(R.id.password_register);
-        addressField = findViewById(R.id.adress_register);
-        phoneField = findViewById(R.id.phone_number);
+        // Intent extras’tan alınır
+        deviceId = getIntent().getStringExtra("deviceId");
+        if (deviceId == null) {
+            Toast.makeText(this, "Eksik parameter: deviceId", Toast.LENGTH_LONG).show();
+            finish();
+            return;
+        }
 
-        // Find the ImageView (used as a button)
-        ImageView registerButton = findViewById(R.id.img_register);
+        // Firebase init
+        mAuth      = FirebaseAuth.getInstance();
+        functions  = FirebaseFunctions.getInstance();
 
-        // Handle single press: Navigate to Login activity
-        registerButton.setOnClickListener(v -> {
-            Intent intent = new Intent(Register.this, Login.class);
-            startActivity(intent);
-        });
+        // UI init
+        usernameField   = findViewById(R.id.username_register);
+        emailField      = findViewById(R.id.e_mail_register);
+        passwordField   = findViewById(R.id.password_register);
+        locationField   = findViewById(R.id.adress_register);
+        phoneField      = findViewById(R.id.phone_register);
+        registerButton  = findViewById(R.id.img_register);
 
-        // Handle long press: Submit the registration form
-        registerButton.setOnLongClickListener(v -> {
-            registerUser(); // Call the registration method
-            Toast.makeText(Register.this, "Submitting registration form...", Toast.LENGTH_SHORT).show();
-            return true; // Consume the long press event
-        });
+        registerButton.setOnClickListener(v -> attemptRegistration());
     }
 
-    /**
-     * Registers a new user with Firebase Authentication and saves their details to Firestore.
-     */
-    private void registerUser() {
-        // Get input values
+    private void attemptRegistration() {
+        // 1) Alanları al ve doğrula
         String username = usernameField.getText().toString().trim();
-        String email = emailField.getText().toString().trim();
-        String password = passwordField.getText().toString().trim();
-        String address = addressField.getText().toString().trim();
-        String phone = phoneField.getText().toString().trim();
+        String email    = emailField.getText().toString().trim();
+        String password = passwordField.getText().toString();
+        String location = locationField.getText().toString().trim();
+        String phone    = phoneField.getText().toString().trim();
 
-        // Validate inputs
         if (TextUtils.isEmpty(username)) {
-            usernameField.setError("Username is required");
+            usernameField.setError("Kullanıcı adı gerekli");
             usernameField.requestFocus();
             return;
         }
 
         if (TextUtils.isEmpty(email) || !Patterns.EMAIL_ADDRESS.matcher(email).matches()) {
-            emailField.setError("Valid email is required");
+            emailField.setError("Geçerli e‑posta gerekli");
             emailField.requestFocus();
             return;
         }
 
         if (TextUtils.isEmpty(password) || password.length() < 6) {
-            passwordField.setError("Password must be at least 6 characters");
+            passwordField.setError("Şifre en az 6 karakter olmalı");
             passwordField.requestFocus();
             return;
         }
 
-        if (TextUtils.isEmpty(address)) {
-            addressField.setError("Address is required");
-            addressField.requestFocus();
+        if (TextUtils.isEmpty(location)) {
+            locationField.setError("Konum gerekli");
+            locationField.requestFocus();
             return;
         }
 
         if (TextUtils.isEmpty(phone) || phone.length() < 10) {
-            phoneField.setError("Valid phone number is required");
+            phoneField.setError("Geçerli telefon numarası gerekli");
             phoneField.requestFocus();
             return;
         }
 
-        // Register user in Firebase Authentication
+        // 2) Firebase Auth ile kullanıcı oluştur
         mAuth.createUserWithEmailAndPassword(email, password)
                 .addOnCompleteListener(task -> {
-                    if (task.isSuccessful()) {
-                        // Get the registered user
-                        FirebaseUser user = mAuth.getCurrentUser();
-
-                        // Save user details to Firestore
-                        saveUserToFirestore(user.getUid(), username, email, address, phone);
-
-                        // Navigate to Welcome activity
-                        Intent intent = new Intent(Register.this, Welcome.class);
-                        startActivity(intent);
-                        finish();
-
-                        Toast.makeText(Register.this, "Registration successful", Toast.LENGTH_SHORT).show();
-                    } else {
-                        // Show error message
-                        Toast.makeText(Register.this, "Registration failed: " + task.getException().getMessage(), Toast.LENGTH_LONG).show();
+                    if (!task.isSuccessful()) {
+                        Toast.makeText(this,
+                                "Kayıt başarısız: " + task.getException().getMessage(),
+                                Toast.LENGTH_LONG).show();
+                        return;
                     }
+
+                    FirebaseUser user = mAuth.getCurrentUser();
+                    if (user == null) {
+                        Toast.makeText(this,
+                                "Beklenmedik hata: kullanıcı alınamadı",
+                                Toast.LENGTH_LONG).show();
+                        return;
+                    }
+
+                    // 3) Cloud Function: completeRegistration çağır
+                    Map<String,Object> profile = new HashMap<>();
+                    profile.put("username", username);
+                    profile.put("location", location);
+                    profile.put("phone", phone);
+
+                    Map<String,Object> payload = new HashMap<>();
+                    payload.put("deviceId", deviceId);
+                    payload.put("profile", profile);
+
+                    functions
+                            .getHttpsCallable("completeRegistration")
+                            .call(payload)
+                            .addOnSuccessListener((HttpsCallableResult result) -> {
+                                // 4) Token’ı yenileyip Welcome ekranına geç
+                                user.getIdToken(true)
+                                        .addOnSuccessListener(t -> {
+                                            startActivity(new Intent(this, Welcome.class));
+                                            finish();
+                                        });
+                            })
+                            .addOnFailureListener(e -> {
+                                Toast.makeText(this,
+                                        "Sunucu hatası: " + e.getMessage(),
+                                        Toast.LENGTH_LONG).show();
+                            });
                 });
-    }
-
-    /**
-     * Saves user details to Firestore.
-     *
-     * @param userId   The user ID from Firebase Authentication.
-     * @param username The username entered by the user.
-     * @param email    The email entered by the user.
-     * @param address  The address entered by the user.
-     * @param phone    The phone number entered by the user.
-     */
-    private void saveUserToFirestore(String userId, String username, String email, String address, String phone) {
-        Map<String, Object> userMap = new HashMap<>();
-        userMap.put("username", username);
-        userMap.put("email", email);
-        userMap.put("address", address);
-        userMap.put("phone", phone);
-
-        db.collection("users")
-                .document(userId)
-                .set(userMap)
-                .addOnSuccessListener(aVoid -> {
-                    Toast.makeText(Register.this, "User details saved successfully", Toast.LENGTH_SHORT).show();
-                })
-                .addOnFailureListener(e -> {
-                    Toast.makeText(Register.this, "Failed to save user details: " + e.getMessage(), Toast.LENGTH_LONG).show();
-                });
-    }
-    private void showMissionVisionPopup() {
-        // Create the dialog 
-        Dialog dialog = new Dialog(this);
-        dialog.setContentView(R.layout.layout_mission_vision_popup);
-        dialog.setCancelable(false); // Prevent dismissal by tapping outside
-
-        // Get references to the UI elements in the popup
-        TextView missionText = dialog.findViewById(R.id.mission_text);
-        TextView visionText = dialog.findViewById(R.id.vision_text);
-        CheckBox agreeCheckBox = dialog.findViewById(R.id.checkbox_agree);
-
-        // Set localized mission and vision text
-        missionText.setText(getString(R.string.mission_statement));
-        visionText.setText(getString(R.string.vision_statement));
-
-        // Handle checkbox selection
-        agreeCheckBox.setOnCheckedChangeListener((buttonView, isChecked) -> {
-            if (isChecked) {
-                // Close the dialog after 1 second
-                new Handler().postDelayed(dialog::dismiss, 1000);
-            }
-        });
-
-        dialog.show();
-    }
-
-    @Override
-    protected void onResume() {
-        super.onResume();
-
-        // Set language dynamically based on the user's region
-        Locale currentLocale = getResources().getConfiguration().locale;
-        Locale.setDefault(currentLocale);
-
-        Configuration config = new Configuration();
-        config.locale = currentLocale;
-
-        getResources().updateConfiguration(config, getResources().getDisplayMetrics());
     }
 }
