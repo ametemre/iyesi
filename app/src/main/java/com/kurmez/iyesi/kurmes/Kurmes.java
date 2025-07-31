@@ -2,6 +2,7 @@ package com.kurmez.iyesi.kurmes;
 
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.google.firebase.auth.FirebaseAuth;
+import com.kurmez.iyesi.MainActivity;
 import com.kurmez.iyesi.sahiplendirme.Founded;
 import com.kurmez.iyesi.utilities.Ai.Detection;
 //import com.kurmez.iyesi.utilities.Ai.OpenCV;
@@ -11,24 +12,23 @@ import com.kurmez.iyesi.utilities.Ai.VideoClassifier;
 import com.kurmez.iyesi.utilities.Ai.delegate.TFLiteInputPreprocessor;
 import com.kurmez.iyesi.utilities.Ai.threading.ThreadService;
 import com.kurmez.iyesi.utilities.helper.ResourceMonitor;
-import com.kurmez.iyesi.utilities.Ai.threading.Threading;
 import com.kurmez.iyesi.utilities.Helpers;
 import com.kurmez.iyesi.utilities.RTPipeline;
 import com.kurmez.iyesi.utilities.Ai.threading.Terminator;
 import com.kurmez.iyesi.utilities.helper.Actions;
-import com.kurmez.iyesi.utilities.helper.Permissions;
+import com.kurmez.iyesi.utilities.helper.PermissionHelper;
 import com.kurmez.iyesi.R;
 
 import org.opencv.android.CameraBridgeViewBase;
 import org.opencv.android.Utils;
 import org.opencv.core.Mat;
 
+import android.app.Activity;
 import android.content.Intent;
 import android.graphics.Bitmap;
 
 import android.annotation.SuppressLint;
 import android.os.Bundle;
-import android.provider.MediaStore;
 import android.util.Log;
 import android.view.MotionEvent;
 import android.view.View;
@@ -59,6 +59,8 @@ import java.util.concurrent.Executors;
 
 import android.view.Menu;
 import android.widget.Toast;
+
+import androidx.appcompat.app.AppCompatActivity;
 
 import org.opencv.android.CameraBridgeViewBase.CvCameraViewListener2;
 import org.opencv.core.MatOfRect;
@@ -163,7 +165,16 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
     public Mat rgb, gray,frame;
     private OpenCV      openCvUtil;
     private ResourceMonitor monitor;
-
+    private PermissionHelper permissionHelper;
+    // callback’i dışarıda tanımladık:
+    private final PermissionHelper.Callback permissionCallback = new PermissionHelper.Callback() {
+        @Override public void onGranted() {
+            // tüm izinler verildi
+        }
+        @Override public void onDenied() {
+            // izinlerden en az biri reddedildi
+        }
+    };
     MatOfRect rects;
     Mat overlaid;
     //----------------------------------------------------------------------------------------------<Creation
@@ -173,8 +184,21 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
         Log.i(TAG, "called Kurmes onCreate");
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_kurmes);
+        /*
         // izinler
-        new Permissions().requestAllPermissions(this);
+        // 1) helper’ı oluştur, 2) activity ve callback ata,
+        permissionHelper = new PermissionHelper();
+        permissionHelper.setActivity(this);
+        permissionHelper.setCallback(permissionCallback);
+        permissionHelper.initialize();
+        permissionHelper.requestAllPermissions();
+        permissionHelper.setCallback(permissionCallback);
+        // 3) parametresiz initialize:
+        permissionHelper.initialize();
+
+        // artık dilediğiniz yerde:
+        permissionHelper.requestAllPermissions();
+        */
         // Firebase Auth
         mAuth = FirebaseAuth.getInstance();
         // Keep screen on

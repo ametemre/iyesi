@@ -21,15 +21,19 @@ import com.google.firebase.database.Query;
 import com.google.firebase.database.ValueEventListener;
 import com.google.firebase.firestore.DocumentSnapshot;
 import com.google.firebase.firestore.FirebaseFirestore;
+import com.google.firebase.functions.FirebaseFunctions;
 import com.kurmez.iyesi.R;
 import com.kurmez.iyesi.sahiplendirme.Soul;
+import com.kurmez.iyesi.utilities.Helpers;
 import com.kurmez.iyesi.utilities.adapters.ContentAdapter;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 public class ExplorePrivate extends AppCompatActivity {
     private static final String TAG = "ExplorePrivate";
+    List<String> allowedRoles = Arrays.asList("İye", "Körmes", "Ülgen", "Tengri");
 
     private RecyclerView recyclerView;
     private ContentAdapter adapter;
@@ -66,34 +70,28 @@ public class ExplorePrivate extends AppCompatActivity {
         profileHeader.setOnClickListener(v -> {
             startActivity(new Intent(ExplorePrivate.this, Profile.class));
         });
-
-        // 4) Kullanıcının rolünü oku ve ardından veri dinlemeyi başlat
-        String uid = user.getUid();
-        firestore.collection("profiles")
-                .document(uid)
-                .get()
-                .addOnSuccessListener(this::onProfileLoaded)
-                .addOnFailureListener(e -> {
-                    Log.e(TAG, "Profil yüklenemedi", e);
-                    Toast.makeText(this, "Profil bilgisi alınamadı.", Toast.LENGTH_SHORT).show();
-                    finish();
-                });
-    }
-
-    private void onProfileLoaded(DocumentSnapshot doc) {
-        if (!doc.exists()) {
-            Toast.makeText(this, "Profil bulunamadı.", Toast.LENGTH_SHORT).show();
-            finish();
-            return;
-        }
-        userRole = doc.getString("role");
-        if (userRole == null || userRole.isEmpty()) {
-            Toast.makeText(this, "Rol bilgisi tanımsız.", Toast.LENGTH_SHORT).show();
-            finish();
-            return;
-        }
-
-        attachPendingListener(userRole);
+            // 4) Kullanıcı rolünü çek ve gönderileri yükle
+            Helpers.getRoleFunction()
+                    .addOnSuccessListener(role -> {
+                        if (role == null) {
+                            // Hata veya rol atanmadı, uyarı göster
+                            Toast.makeText(this, "Rol atanmadı!", Toast.LENGTH_SHORT).show();
+                            finish();
+                            return;
+                        }
+                        // Role kontrolü:
+                        if (!allowedRoles.contains(role)) {
+                            Toast.makeText(this, "Bu sayfaya erişim yetkiniz yok: " + role, Toast.LENGTH_SHORT).show();
+                            finish();
+                            return;
+                        }
+                        // 5) Cloud Functions init ve veri çek
+                        attachPendingListener(userRole);
+                    })
+                    .addOnFailureListener(e -> {
+                        Toast.makeText(this, "Rol sorgusu hatası: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                        finish();
+                    });
     }
 
     private void attachPendingListener(String role) {

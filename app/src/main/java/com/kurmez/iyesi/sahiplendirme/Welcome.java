@@ -11,6 +11,7 @@ import android.util.Log;
 import android.widget.ImageButton;
 import android.widget.ImageView;
 import android.widget.ListView;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
@@ -45,6 +46,7 @@ public class Welcome extends AppCompatActivity {
     private ImageButton quitButton;
     private ImageButton messageButton;
     private ImageButton notificationButton;
+    private TextView username;
     private ListView listView;
     private String idToken;
     private CompanionAdapter adapter;
@@ -69,7 +71,7 @@ public class Welcome extends AppCompatActivity {
         messageButton = findViewById(R.id.message);
         notificationButton = findViewById(R.id.notification);
         listView = findViewById(R.id.list_view);
-
+        username = findViewById(R.id.username_validation);
         // Adapter kurulumu
         adapter = new CompanionAdapter(this, companions);
         listView.setAdapter(adapter);
@@ -94,6 +96,8 @@ public class Welcome extends AppCompatActivity {
             startActivity(new Intent(this, Login.class));
             finish();
             return;
+        } else {
+            username.setText(user.getEmail());
         }
 
         // Token alma + hata yönetimi

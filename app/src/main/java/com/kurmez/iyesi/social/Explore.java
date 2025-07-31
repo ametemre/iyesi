@@ -17,16 +17,18 @@ import com.google.firebase.functions.HttpsCallableResult;
 import com.google.firebase.firestore.DocumentSnapshot;
 import com.google.firebase.firestore.FirebaseFirestore;
 import com.kurmez.iyesi.R;
+import com.kurmez.iyesi.utilities.Helpers;
 import com.kurmez.iyesi.utilities.adapters.ContentAdapter;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 public class Explore extends AppCompatActivity {
     private static final String TAG = "ExploreActivity";
-
+    List<String> allowedRoles = Arrays.asList("İye", "Körmes", "Ülgen", "Tengri", "Ağaç");
     private FirebaseAuth auth;
     private FirebaseUser user;
     private FirebaseFunctions functions;
@@ -65,30 +67,31 @@ public class Explore extends AppCompatActivity {
         profileHeader.setOnClickListener(v -> startActivity(new Intent(this, Profile.class)));
 
         // 4) Kullanıcı rolünü çek ve gönderileri yükle
-        String uid = user.getUid();
-        firestore.collection("profiles")
-                .document(uid)
-                .get()
-                .addOnSuccessListener(this::onProfileLoaded)
-                .addOnFailureListener(e -> {
-                    Log.e(TAG, "Profil yüklenemedi", e);
-                    Toast.makeText(this, "Profil bilgisi alınamadı.", Toast.LENGTH_SHORT).show();
-                    finish();
-                });
+            Helpers.getRoleFunction()
+                    .addOnSuccessListener(role -> {
+                        if (role == null) {
+                            // Hata veya rol atanmadı, uyarı göster
+                            Toast.makeText(this, "Rol atanmadı!", Toast.LENGTH_SHORT).show();
+                            finish();
+                            return;
+                        }
+                        // Role kontrolü:
+                        if (!allowedRoles.contains(role)) {
+                            Toast.makeText(this, "Bu sayfaya erişim yetkiniz yok: " + role, Toast.LENGTH_SHORT).show();
+                            finish();
+                            return;
+                        }
+
+                        // 5) Cloud Functions init ve veri çek
+                        functions = FirebaseFunctions.getInstance();
+                        fetchPublicCompletedPosts();
+                    })
+                    .addOnFailureListener(e -> {
+                        Toast.makeText(this, "Rol sorgusu hatası: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                        finish();
+                    });
     }
 
-    private void onProfileLoaded(DocumentSnapshot doc) {
-        userRole = doc.getString("role");
-        if (userRole == null || userRole.isEmpty()) {
-            Toast.makeText(this, "Rol bilgisi tanımsız.", Toast.LENGTH_SHORT).show();
-            finish();
-            return;
-        }
-
-        // 5) Cloud Functions init ve veri çek
-        functions = FirebaseFunctions.getInstance();
-        fetchPublicCompletedPosts();
-    }
 
     private void fetchPublicCompletedPosts() {
         Map<String, Object> payload = new HashMap<>();

@@ -82,7 +82,10 @@
             android:contentDescription="pres or pres and hold"
             android:src="@drawable/welcome"
             tools:ignore="HardcodedText" />
-
+        <TextView
+            android:id="@+id/username_validation"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"/>
         <ImageView
             android:id="@+id/scroll_text"
             android:layout_width="match_parent"

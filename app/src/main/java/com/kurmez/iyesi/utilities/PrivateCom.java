@@ -1,14 +1,20 @@
 package com.kurmez.iyesi.utilities;
 
+import android.Manifest;
 import android.app.Activity;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothSocket;
 import android.content.Intent;
 import android.os.Handler;
+import android.util.Log;
 import android.widget.Toast;
 
+import androidx.annotation.RequiresPermission;
+
 import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.Set;
 import java.util.UUID;
 
@@ -22,7 +28,8 @@ public class PrivateCom {
     private static Handler handler = new Handler();
 
     // Bluetooth’u aç ve cihazı bulunabilir yap
-    public static void enableBluetoothAndMakeDiscoverable(Activity activity, int discoverableSec) {
+    @RequiresPermission(allOf = {Manifest.permission.BLUETOOTH_CONNECT, Manifest.permission.BLUETOOTH_ADVERTISE})
+    public void enableBluetoothAndMakeDiscoverable(Activity activity, int discoverableSec) {
         BluetoothAdapter bluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
         if (bluetoothAdapter == null) {
             showToast(activity, "Bluetooth desteklenmiyor");
@@ -37,6 +44,7 @@ public class PrivateCom {
     }
 
     // Cihazı bulunabilir moda al
+    @RequiresPermission(Manifest.permission.BLUETOOTH_ADVERTISE)
     public static void makeDeviceDiscoverable(Activity activity, int seconds) {
         Intent discoverableIntent = new Intent(BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE);
         discoverableIntent.putExtra(BluetoothAdapter.EXTRA_DISCOVERABLE_DURATION, seconds);
@@ -44,13 +52,15 @@ public class PrivateCom {
     }
 
     // Hedef Bluetooth cihaza bağlan
-    public static void connectToBluetoothDevice(Activity activity) {
+
+    @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
+    public static void connectToBluetoothDevice(Activity activity, Runnable onConnected) {
         BluetoothAdapter bluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
         if (bluetoothAdapter == null || !bluetoothAdapter.isEnabled()) {
             showToast(activity, "Bluetooth kapalı veya yok");
             return;
         }
-        // Eşleşmiş cihazlar arasında ara
+
         Set<BluetoothDevice> pairedDevices = bluetoothAdapter.getBondedDevices();
         targetDevice = null;
         for (BluetoothDevice device : pairedDevices) {
@@ -59,21 +69,28 @@ public class PrivateCom {
                 break;
             }
         }
+
         if (targetDevice == null) {
             showToast(activity, "Hedef Bluetooth cihazı bulunamadı!");
             return;
         }
-        // Socket üzerinden bağlan
+
         new Thread(() -> {
             try {
                 bluetoothSocket = targetDevice.createRfcommSocketToServiceRecord(MY_UUID);
                 bluetoothSocket.connect();
-                activity.runOnUiThread(() -> showToast(activity, "Bluetooth cihazına bağlandı!"));
+                activity.runOnUiThread(() -> {
+                    showToast(activity, "Bluetooth cihazına bağlandı!");
+                    if (onConnected != null) {
+                        onConnected.run(); // bağlantı tamamlandıktan sonra çağrılır
+                    }
+                });
             } catch (IOException e) {
                 activity.runOnUiThread(() -> showToast(activity, "Bluetooth bağlantı hatası: " + e.getMessage()));
             }
         }).start();
     }
+
 
     // Bağlı cihaza veri gönder
     public static void sendResponseToBluetoothDevice(Activity activity, String response) {
@@ -90,6 +107,20 @@ public class PrivateCom {
                 activity.runOnUiThread(() -> showToast(activity, "Bluetooth gönderim hatası: " + e.getMessage()));
             }
         }).start();
+    }
+    public static String receiveDataBlocking() throws IOException {
+        if (bluetoothSocket == null || !bluetoothSocket.isConnected()) {
+            return null;
+        }
+        InputStream in = bluetoothSocket.getInputStream();
+        byte[] buffer = new byte[1024];
+        // Bu satır veri gelene kadar bekler:
+        int bytesRead = in.read(buffer);
+        if (bytesRead > 0) {
+            return new String(buffer, 0, bytesRead, StandardCharsets.UTF_8);
+        } else {
+            return null;
+        }
     }
 
     // Bluetooth bağlantısını kapat
