@@ -1,0 +1,8 @@
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <item
+        android:id="@+id/action_refresh"
+        android:title="action_refresh" />
+    <item
+        android:id="@+id/action_filter"
+        android:title="action_filter" />
+</menu>

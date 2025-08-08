@@ -9,7 +9,7 @@
     android:paddingBottom="4dp">
 
     <TextView
-        android:id="@+id/tvMessageIncoming"
+        android:id="@+id/tvMessage"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:background="@drawable/bg_message_incoming"

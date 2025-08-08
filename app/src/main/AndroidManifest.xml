@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest package="com.kurmez.iyesi"
-    xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    package="com.kurmez.iyesi" >
     <!-- Gerekli izinler -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.INTERNET" />
@@ -60,22 +60,29 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.Iyesi"
-        tools:targetApi="36">
+        tools:targetApi="36" >
+        <activity
+            android:name=".kurmes.social.message.Message"
+            android:windowSoftInputMode="adjustResize|stateHidden"
+            android:exported="false" />
+        <activity
+            android:name=".ProfileActivity"
+            android:exported="false" />
+
         <meta-data
             android:name="com.google.android.gms.version"
-            android:value="@integer/google_play_services_version"/>
-        <!-- Google Maps API anahtarı -->
+            android:value="@integer/google_play_services_version" /> <!-- Google Maps API anahtarı -->
         <meta-data
             android:name="com.google.android.geo.API_KEY"
             android:value="AIzaSyBP4FOeMzLyIXiSu7EGO6xjV7P-Sz_4KFs" /> <!-- Aktiviteler -->
         <activity
-            android:name=".sokak.SokakActivity"
+            android:name=".umay.sokak.SokakActivity"
             android:exported="false" />
         <activity
-            android:name=".social.Messaging"
+            android:name=".kurmes.social.message.Messaging"
             android:exported="false" />
         <activity
-            android:name=".sahiplendirme.Sahiplendirme"
+            android:name=".umay.sahiplendirme.Sahiplendirme"
             android:exported="false" />
         <activity
             android:name=".kurmes.CameraCalibrationActivity"
@@ -93,10 +100,10 @@
             android:name=".QRScannerActivity"
             android:exported="false" />
         <activity
-            android:name=".social.ExplorePrivate"
+            android:name=".kurmes.social.content.ExplorePrivate"
             android:exported="false" />
         <activity
-            android:name=".sahiplendirme.Welcome"
+            android:name=".umay.sahiplendirme.Welcome"
             android:exported="false" />
         <activity
             android:name=".Register"
@@ -108,17 +115,17 @@
             android:name=".Login"
             android:exported="false" />
         <activity
-            android:name=".sahiplendirme.Founded"
+            android:name=".umay.sahiplendirme.Founded"
             android:exported="false" />
         <activity
-            android:name=".social.Explore"
+            android:name=".kurmes.social.content.Explore"
             android:exported="false" />
         <activity
-            android:name=".sahiplendirme.Companion"
+            android:name=".umay.sahiplendirme.Companion"
             android:exported="false" /> <!-- Giriş (Launcher) aktivitesi -->
         <activity
             android:name=".MainActivity"
-            android:exported="true">
+            android:exported="true" >
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
 
@@ -129,7 +136,7 @@
             android:name="androidx.core.content.FileProvider"
             android:authorities="com.kurmez.iyesi.fileprovider"
             android:exported="false"
-            android:grantUriPermissions="true">
+            android:grantUriPermissions="true" >
             <meta-data
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths" />

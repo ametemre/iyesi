@@ -1,7 +1,5 @@
 package com.kurmez.iyesi;
 
-import static com.kurmez.iyesi.utilities.PrivateCom.connectToBluetoothDevice;
-
 import android.Manifest;
 import android.annotation.SuppressLint;
 import android.content.Intent;
@@ -25,13 +23,13 @@ import com.google.zxing.BarcodeFormat;
 import com.google.zxing.WriterException;
 import com.journeyapps.barcodescanner.BarcodeEncoder;
 import com.kurmez.iyesi.kurmes.Kurmes;
-import com.kurmez.iyesi.sahiplendirme.Welcome;
+import com.kurmez.iyesi.umay.sahiplendirme.Welcome;
 
 import java.io.IOException;
 import java.util.HashMap;
 import com.google.firebase.functions.FirebaseFunctions;
-import com.kurmez.iyesi.utilities.PrivateCom;
-import com.kurmez.iyesi.utilities.helper.PermissionHelper;
+import com.kurmez.iyesi.kurmes.utilities.PrivateCom;
+import com.kurmez.iyesi.kurmes.utilities.helper.PermissionHelper;
 
 import java.util.Map;
 

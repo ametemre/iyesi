@@ -14,7 +14,7 @@ import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.functions.FirebaseFunctions;
 import com.google.firebase.functions.HttpsCallableResult;
-import com.kurmez.iyesi.sahiplendirme.Welcome;
+import com.kurmez.iyesi.umay.sahiplendirme.Welcome;
 
 import java.util.HashMap;
 import java.util.Map;

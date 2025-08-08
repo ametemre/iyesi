@@ -8,8 +8,11 @@ import android.util.Log;
 import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.common.GoogleApiAvailability;
 import com.google.android.gms.security.ProviderInstaller;
+import com.google.firebase.FirebaseApp;
+import com.google.firebase.appcheck.FirebaseAppCheck;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
+import com.google.firebase.appcheck.debug.DebugAppCheckProviderFactory;
 
 public class MyApp extends Application {
     private static final String TAG = "MyApp";
@@ -17,10 +20,11 @@ public class MyApp extends Application {
     @Override
     public void onCreate() {
         super.onCreate();
-        FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
-        Log.d("AUTH", user == null ? "Kullanıcı yok" : "Kullanıcı var: " + user.getUid());
-
-        safeInstallProviderIfNeeded(this);
+        FirebaseApp.initializeApp(this);
+        FirebaseAppCheck firebaseAppCheck = FirebaseAppCheck.getInstance();
+        // This will always succeed in dev, and suppress the broker‐error:
+        firebaseAppCheck.installAppCheckProviderFactory(
+                DebugAppCheckProviderFactory.getInstance());
     }
 
     /**

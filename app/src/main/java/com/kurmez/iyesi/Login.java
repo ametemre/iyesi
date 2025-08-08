@@ -11,7 +11,7 @@ import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.google.firebase.auth.FirebaseAuth;
-import com.kurmez.iyesi.sahiplendirme.Welcome;
+import com.kurmez.iyesi.umay.sahiplendirme.Welcome;
 
 public class Login extends AppCompatActivity {
 

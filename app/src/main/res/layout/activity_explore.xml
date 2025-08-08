@@ -7,7 +7,7 @@
     <!-- Profile Header -->
     <include
         android:id="@+id/profile_header"
-        layout="@layout/layout_profile_header"
+        layout="@layout/item_conversation_header"
         android:layout_width="match_parent"
         android:layout_height="wrap_content" />
 

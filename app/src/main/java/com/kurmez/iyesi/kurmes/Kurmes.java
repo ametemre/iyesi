@@ -2,28 +2,26 @@ package com.kurmez.iyesi.kurmes;
 
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.google.firebase.auth.FirebaseAuth;
-import com.kurmez.iyesi.MainActivity;
-import com.kurmez.iyesi.sahiplendirme.Founded;
-import com.kurmez.iyesi.utilities.Ai.Detection;
+import com.kurmez.iyesi.umay.sahiplendirme.Founded;
+import com.kurmez.iyesi.kurmes.utilities.Ai.Detection;
 //import com.kurmez.iyesi.utilities.Ai.OpenCV;
-import com.kurmez.iyesi.utilities.Ai.OpenCV;
-import com.kurmez.iyesi.utilities.Ai.SoundClassifier;
-import com.kurmez.iyesi.utilities.Ai.VideoClassifier;
-import com.kurmez.iyesi.utilities.Ai.delegate.TFLiteInputPreprocessor;
-import com.kurmez.iyesi.utilities.Ai.threading.ThreadService;
-import com.kurmez.iyesi.utilities.helper.ResourceMonitor;
-import com.kurmez.iyesi.utilities.Helpers;
-import com.kurmez.iyesi.utilities.RTPipeline;
-import com.kurmez.iyesi.utilities.Ai.threading.Terminator;
-import com.kurmez.iyesi.utilities.helper.Actions;
-import com.kurmez.iyesi.utilities.helper.PermissionHelper;
+import com.kurmez.iyesi.kurmes.utilities.Ai.OpenCV;
+import com.kurmez.iyesi.kurmes.utilities.Ai.SoundClassifier;
+import com.kurmez.iyesi.kurmes.utilities.Ai.VideoClassifier;
+import com.kurmez.iyesi.kurmes.utilities.Ai.delegate.TFLiteInputPreprocessor;
+import com.kurmez.iyesi.kurmes.utilities.Ai.threading.ThreadService;
+import com.kurmez.iyesi.kurmes.utilities.helper.ResourceMonitor;
+import com.kurmez.iyesi.kurmes.utilities.Helpers;
+import com.kurmez.iyesi.kurmes.utilities.RTPipeline;
+import com.kurmez.iyesi.kurmes.utilities.Ai.threading.Terminator;
+import com.kurmez.iyesi.kurmes.utilities.helper.Actions;
+import com.kurmez.iyesi.kurmes.utilities.helper.PermissionHelper;
 import com.kurmez.iyesi.R;
 
 import org.opencv.android.CameraBridgeViewBase;
 import org.opencv.android.Utils;
 import org.opencv.core.Mat;
 
-import android.app.Activity;
 import android.content.Intent;
 import android.graphics.Bitmap;
 
@@ -37,8 +35,8 @@ import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
-import com.kurmez.iyesi.utilities.Ai.Ai;
-import com.kurmez.iyesi.utilities.MiniFabs;
+import com.kurmez.iyesi.kurmes.utilities.Ai.Ai;
+import com.kurmez.iyesi.kurmes.utilities.MiniFabs;
 
 import org.opencv.android.CameraActivity;
 import org.opencv.android.OpenCVLoader;
@@ -58,9 +56,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 import android.view.Menu;
-import android.widget.Toast;
-
-import androidx.appcompat.app.AppCompatActivity;
 
 import org.opencv.android.CameraBridgeViewBase.CvCameraViewListener2;
 import org.opencv.core.MatOfRect;

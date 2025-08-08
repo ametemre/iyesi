@@ -5,7 +5,7 @@
     android:id="@+id/container"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    tools:context=".sokak.SokakActivity">
+    tools:context=".umay.sokak.SokakActivity">
   <!-- 1) En tepede indikatör olacak -->
   <ProgressBar
       android:id="@+id/progress_bar"

@@ -1,6 +1,6 @@
 package com.kurmez.iyesi;
 
-import com.kurmez.iyesi.social.Content;
+import com.kurmez.iyesi.kurmes.social.content.Content;
 
 import java.util.ArrayList;
 import java.util.List;
