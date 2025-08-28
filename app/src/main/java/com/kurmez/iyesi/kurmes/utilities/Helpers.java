@@ -121,15 +121,9 @@ public class Helpers {
             String location    = u.optString("location", "");
             String phone       = u.optString("phone", "");
             String role        = u.optString("role", "");
+            String avatar_url  = u.optString("avatar","");
 
-            list.add(new Profile(
-                    uid,
-                    username,
-                    email,
-                    location,
-                    phone,
-                    role
-            ));
+            list.add(new Profile(uid, username, email, location, phone, role,avatar_url));
         }
         return list;
     }

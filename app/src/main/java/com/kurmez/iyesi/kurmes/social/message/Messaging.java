@@ -27,6 +27,7 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 import com.kurmez.iyesi.Login;
+import com.kurmez.iyesi.ProfileActivity;
 import com.kurmez.iyesi.R;
 
 import java.io.IOException;
@@ -50,7 +51,7 @@ import okhttp3.Response;
 
 public class Messaging extends AppCompatActivity {
     private static final String CF_ALL_USERS = "https://us-central1-iyesi-a651a.cloudfunctions.net/listAllUsersHttp";
-
+    private ProfileActivity profileActivity;
     private FirebaseFunctions functions;
     private RecyclerView rvConversations;
     private ConversationAdapter adapter;
@@ -170,13 +171,16 @@ public class Messaging extends AppCompatActivity {
         };
         Helpers.ConversationHeaderHelper.setupHeader(this, R.menu.menu_message_options, item -> {
             if (item.getItemId() == R.id.blueTooth) {
-                Toast.makeText(this, "BlueTooth", Toast.LENGTH_SHORT).show();
-                return true;
-            }
-            if (item.getItemId() == R.id.blueTooth) {
                 PrivateCom btHelper = new PrivateCom();
                 btHelper.enableBluetoothAndMakeDiscoverable(Messaging.this, 120); // 2 dakika görünür
                 Toast.makeText(this, "Bluetooth aktif ve görünür hale geldi", Toast.LENGTH_SHORT).show();
+                return true;
+            }
+            if (item.getItemId() == R.id.edit_profile) {
+                profileActivity = new ProfileActivity();
+                //profileActivity.launchForEdit(this);
+                profileActivity.launchProfile(this);
+                Toast.makeText(this, "Profil Düzenleniyor", Toast.LENGTH_SHORT).show();
                 return true;
             }
             return false;
@@ -278,10 +282,15 @@ public class Messaging extends AppCompatActivity {
     // Demo - CloudFunctions ile mesajlaşma aç (onConversationClick'te)
     private void openCloudMessaging(Conversation convo) {
         Intent intent = new Intent(this, Message.class);
-        intent.putExtra("userId", convo.userId);
+        intent.putExtra(Message.EXTRA_MODE, Message.MODE_BLOCKCHAIN);
+        if (convo.userId!=null) {
+            intent.putExtra(Message.EXTRA_TARGET_USER_ID, convo.userId);
+        }
+        if (convo.username!=null) {
+            intent.putExtra(Message.EXTRA_TARGET_USER_NAME, convo.username);
+        }
         startActivity(intent);
     }
-
     // Adapter
     static class ConversationAdapter extends RecyclerView.Adapter<ConversationAdapter.ViewHolder> {
         private List<Conversation> items;
@@ -364,6 +373,7 @@ public class Messaging extends AppCompatActivity {
                               @NonNull RecyclerView.ViewHolder target) {
             return false;
         }
+        @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
         @Override
         public void onSwiped(@NonNull RecyclerView.ViewHolder viewHolder, int direction) {
             int pos = viewHolder.getAdapterPosition();

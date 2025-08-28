@@ -3,6 +3,6 @@
         android:id="@+id/blueTooth"
         android:title="BlueTooth Mesajları Kabulet" />
     <item
-        android:id="@+id/action_report"
-        android:title="Engelle" />
+        android:id="@+id/edit_profile"
+        android:title="Profili Düzenle" />
 </menu>

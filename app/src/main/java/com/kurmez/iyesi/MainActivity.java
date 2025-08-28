@@ -43,7 +43,7 @@ public class MainActivity extends AppCompatActivity {
     private Runnable startCameraRunnable; // Camera-starting task
     private static final int SCAN_QR_REQUEST_CODE = 1001; // Unique request code for QR Scanner
     private FirebaseFirestore db; // Firestore instance
-    private FirebaseAuth mAuth; // FirebaseAuth instance
+    private FirebaseAuth mAuth = FirebaseAuth.getInstance(); // FirebaseAuth instance
     private String generatedQRCode; // QR code generated for the device
     private PrivateCom privateCom;
     private String response = null;

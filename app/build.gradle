@@ -30,6 +30,7 @@ android {
     ndkVersion '28.0.12674087 rc2'
     buildFeatures {
         viewBinding true
+        buildConfig = true
     }
     aaptOptions {
         noCompress "tflite"
@@ -54,7 +55,9 @@ dependencies {
     implementation libs.firebase.functions
     implementation libs.firebase.storage
     implementation libs.firebase.auth
-
+    implementation "com.google.firebase:firebase-appcheck"
+    implementation "com.google.firebase:firebase-appcheck-playintegrity"
+    debugImplementation "com.google.firebase:firebase-appcheck-debug"
     // core
     implementation 'org.tensorflow:tensorflow-lite:2.15.0'  // Core TFLite
     implementation 'org.tensorflow:tensorflow-lite-gpu:2.15.0'// GPU delegate
@@ -74,8 +77,8 @@ dependencies {
     annotationProcessor 'com.github.bumptech.glide:compiler:4.16.0'
     implementation 'com.github.bumptech.glide:glide:4.16.0'
 
-
-    implementation 'com.squareup.okhttp3:okhttp:4.9.3'
+    implementation platform("com.google.firebase:firebase-bom:33.1.2")
+    implementation "com.squareup.okhttp3:okhttp:4.10.0"
 
 
     implementation 'com.journeyapps:zxing-android-embedded:4.3.0'

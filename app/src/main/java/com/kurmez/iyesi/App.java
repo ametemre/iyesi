@@ -1,0 +1,123 @@
+package com.kurmez.iyesi;
+
+import android.app.Application;
+import android.content.Context;
+import android.content.Intent;
+import android.util.Log;
+
+import com.google.android.gms.common.ConnectionResult;
+import com.google.android.gms.common.GoogleApiAvailability;
+import com.google.android.gms.security.ProviderInstaller;
+import com.google.firebase.FirebaseApp;
+import com.google.firebase.appcheck.FirebaseAppCheck;
+import com.google.firebase.appcheck.debug.DebugAppCheckProviderFactory;
+import com.google.firebase.appcheck.playintegrity.PlayIntegrityAppCheckProviderFactory;
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseUser;
+
+import org.json.JSONObject;
+
+import java.io.IOException;
+import java.util.concurrent.TimeUnit;
+
+import okhttp3.Call;
+import okhttp3.Callback;
+import okhttp3.MediaType;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.RequestBody;
+import okhttp3.Response;
+
+public class App extends Application {
+    private static final String TAG = "MyApp";
+
+    @Override
+    public void onCreate() {
+        super.onCreate();
+
+        FirebaseApp.initializeApp(this);
+
+        FirebaseAppCheck appCheck = FirebaseAppCheck.getInstance();
+        if (BuildConfig.DEBUG) {
+            FirebaseAppCheck.getInstance()
+                    .installAppCheckProviderFactory(
+                            com.google.firebase.appcheck.debug.DebugAppCheckProviderFactory.getInstance());
+        } else {
+            FirebaseAppCheck.getInstance()
+                    .installAppCheckProviderFactory(
+                            com.google.firebase.appcheck.playintegrity.PlayIntegrityAppCheckProviderFactory.getInstance());
+        }
+    }
+
+    /**
+     * Eğer cihazda Google Play Services uygunsa ProviderInstaller'ı başlatır,
+     * değilse atlayıp DEVELOPER_ERROR log'larını önler.
+     */
+    private void safeInstallProviderIfNeeded(Context ctx) {
+        GoogleApiAvailability api = GoogleApiAvailability.getInstance();
+        int status = api.isGooglePlayServicesAvailable(ctx);
+        if (status == ConnectionResult.SUCCESS) {
+            ProviderInstaller.installIfNeededAsync(ctx, new ProviderInstaller.ProviderInstallListener() {
+                @Override
+                public void onProviderInstalled() {
+                    Log.d(TAG, "Provider başarıyla yüklendi");
+                }
+
+                @Override
+                public void onProviderInstallFailed(int errorCode, Intent recoveryIntent) {
+                    Log.w(TAG, "Provider yüklemesi başarısız, code: " + errorCode);
+                }
+            });
+        } else {
+            Log.w(TAG, "Google Play Services mevcut değil (code: " + status + "), ProviderInstaller atlandı");
+        }
+    }
+    public void sendRequestWithAppCheckAndAuth(JSONObject payload) {
+        FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
+        if (user == null) {
+            Log.e("Message", "Kullanıcı yok");
+            return;
+        }
+        OkHttpClient okHttpClient = new OkHttpClient.Builder()
+                .connectTimeout(30, TimeUnit.SECONDS)
+                .readTimeout(30, TimeUnit.SECONDS)
+                .build();
+        // 1) Auth ID token
+        user.getIdToken(true).addOnSuccessListener(idTok -> {
+            String idToken = idTok.getToken();
+
+            // 2) App Check token
+            FirebaseAppCheck.getInstance().getAppCheckToken(false)
+                    .addOnSuccessListener(appTok -> {
+                        String appCheckToken = appTok.getToken();
+
+                        RequestBody body = RequestBody.create(
+                                payload.toString(), MediaType.get("application/json; charset=utf-8"));
+
+                        Request req = new Request.Builder()
+                                .url("https://us-central1-iyesi-a651a.cloudfunctions.net/appSend")
+                                .addHeader("Authorization", "Bearer " + idToken)     // Firebase Auth
+                                .addHeader("X-Firebase-AppCheck", appCheckToken)      // App Check
+                                .post(body)
+                                .build();
+
+                        okHttpClient.newCall(req).enqueue(new Callback() {
+                            @Override public void onFailure(Call call, IOException e) {
+                                Log.e("Message", "İstek hatası", e);
+                            }
+                            @Override public void onResponse(Call call, Response rsp) throws IOException {
+                                Log.d("Message", "HTTP " + rsp.code() + " " + rsp.message());
+                            }
+                        });
+                    })
+                    .addOnFailureListener(e -> {
+                        Log.e("Message", "App Check token alınamadı", e);
+                        // İsterseniz burada kullanıcıya kısa bir uyarı gösterin
+                    });
+
+        }).addOnFailureListener(e -> {
+            Log.e("Message", "Auth ID token alınamadı", e);
+        });
+    }
+
+}
