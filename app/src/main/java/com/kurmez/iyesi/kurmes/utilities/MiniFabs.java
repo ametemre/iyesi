@@ -11,6 +11,7 @@ import android.graphics.Color;
 import android.graphics.PorterDuff;
 import android.graphics.drawable.Drawable;
 import android.os.Handler;
+import android.util.Log;
 import android.view.VelocityTracker;
 import android.view.View;
 import android.view.MotionEvent;
@@ -323,7 +324,7 @@ public class MiniFabs {
     @SuppressLint("ClickableViewAccessibility")
     public void setupDraggableFAB(Context context, MiniFabs miniFabs, FloatingActionButton fabDraggable) {
         mAuth = FirebaseAuth.getInstance();
-        Kurmes kurmes = (Kurmes) context;
+
         fabDraggable.setOnTouchListener((v, event) -> {
             switch (event.getActionMasked()) {
                 case MotionEvent.ACTION_DOWN:
@@ -370,16 +371,22 @@ public class MiniFabs {
                     if (!isDragging) {
                         long pressDuration = System.currentTimeMillis() - pressStartTime;
                         if (pressDuration < LONG_PRESS_THRESHOLD) {
+                            miniFabs.toggle();
                             // Kısa tıklama: miniFAB menüsünü toggle et
-                            if (kurmes.getCurrentState() != Kurmes.State.IDLE && kurmes.reusableBitmap != null) {
-                                // cameraView’den snapshot alıp listener'a ileten metodun:
-                                miniFabs.takeSnapshot(kurmes.reusableBitmap);
-                            } else {
-                                handleLongClick(context,fabDraggable);
-                            }
+
                         } else {
                             // Uzun basış
-                            miniFabs.toggle();
+                            try {
+                                Kurmes kurmes = (Kurmes) context;
+                                if (kurmes.getCurrentState() != Kurmes.State.IDLE && kurmes.reusableBitmap != null) {
+                                    // cameraView’den snapshot alıp listener'a ileten metodun:
+                                    miniFabs.takeSnapshot(kurmes.reusableBitmap);
+                                } else {
+                                    handleLongClick(context,fabDraggable);
+                                }
+                            } catch (Exception e) {
+                                Log.w("Error", e.getMessage());
+                            }
                         }
                     } else {
                         // Sürükleme sonrası momentumlu animasyon

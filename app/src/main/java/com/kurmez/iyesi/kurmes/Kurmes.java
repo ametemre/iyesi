@@ -264,10 +264,6 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
         }
         SetLabelText("ready...");
         // fabAction:
-        fabAction.setOnLongClickListener(v -> {
-
-            return true;
-        });
 
         fabAction.setOnClickListener(v -> {
             SetLabelText("standby...");

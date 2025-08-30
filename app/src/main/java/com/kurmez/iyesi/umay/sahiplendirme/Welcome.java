@@ -23,6 +23,7 @@ import com.kurmez.iyesi.R;
 import com.kurmez.iyesi.kurmes.social.content.Explore;
 import com.kurmez.iyesi.kurmes.social.content.ExplorePrivate;
 import com.kurmez.iyesi.kurmes.social.message.Messaging;
+import com.kurmez.iyesi.kurmes.utilities.Helpers;
 import com.kurmez.iyesi.kurmes.utilities.adapters.CompanionAdapter;
 
 import org.json.JSONArray;
@@ -183,7 +184,7 @@ public class Welcome extends AppCompatActivity {
         messageButton.setOnClickListener(v ->
                 startActivity(new Intent(this, Messaging.class))
         );
-        notificationButton.setOnClickListener(v -> showToast("Bildirim özelliği yakında gelecek"));
+        notificationButton.setOnClickListener(v -> Helpers.showToastSafe(this,"Bildirim özelliği yakında gelecek"));
     }
 
     /**
@@ -296,8 +297,5 @@ public class Welcome extends AppCompatActivity {
         } catch (Exception e) {
             e.printStackTrace();
         }
-    }
-    private void showToast(String message){
-            Toast.makeText(Welcome.this,message,LENGTH_SHORT).show();
     }
 }

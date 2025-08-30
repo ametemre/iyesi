@@ -6,6 +6,7 @@ import android.graphics.Typeface;
 import android.os.Bundle;
 import android.text.InputType;
 import android.text.TextUtils;
+import android.util.Log;
 import android.view.Gravity;
 import android.view.View;
 import android.view.Menu;
@@ -29,6 +30,7 @@ import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.auth.GetTokenResult;
 import com.google.firebase.functions.FirebaseFunctions;
 import com.google.firebase.functions.HttpsCallableResult;
+import com.kurmez.iyesi.kurmes.utilities.Helpers;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -50,7 +52,7 @@ public class ProfileActivity extends AppCompatActivity {
     private ImageView iyeImage, headerTitle;
     private TextView tvCompanion, tvFoundDate, tvPlace, tvWho;
     private ListView listViewIye; // normalde boş; edit modda satırlar gösterilir
-
+    public FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
     // === State ===
     private FirebaseFunctions functions;
     private Map<String, Object> claimCache = new HashMap<>();
@@ -87,8 +89,14 @@ public class ProfileActivity extends AppCompatActivity {
         tvPlace      = findViewById(R.id.iye_place);
         tvWho        = findViewById(R.id.who);
         listViewIye  = findViewById(R.id.list_view_iye);
+        FirebaseFunctions.getInstance("us-central1")
+                .getHttpsCallable("echoMe")
+                .call()
+                .addOnSuccessListener(r -> Log.d("ECHO", "OK: "+r.getData()))
+                .addOnFailureListener(e -> Log.e("ECHO", "FAIL: "+e.getMessage()));
 
-        functions = FirebaseFunctions.getInstance();
+        functions = FirebaseFunctions.getInstance("us-central1");   // << ekle
+
 
         // ImageView jestleri: long-press = edit mode ON, tap = save & edit mode OFF
         iyeImage.setOnLongClickListener(v -> {
@@ -100,7 +108,7 @@ public class ProfileActivity extends AppCompatActivity {
         });
 
         // İlk yükleme
-        refreshClaimsAndRender();
+        refreshClaimsAndRender(user);
     }
 
     // Menü (isteğe bağlı, burada edit’i menüden kaldırdık; sadece image jestleriyle kontrol ediliyor)
@@ -113,8 +121,7 @@ public class ProfileActivity extends AppCompatActivity {
     public boolean onOptionsItemSelected(MenuItem item) { return super.onOptionsItemSelected(item); }
 
     // === Claims Yükleme / UI doldurma ===
-    private void refreshClaimsAndRender() {
-        FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
+    private void refreshClaimsAndRender(FirebaseUser user) {
         if (user == null) {
             Toast.makeText(this, "Oturum bulunamadı.", Toast.LENGTH_LONG).show();
             finish();
@@ -173,7 +180,7 @@ public class ProfileActivity extends AppCompatActivity {
         rows.put(ClaimsKeys.EMAIL,      new RowMeta("E-posta",       getStringClaim(claimCache, ClaimsKeys.EMAIL),    InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS));
         rows.put(ClaimsKeys.PHONE,      new RowMeta("Telefon",       getStringClaim(claimCache, ClaimsKeys.PHONE),    InputType.TYPE_CLASS_PHONE));
         rows.put(ClaimsKeys.LOCATION,   new RowMeta("Konum",         getStringClaim(claimCache, ClaimsKeys.LOCATION), InputType.TYPE_CLASS_TEXT));
-        rows.put(ClaimsKeys.AVATAR_URL, new RowMeta("Avatar URL",    getStringClaim(claimCache, ClaimsKeys.AVATAR_URL), InputType.TYPE_TEXT_VARIATION_URI));
+        //rows.put(ClaimsKeys.AVATAR_URL, new RowMeta("Avatar URL",    getStringClaim(claimCache, ClaimsKeys.AVATAR_URL), InputType.TYPE_TEXT_VARIATION_URI));
 
         editAdapter = new EditAdapter(new ArrayList<>(rows.entrySet()));
         listViewIye.setAdapter(editAdapter);
@@ -215,19 +222,31 @@ public class ProfileActivity extends AppCompatActivity {
         // Backend’e gönder
         Map<String, Object> payload = new HashMap<>();
         payload.put("updates", filtered);
-
-        setUiBusy(true);
-        functions.getHttpsCallable(FN_UPDATE_CLAIMS)
-                .call(payload)
-                .addOnSuccessListener(this::onUpdateClaimsSuccess)
+        if (user == null) {
+            Toast.makeText(this, "Giriş yapmalısın", Toast.LENGTH_LONG).show();
+            startActivity(new Intent(this, Login.class));
+            finish();
+            return;
+        } else {
+// Token al (false = mevcut token; true verirsen zorla yeniler)
+            user.getIdToken(true)
+                .addOnSuccessListener(tr -> {
+                    setUiBusy(true);
+                    functions.getHttpsCallable(FN_UPDATE_CLAIMS)
+                            .call(payload)
+                            .addOnSuccessListener(this::onUpdateClaimsSuccess)
+                            .addOnFailureListener(e -> {
+                                setUiBusy(false);
+                                Helpers.showToastSafe(this, "Güncelleme başarısız: " + e.getMessage());
+                            });
+                })
                 .addOnFailureListener(e -> {
-                    setUiBusy(false);
-                    Toast.makeText(this, "Güncelleme başarısız: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                    Helpers.showToastSafe(this, "Token alınamadı: " + e.getMessage());
                 });
+        }
     }
 
     private void onUpdateClaimsSuccess(HttpsCallableResult result) {
-        FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
         if (user == null) {
             setUiBusy(false);
             Toast.makeText(this, "Kullanıcı oturumu yok.", Toast.LENGTH_LONG).show();
@@ -374,11 +393,18 @@ public class ProfileActivity extends AppCompatActivity {
         context.startActivity(intent);
         finish();
     }
-    public void launchForEdit(Context context) {
-        Intent intent = new Intent(context, ProfileActivity.class);
+    public static final String EXTRA_EDIT = "editMode";
+    public void launchForEdit(Context ctx,Boolean editMode) {
+        Intent i = new Intent(ctx, ProfileActivity.class);
+        i.putExtra(EXTRA_EDIT, editMode);
+        ctx.startActivity(i);
         // İstersen ileride "editMode" flag’ı koyabilirsin:
-        intent.putExtra("editMode", true);
-        context.startActivity(intent);
         finish();
+        if (!isEditing){
+            enterEditMode();
+            isEditing=!isEditing;
+        }else {
+            enterEditMode();
+        }
     }
 }

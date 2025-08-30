@@ -63,6 +63,7 @@ public class SokakActivity extends FragmentActivity {
         initializeFABs();
         // Yalnızca harita ile ilgili başlatmayı Harita sınıfına devret
         harita = new Harita(this);
+
         touchOverlay = findViewById(R.id.map_overlay);
         gestureDetector = new GestureDetector(this, new GestureDetector.SimpleOnGestureListener() {
             @Override
@@ -107,29 +108,6 @@ public class SokakActivity extends FragmentActivity {
             // Marker modu aktifse dokunma olayını tüketme (harita hareketlerine izin ver)
             return false;
         });
-    }
-    private void handleMapTouch(MotionEvent event) {
-        int action = event.getActionMasked();
-
-        switch (action) {
-            case MotionEvent.ACTION_DOWN:
-                startX = event.getX();
-                startY = event.getY();
-                break;
-
-            case MotionEvent.ACTION_MOVE:
-                // Marker modu aktifken harita hareketlerini engelle
-                if (isMarkerModeActive) return;
-
-                // ... hareket algılama kodu ...
-                break;
-
-            case MotionEvent.ACTION_UP:
-                if (!isMarkerMode) {
-                    gestureDetector.onTouchEvent(event);
-                }
-                break;
-        }
     }
 
     @Override

@@ -178,8 +178,9 @@ public class Messaging extends AppCompatActivity {
             }
             if (item.getItemId() == R.id.edit_profile) {
                 profileActivity = new ProfileActivity();
-                //profileActivity.launchForEdit(this);
-                profileActivity.launchProfile(this);
+                profileActivity.launchForEdit(this, true);
+                Toast.makeText(this, "Profil Düzenleniyor", Toast.LENGTH_SHORT).show();
+                //profileActivity.launchProfile(this);
                 Toast.makeText(this, "Profil Düzenleniyor", Toast.LENGTH_SHORT).show();
                 return true;
             }
