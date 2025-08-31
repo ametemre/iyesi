@@ -1,6 +1,7 @@
 package com.kurmez.iyesi.umay.sokak;
 
 import android.Manifest;
+import android.annotation.SuppressLint;
 import android.content.Context;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
@@ -75,6 +76,38 @@ import com.google.firebase.appcheck.FirebaseAppCheck;
 import com.kurmez.iyesi.kurmes.utilities.Helpers;
 import org.json.JSONObject;
 import okhttp3.HttpUrl;
+import android.net.Uri;
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseUser;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
+import okhttp3.Call;
+import okhttp3.Callback;
+import okhttp3.Response;
+import com.kurmez.iyesi.umay.sokak.data.model.MarkerType;
+import android.net.Uri;
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseUser;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
+import okhttp3.Call;
+import okhttp3.Callback;
+import okhttp3.Response;
+// imports:
+import androidx.annotation.NonNull;
+import com.google.android.gms.maps.model.Marker;
+import com.google.android.gms.maps.model.LatLng;
+import okhttp3.Callback;
+import okhttp3.Call;
+import okhttp3.Response;
+import org.json.JSONObject;
+// imports
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+
+
+// enum’a ekle:
+
 /**
  * Harita sınıfı:
  * - GitHub’daki GeoBoundaries “main/releaseData/gbOpen” klasöründen
@@ -86,6 +119,12 @@ import okhttp3.HttpUrl;
  */
 public class Harita implements OnMapReadyCallback {
     private boolean isMarking = false;
+    // Harita.java (diğer alanların yanına)
+    private com.google.android.gms.maps.model.Marker myLocMarker = null;
+    private com.google.android.gms.maps.model.Circle  myAccCircle = null;
+    private com.google.android.gms.location.LocationCallback myLocCallback = null;
+    private boolean myLocFirstFixCentered = false;
+
     private static final float MARKER_WIDTH_DP  = 48f;
     private static final float ICON_DP          = 20f;
     private static final float ICON_OFFSET_Y_DP = 13f;   // yukarı kaydırma
@@ -97,7 +136,10 @@ public class Harita implements OnMapReadyCallback {
     private Marker draggableMarker;
     private GestureDetector gestureDetector;
     private GoogleMap mMap;
-    public enum MapMode { DEFAULT, FEEDING, NEST, SHELTER, TASK }  // Görev=TASK
+    public enum MapMode { DEFAULT, FEEDING, NEST, SHELTER, TASK, REPOSITION }  // Görev=TASK
+    // Harita sınıfı içinde (field olarak)
+    private final Map<String, com.google.android.gms.maps.model.Marker> markerById = new ConcurrentHashMap<>();
+
     private GeoJsonLayer layerCountry,layerProvince,layerDistrict;
     private final FragmentActivity activity;
     private Marker tempMarker;
@@ -112,14 +154,25 @@ public class Harita implements OnMapReadyCallback {
 
     private final java.util.List<com.google.android.gms.maps.model.Marker> renderedMarkers = new java.util.ArrayList<>();
 
-
+    private final Map<Marker, String> markerTypeMap = new HashMap<>();
+    private Marker highlightedMarker = null;
 
     private MapMode mode = MapMode.DEFAULT;
     private boolean isPlacing = false;
     private GestureDetector placementDetector;
 
+    private static final double NEARBY_CHECKIN_THRESHOLD_M = 50.0;
+    // son check-in’leri kısa süreli engellemek için (çifte tıklama/vs)
+    private final Map<String, Long> recentCheckIns = new HashMap<>();
+
+    // alanlar:
+    private boolean isReposition = false;
+    private String  repositionMarkerId = null;
+    private Marker  repositionMarker = null;
+    private LatLng  originalPos = null;
 
 
+    @SuppressLint("PotentialBehaviorOverride")
     @Override
     public void onMapReady(@NonNull GoogleMap googleMap) {
         mMap = googleMap;
@@ -154,27 +207,145 @@ public class Harita implements OnMapReadyCallback {
             getUserLocationAndLoadInitial();
         }
         // Harita.onMapReady(...) sonunda
-        mMap.setOnMarkerClickListener(m -> {
-            if (isPlacementMode()) return true; // yerleştirme modunda marker etkileşimini kapat
-            // burada detay panelini aç (BottomSheet vs.)
-            // String id = (String) m.getTag();
-            // MarkerDetailsBottomSheet.newInstance(id, ...).show(...)
-            String markerId = (String) m.getTag();   // create’de set edeceğiz
-            if (markerId != null) {
-                openMarkerDetails(markerId);         // aşağıdaki metod
+        mMap.setOnMarkerClickListener(marker -> {
+            highlightMarker(marker);
+            checkInIfNearby(marker);          // ← 50 m içindeyse CF’ye "visit" gönder
+            Object tag = marker.getTag();
+            if (tag instanceof String) {
+                openMarkerDetails((String) tag); // mevcut detay açıcı
             }
-            return true; // tıklamayı tükettik, default infoWindow göstermeyelim
+            return true; // default info-window davranışını tüket
+        });
+
+        mMap.setOnMapClickListener(latLng -> {
+            // Haritanın boş bir yerine dokunulursa seçim kalksın
+            clearMarkerHighlight();
+            for (Marker m : renderedMarkers) m.remove();
+            renderedMarkers.clear();
+            markerTypeMap.clear();
         });
     }
-    private void openMarkerDetails(String markerId) {
-        // ui/MarkerDetailsBottomSheet.java kullan
-        try {
-            com.kurmez.iyesi.umay.sokak.ui.MarkerDetailsBottomSheet
-                    .newInstance(markerId, /* opsiyonel MarkerType */ null)
-                    .show(activity.getSupportFragmentManager(), "marker_details");
-        } catch (Exception e) {
-            android.widget.Toast.makeText(activity, "Detay açılamadı", android.widget.Toast.LENGTH_SHORT).show();
+    private static MarkerType mapServerType(@androidx.annotation.Nullable String t) {
+        if (t == null) return MarkerType.TASK;
+        String n = t.trim().toLowerCase(java.util.Locale.ROOT);
+        switch (n) {
+            // TR adları
+            case "besleme": return MarkerType.FEEDING;
+            case "yuva":    return MarkerType.NEST;
+            case "barınak": return MarkerType.SHELTER;
+            case "gorev":   return MarkerType.TASK;
+            // EN adları (olası payloadlar için)
+            case "feeding": return MarkerType.FEEDING;
+            case "nest":    return MarkerType.NEST;
+            case "shelter": return MarkerType.SHELTER;
+            default:        return MarkerType.TASK;
         }
+    }
+    // basit haversine
+    private static double haversineMeters(double lat1, double lon1, double lat2, double lon2) {
+        final double R = 6371000.0;
+        double dLat = Math.toRadians(lat2 - lat1);
+        double dLon = Math.toRadians(lon2 - lon1);
+        double a = Math.sin(dLat/2)*Math.sin(dLat/2)
+                + Math.cos(Math.toRadians(lat1))*Math.cos(Math.toRadians(lat2))
+                * Math.sin(dLon/2)*Math.sin(dLon/2);
+        double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        return R * c;
+    }
+    private void openMarkerDetails(String markerId) {
+        // 0) Login guard
+        FirebaseUser u = FirebaseAuth.getInstance().getCurrentUser();
+        if (u == null) {
+            android.widget.Toast.makeText(activity, "Devam etmek için giriş yapın", android.widget.Toast.LENGTH_LONG).show();
+            return;
+        }
+
+        // 1) URL’ler
+        final String urlDetails = CF_BASE + "/markerDetails?id=" + Uri.encode(markerId);
+        final String urlSouls   = CF_BASE + "/markerSouls?id=" + Uri.encode(markerId) + "&limit=50";
+
+        // 2) Paralel istekler
+        final AtomicReference<org.json.JSONObject> markerRef = new AtomicReference<>();
+        final AtomicReference<org.json.JSONArray>  soulsRef  = new AtomicReference<>(new org.json.JSONArray());
+        final AtomicInteger pending = new AtomicInteger(2);
+
+        final Runnable tryShow = () -> {
+            if (pending.get() != 0) return;
+
+            // MarkerType’ı güvenle çıkar
+            MarkerType mt = MarkerType.TASK;
+            try {
+                org.json.JSONObject m = markerRef.get();
+                if (m != null) {
+                    // Bazı CF’ler { success:true, id:..., ...fields } gibi döner → type kökte
+                    String typeStr = m.optString("type", null);
+                    // (İhtimale karşı) gömülü data içinde olabilir:
+                    if (typeStr == null && m.has("data")) {
+                        org.json.JSONObject d = m.optJSONObject("data");
+                        if (d != null) typeStr = d.optString("type", null);
+                    }
+                    mt = mapServerType(typeStr);
+                }
+            } catch (Throwable ignore) { /* DEFAULT kalır */ }
+
+            final MarkerType finalMt = mt;
+            activity.runOnUiThread(() -> {
+                try {
+                    com.kurmez.iyesi.umay.sokak.ui.MarkerDetailsBottomSheet sheet =
+                            com.kurmez.iyesi.umay.sokak.ui.MarkerDetailsBottomSheet
+                                    .newInstance(markerId, finalMt); // ← asla null değil
+
+                    android.os.Bundle args = sheet.getArguments();
+                    if (args == null) args = new android.os.Bundle();
+                    if (markerRef.get() != null) args.putString("marker_json", markerRef.get().toString());
+                    if (soulsRef.get()  != null) args.putString("souls_json",  soulsRef.get().toString());
+                    sheet.setArguments(args);
+
+                    sheet.show(activity.getSupportFragmentManager(), "marker_details");
+                } catch (Exception e) {
+                    android.widget.Toast.makeText(activity, "Detay açılamadı", android.widget.Toast.LENGTH_SHORT).show();
+                }
+            });
+        };
+
+        // 3) Detay çağrısı
+        com.kurmez.iyesi.kurmes.utilities.Helpers.authorizedGetJson(
+                activity, urlDetails, /*deviceId*/ null, /*AppCheck*/ true,
+                new Callback() {
+                    @Override public void onFailure(Call call, java.io.IOException e) {
+                        pending.decrementAndGet(); tryShow.run();
+                        activity.runOnUiThread(() ->
+                                android.widget.Toast.makeText(activity, "Detay alınamadı: " + e.getMessage(), android.widget.Toast.LENGTH_LONG).show());
+                    }
+                    @Override public void onResponse(Call call, Response response) throws java.io.IOException {
+                        String body = response.body() != null ? response.body().string() : "{}";
+                        if (response.isSuccessful()) {
+                            try { markerRef.set(new org.json.JSONObject(body)); }
+                            catch (org.json.JSONException ignore) {}
+                        }
+                        pending.decrementAndGet(); tryShow.run();
+                    }
+                });
+
+        // 4) Souls çağrısı
+        com.kurmez.iyesi.kurmes.utilities.Helpers.authorizedGetJson(
+                activity, urlSouls, /*deviceId*/ null, /*AppCheck*/ true,
+                new Callback() {
+                    @Override public void onFailure(Call call, java.io.IOException e) {
+                        pending.decrementAndGet(); tryShow.run();
+                    }
+                    @Override public void onResponse(Call call, Response response) throws java.io.IOException {
+                        String body = response.body() != null ? response.body().string() : "{}";
+                        if (response.isSuccessful()) {
+                            try {
+                                org.json.JSONObject json = new org.json.JSONObject(body);
+                                org.json.JSONArray arr = json.optJSONArray("souls");
+                                if (arr != null) soulsRef.set(arr);
+                            } catch (org.json.JSONException ignore) {}
+                        }
+                        pending.decrementAndGet(); tryShow.run();
+                    }
+                });
     }
 
     public void confirmMarkerLocation() {
@@ -416,6 +587,7 @@ public class Harita implements OnMapReadyCallback {
                 Toast.makeText(activity, "Konum alınamadı.", Toast.LENGTH_SHORT).show();
             }
         });
+        setMyLocationIconEnabled(true);
     }
     /**
      * Kullanıcının konumunu alır, ülke kodlarını çözer ve spinner’daki seçime göre
@@ -604,6 +776,54 @@ public class Harita implements OnMapReadyCallback {
             draggableMarker = null;
         }
     }
+    private void checkInIfNearby(@NonNull Marker marker) {
+        Object tag = marker.getTag();
+        if (!(tag instanceof String)) return;
+        String markerId = (String) tag;
+
+        LatLng me = getCurrentLocation();
+        if (me == null) return;
+
+        LatLng mp = marker.getPosition();
+        double dist = haversineMeters(me.latitude, me.longitude, mp.latitude, mp.longitude);
+        if (dist > NEARBY_CHECKIN_THRESHOLD_M) return;
+
+        // 30 sn içinde aynı marker için tekrar yollama
+        long now = System.currentTimeMillis();
+        Long last = recentCheckIns.get(markerId);
+        if (last != null && (now - last) < 30_000) return;
+        recentCheckIns.put(markerId, now);
+
+        try {
+            JSONObject body = new JSONObject();
+            body.put("markerId", markerId);
+            body.put("kind", "visit");              // UmayAna.markerInteract bunu işler
+            body.put("note", "auto-checkin (≤50m)");// opsiyonel
+
+            com.kurmez.iyesi.kurmes.utilities.Helpers.authorizedPostJson(
+                    activity,
+                    CF_BASE + "/markerInteract",
+                    body,
+                    /*deviceId*/ null,
+                    /*includeAppCheck*/ true,
+                    new Callback() {
+                        @Override public void onFailure(Call call, java.io.IOException e) {
+                            activity.runOnUiThread(() ->
+                                    android.widget.Toast.makeText(activity, "Check-in başarısız", android.widget.Toast.LENGTH_SHORT).show());
+                        }
+                        @Override public void onResponse(Call call, Response response) throws java.io.IOException {
+                            activity.runOnUiThread(() -> {
+                                if (response.isSuccessful()) {
+                                    android.widget.Toast.makeText(activity, "Yakınındasın: Ziyaret kaydedildi ✓", android.widget.Toast.LENGTH_SHORT).show();
+                                } else {
+                                    android.widget.Toast.makeText(activity, "Check-in HTTP " + response.code(), android.widget.Toast.LENGTH_SHORT).show();
+                                }
+                            });
+                        }
+                    }
+            );
+        } catch (org.json.JSONException ignore) { /* no-op */ }
+    }
 
     private BitmapDescriptor getCustomIcon(String type) {
         if (iconCache.containsKey(type)) {
@@ -722,6 +942,24 @@ public class Harita implements OnMapReadyCallback {
                 return false;
             }
         });
+        gestureDetector = new android.view.GestureDetector(activity,
+                new android.view.GestureDetector.SimpleOnGestureListener() {
+                    @Override public boolean onDoubleTap(android.view.MotionEvent e) {
+                        if (isReposition && repositionMarker != null) {
+                            confirmReposition();
+                            return true;
+                        }
+                        return false;
+                    }
+                    @Override public boolean onSingleTapConfirmed(android.view.MotionEvent e) {
+                        if (isReposition) {
+                            cancelReposition();
+                            return true;
+                        }
+                        return false;
+                    }
+                    // (REPOSITION’da long press’e gerek yok; mevcut markeri sürüklüyoruz)
+                });
     }
 
     private boolean isPlacementMode() {
@@ -737,11 +975,7 @@ public class Harita implements OnMapReadyCallback {
     }
 
     /** Overlay dokunuşlarını tek noktadan yönet */
-    public boolean handleOverlayTouch(MotionEvent e) {
-        if (!isPlacementMode()) return false;          // harita/marker tıklamaları serbest
-        placementDetector.onTouchEvent(e);             // yerleştirme jestleri devrede
-        return true;                                   // olayı tüket → harita sürüklenmesin
-    }
+
     public void fetchMarkersNearbyOld(@androidx.annotation.Nullable String type, int radiusM, int limit) {
         if (!mapReady || centerPoint == null) {
             Toast.makeText(activity, "Konum hazır değil", Toast.LENGTH_SHORT).show();
@@ -804,6 +1038,27 @@ public class Harita implements OnMapReadyCallback {
                     }
                 });
     }
+    private String normalizeUiType(@Nullable String raw) {
+        if (raw == null) return "default";
+        String n = raw.trim().toLowerCase(Locale.ROOT);
+        switch (n) {
+            case "feeding": case "besleme": return "besleme";
+            case "nest":    case "yuva":    return "yuva";
+            case "shelter": case "barınak": case "barinak": return "barınak";
+            case "task":    case "görev":   case "gorev":   return "gorev";
+            default: return "default";
+        }
+    }
+    private String titleFor(String uiKey) {
+        switch (uiKey) {
+            case "besleme": return "Besleme";
+            case "yuva":    return "Yuva";
+            case "barınak": return "Barınak";
+            case "gorev":   return "Görev";
+            default:        return "Nokta";
+        }
+    }
+
     public void fetchMarkersNearby(@androidx.annotation.Nullable String type, int radiusM, int limit) {
         FirebaseUser u = FirebaseAuth.getInstance().getCurrentUser();
         if (u == null) {
@@ -857,15 +1112,21 @@ public class Harita implements OnMapReadyCallback {
                                 final double lng = m.optDouble("lng");
                                 final String mtype = m.optString("type", "Default");
                                 final String id = m.optString("id", null);
+                                String rawType = m.optString("type", "Default");
+                                String uiKey   = normalizeUiType(rawType);
+                                String title   = titleFor(uiKey);
 
                                 activity.runOnUiThread(() -> {
-                                    com.google.android.gms.maps.model.Marker mm =
-                                            mMap.addMarker(new com.google.android.gms.maps.model.MarkerOptions()
-                                                    .position(new com.google.android.gms.maps.model.LatLng(lat, lng))
-                                                    .icon(getCustomIcon(mtype))
-                                                    .title(mtype));
+                                    Marker mm = mMap.addMarker(new MarkerOptions()
+                                            .position(new LatLng(lat, lng))
+                                            .icon(getCustomIcon(mtype))       // mevcut teal ikonunuz
+                                            .title(mtype));                   // tipi başlığa koymak da faydalı
                                     if (mm != null) {
-                                        if (id != null) mm.setTag(id);
+                                        if (id != null) {
+                                            mm.setTag(id);       // tag = markerId
+                                            registerMarker(id, mm);                 // ← EKLE (startRepositionMode/findMarkerById için)
+                                        }
+                                        markerTypeMap.put(mm, mtype);        // tipi sakla
                                         renderedMarkers.add(mm);
                                     }
                                 });
@@ -927,6 +1188,258 @@ public class Harita implements OnMapReadyCallback {
                 } catch (org.json.JSONException ignored) { }
             }
         });
+    }
+    private void clearMarkerHighlight() {
+        if (highlightedMarker != null) {
+            String uiKey = markerTypeMap.getOrDefault(highlightedMarker, "default");
+            highlightedMarker.setIcon(
+                    com.kurmez.iyesi.umay.sokak.ui.MarkerIconFactory.getDefaultIcon(activity, uiKey)
+            );
+            highlightedMarker = null;
+        }
+    }
+    private void highlightMarker(@NonNull Marker marker) {
+        if (highlightedMarker == marker) return;
+        if (highlightedMarker != null) clearMarkerHighlight();
+        String uiKey = markerTypeMap.getOrDefault(marker, "default");
+        marker.setIcon(
+                com.kurmez.iyesi.umay.sokak.ui.MarkerIconFactory.getSelectedIcon(activity, uiKey)
+        );
+        highlightedMarker = marker;
+    }
+
+    public void startRepositionMode(@NonNull String markerId) {
+        // markerId → Google Maps Marker bul
+        Marker m = findMarkerById(markerId); // ↓ aşağıda yardımcıyı ekledik
+        if (m == null) {
+            toast("Marker bulunamadı");
+            return;
+        }
+        // state
+        this.repositionMarkerId = markerId;
+        this.repositionMarker   = m;
+        this.originalPos        = m.getPosition();
+        this.isReposition       = true;
+        setMode(MapMode.REPOSITION);
+
+        // görsel/etkileşim
+        m.setDraggable(true);
+        // istersen seçili renk yap:
+        m.setIcon(com.kurmez.iyesi.umay.sokak.ui.MarkerIconFactory.getSelectedIcon(activity, "default"));
+
+        toast("Sürükleyin, çift dokunarak onaylayın. Tek dokunma: iptal");
+    }
+    // Yerleştirme (placement) ve yeniden konumlandırma (reposition) dokunmalarını tek yerden yönet
+    public boolean handleOverlayTouch(@NonNull MotionEvent e) {
+        // 1) YENİ NOKTA YERLEŞTİRME modu aktifse → placementDetector devrede
+        if (isPlacementMode()) {
+            if (placementDetector != null) placementDetector.onTouchEvent(e);
+            // Bu modda haritanın pan/zoom almasını istemiyoruz → olayı tüket
+            return true;
+        }
+
+        // 2) MEVCUT MARKER'I YENİDEN KONUMLANDIRMA (REPOSITION) modu aktifse
+        if (isReposition) {
+            if (gestureDetector != null) gestureDetector.onTouchEvent(e);
+
+            // (İsteğe bağlı) ekstra akışlar:
+            switch (e.getActionMasked()) {
+                case MotionEvent.ACTION_UP:
+                    // no-op; doubleTap/singleTap confirm/cancel için gestureDetector zaten bakıyor
+                    break;
+            }
+            // Reposition sırasında da haritayı kilitle → olayı tüket
+            return true;
+        }
+
+        // 3) Hiçbiri aktif değilse: harita serbest (pan/zoom/marker tıklamaları çalışsın)
+        return false;
+    }
+
+    private void confirmReposition() {
+        if (!isReposition || repositionMarker == null || repositionMarkerId == null) return;
+        LatLng p = repositionMarker.getPosition();
+
+        try {
+            JSONObject body = new JSONObject();
+            body.put("markerId", repositionMarkerId);
+            body.put("lat", p.latitude);
+            body.put("lng", p.longitude);
+
+            com.kurmez.iyesi.kurmes.utilities.Helpers.authorizedPostJson(
+                    activity,
+                    CF_BASE + "/markerUpdate",  // UmayAna.js’de lat/lng güncelleyen uç
+                    body,
+                    /*deviceId*/ null,
+                    /*includeAppCheck*/ true,
+                    new Callback() {
+                        @Override public void onFailure(Call call, java.io.IOException e) {
+                            activity.runOnUiThread(() -> toast("Konum güncellenemedi: " + e.getMessage()));
+                        }
+                        @Override public void onResponse(Call call, Response response) throws java.io.IOException {
+                            activity.runOnUiThread(() -> {
+                                if (response.isSuccessful()) {
+                                    toast("Konum güncellendi ✓");
+                                    exitReposition(true);
+                                } else {
+                                    toast("HTTP " + response.code());
+                                    // başarısızsa geri al
+                                    exitReposition(false);
+                                }
+                            });
+                        }
+                    });
+        } catch (org.json.JSONException ignore) {
+            toast("İstek hazırlanamıyor");
+        }
+    }
+
+    private void cancelReposition() {
+        if (!isReposition) return;
+        // geri al ve çık
+        exitReposition(false);
+    }
+
+    private void exitReposition(boolean keepNewPos) {
+        if (repositionMarker != null) {
+            repositionMarker.setDraggable(false);
+            if (!keepNewPos && originalPos != null) {
+                repositionMarker.setPosition(originalPos);
+            }
+            // rengini eski haline getir (istenirse):
+            repositionMarker.setIcon(com.kurmez.iyesi.umay.sokak.ui.MarkerIconFactory.getDefaultIcon(activity, "default"));
+        }
+        isReposition = false;
+        repositionMarkerId = null;
+        repositionMarker = null;
+        originalPos = null;
+        setMode(MapMode.DEFAULT);
+    }
+    private com.google.android.gms.maps.model.Marker findMarkerById(@androidx.annotation.NonNull String markerId) {
+        return markerById.get(markerId);
+    }
+
+    // Harita içindeki marker’ı id’den bulmak için (sizde farklıysa uyarlayın)
+
+
+    private void toast(String s) {
+        android.widget.Toast.makeText(activity, s, android.widget.Toast.LENGTH_SHORT).show();
+    }
+    // Bir marker’ı map’e kaydet (tag’i de ayarla)
+    public void registerMarker(@androidx.annotation.NonNull String markerId,
+                               @androidx.annotation.NonNull com.google.android.gms.maps.model.Marker marker) {
+        marker.setTag(markerId);
+        markerById.put(markerId, marker);
+    }
+
+    // Marker’ı map’ten çıkar (istenirse haritadan da sil)
+    public void unregisterMarker(@androidx.annotation.NonNull String markerId, boolean removeFromMap) {
+        com.google.android.gms.maps.model.Marker m = markerById.remove(markerId);
+        if (removeFromMap && m != null) m.remove();
+    }
+
+    // Pozisyon güncelleme yardımcı (UI tarafında gerektiğinde kullanılır)
+    public void updateMarkerPosition(@androidx.annotation.NonNull String markerId,
+                                     @androidx.annotation.NonNull com.google.android.gms.maps.model.LatLng pos) {
+        com.google.android.gms.maps.model.Marker m = markerById.get(markerId);
+        if (m != null) m.setPosition(pos);
+    }
+    // İkonu başlat
+    public void setMyLocationIconEnabled(boolean enable) {
+        if (enable) startMyLocationPuck();
+        else        stopMyLocationPuck();
+    }
+
+    @SuppressLint("MissingPermission")
+    private void startMyLocationPuck() {
+        // İzin kontrolü
+        if (ActivityCompat.checkSelfPermission(activity, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED &&
+                ActivityCompat.checkSelfPermission(activity, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            toast("Konum izni gerekli");
+            return;
+        }
+        // Zaten çalışıyorsa tekrar kurma
+        if (myLocCallback != null) return;
+
+        // İlk fix’te kamerayı yumuşakça ortala
+        myLocFirstFixCentered = false;
+
+        // LocationRequest
+        com.google.android.gms.location.LocationRequest req =
+                com.google.android.gms.location.LocationRequest.create()
+                        .setInterval(2000L)
+                        .setFastestInterval(1000L)
+                        .setPriority(com.google.android.gms.location.Priority.PRIORITY_HIGH_ACCURACY);
+
+        myLocCallback = new com.google.android.gms.location.LocationCallback() {
+            @Override
+            public void onLocationResult(com.google.android.gms.location.LocationResult result) {
+                if (result == null || result.getLastLocation() == null) return;
+                android.location.Location loc = result.getLastLocation();
+                LatLng p = new LatLng(loc.getLatitude(), loc.getLongitude());
+
+                // Marker yoksa oluştur
+                if (myLocMarker == null) {
+                    myLocMarker = mMap.addMarker(new MarkerOptions()
+                            .position(p)
+                            .anchor(0.5f, 0.5f)
+                            .zIndex(1000f) // üste dursun
+                            .icon(myLocationIcon()));
+                } else {
+                    myLocMarker.setPosition(p);
+                }
+
+                // Accuracy çemberi
+                float acc = (loc.hasAccuracy() ? loc.getAccuracy() : 0f);
+                if (acc > 0f) {
+                    if (myAccCircle == null) {
+                        myAccCircle = mMap.addCircle(new com.google.android.gms.maps.model.CircleOptions()
+                                .center(p)
+                                .radius(acc) // metre
+                                .strokeWidth(2f)
+                                .strokeColor(0x662196F3) // yarı saydam mavi
+                                .fillColor(0x332196F3));
+                    } else {
+                        myAccCircle.setCenter(p);
+                        myAccCircle.setRadius(acc);
+                    }
+                }
+
+                // İlk konumda kamerayı tatlı bir animasyonla yakınlaştır
+                if (!myLocFirstFixCentered) {
+                    myLocFirstFixCentered = true;
+                    mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(p, 15.5f));
+                }
+            }
+        };
+
+        // Abone ol
+        locationClient.requestLocationUpdates(req, myLocCallback, activity.getMainLooper());
+    }
+
+    private void stopMyLocationPuck() {
+        if (myLocCallback != null) {
+            locationClient.removeLocationUpdates(myLocCallback);
+            myLocCallback = null;
+        }
+        if (myLocMarker != null) { myLocMarker.remove(); myLocMarker = null; }
+        if (myAccCircle != null) { myAccCircle.remove(); myAccCircle = null; }
+    }
+    private BitmapDescriptor myLocationIcon() {
+        try {
+            // varsa kendi ikonunuz (örn: res/drawable/ic_my_location.xml)
+            Drawable d = ContextCompat.getDrawable(activity, R.drawable.ic_map_marker);
+            if (d != null) {
+                int sz = (int) (24 * activity.getResources().getDisplayMetrics().density + 0.5f);
+                Bitmap bmp = Bitmap.createBitmap(sz, sz, Bitmap.Config.ARGB_8888);
+                Canvas c = new Canvas(bmp);
+                d.setBounds(0, 0, sz, sz);
+                d.draw(c);
+                return BitmapDescriptorFactory.fromBitmap(bmp);
+            }
+        } catch (Throwable ignore) {}
+        // fallback: mavi marker
+        return BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE);
     }
 
     @androidx.annotation.Nullable

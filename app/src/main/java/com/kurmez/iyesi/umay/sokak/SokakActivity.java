@@ -30,7 +30,8 @@ import com.kurmez.iyesi.kurmes.Kurmes;
 import com.kurmez.iyesi.kurmes.utilities.MiniFabs;
 import com.kurmez.iyesi.kurmes.utilities.helper.Actions;
 
-public class SokakActivity extends FragmentActivity {
+public class SokakActivity extends FragmentActivity implements com.kurmez.iyesi.umay.sokak.ui.MarkerDetailsBottomSheet.Host {
+
     private FloatingActionButton selectedFab = null; // Track the selected FAB
     public Kurmes kurmes;
     private boolean isMarkerModeActive = false;
@@ -75,13 +76,12 @@ public class SokakActivity extends FragmentActivity {
 // Overlay kur
         touchOverlay = findViewById(R.id.map_overlay);
         if (touchOverlay != null) {
-                // Tünel mod: clickable=false → overlay kendi onTouchEvent'inde olayı tüketmez.
+            // Artık jestler map view’da; overlay olay almamalı
+            touchOverlay.setOnTouchListener(null);
             touchOverlay.setClickable(false);
-            touchOverlay.bringToFront(); // harita üstünde dursun
-                // Her zaman listener kalsın; Harita placement modunda TRUE döndürüp olayı tüketecek,
-                        // değilse FALSE dönüp alttaki haritaya akmasına izin verecek.
-            touchOverlay.setOnTouchListener((v, ev) -> harita.handleOverlayTouch(ev));
-            }
+            touchOverlay.setVisibility(View.GONE); // istersen tamamen kapat
+        }
+
     }
     private boolean ensureLoggedInOrGoLogin() {
         FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
@@ -293,4 +293,10 @@ public class SokakActivity extends FragmentActivity {
             //harita.setMode(Harita.MapMode.DEFAULT);
         }
     }    // 3.2. animateFAB() metodu: aç/kapa mantığı
+    @Override
+    public void onRequestMarkerReposition(@androidx.annotation.NonNull String markerId) {
+        if (harita != null) {
+            harita.startRepositionMode(markerId);
+        }
+    }
 }
