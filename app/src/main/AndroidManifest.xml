@@ -85,12 +85,6 @@
             android:name=".umay.sahiplendirme.Sahiplendirme"
             android:exported="false" />
         <activity
-            android:name=".kurmes.CameraCalibrationActivity"
-            android:configChanges="orientation|keyboardHidden|screenSize"
-            android:exported="false"
-            android:label="@string/title_activity_camera"
-            android:theme="@style/Theme.Iyesi.Fullscreen" />
-        <activity
             android:name=".kurmes.Kurmes"
             android:exported="false" />
         <activity

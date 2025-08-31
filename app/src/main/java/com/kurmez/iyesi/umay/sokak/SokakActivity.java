@@ -1,6 +1,7 @@
 package com.kurmez.iyesi.umay.sokak;
 
 import android.annotation.SuppressLint;
+import android.content.Intent;
 import android.graphics.Point;
 import android.os.Bundle;
 import android.view.GestureDetector;
@@ -20,7 +21,10 @@ import androidx.fragment.app.FragmentActivity;
 
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseUser;
 import com.google.maps.android.data.geojson.GeoJsonLayer;
+import com.kurmez.iyesi.Login;
 import com.kurmez.iyesi.R;
 import com.kurmez.iyesi.kurmes.Kurmes;
 import com.kurmez.iyesi.kurmes.utilities.MiniFabs;
@@ -59,70 +63,47 @@ public class SokakActivity extends FragmentActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_sokak);
         // 1) Animasyonları yükle
+        if (!ensureLoggedInOrGoLogin()) return;
+
         initializeSpinners();
         initializeFABs();
         // Yalnızca harita ile ilgili başlatmayı Harita sınıfına devret
         harita = new Harita(this);
+        harita.fetchMarkersNearby(null, 2500, 150);
+        harita.initGesture(this);  // YENİ: Harita kendi gesture’ını kurar
 
+// Overlay kur
         touchOverlay = findViewById(R.id.map_overlay);
-        gestureDetector = new GestureDetector(this, new GestureDetector.SimpleOnGestureListener() {
-            @Override
-            public boolean onDown(MotionEvent e) {
-                return true;
+        if (touchOverlay != null) {
+                // Tünel mod: clickable=false → overlay kendi onTouchEvent'inde olayı tüketmez.
+            touchOverlay.setClickable(false);
+            touchOverlay.bringToFront(); // harita üstünde dursun
+                // Her zaman listener kalsın; Harita placement modunda TRUE döndürüp olayı tüketecek,
+                        // değilse FALSE dönüp alttaki haritaya akmasına izin verecek.
+            touchOverlay.setOnTouchListener((v, ev) -> harita.handleOverlayTouch(ev));
             }
-
-            @Override
-            public void onLongPress(MotionEvent e) {
-                if (!isMarkerModeActive) {
-                    Point point = new Point((int) e.getX(), (int) e.getY());
-                    LatLng location = harita.screenPointToLatLng(point);
-                    harita.placeDraggableMarker(location);
-                    isMarkerModeActive = true;
-                }
-            }
-
-            @Override
-            public boolean onDoubleTap(MotionEvent e) {
-                if (isMarkerModeActive && harita.isMarkerActive()) {
-                    harita.confirmMarkerLocation();
-                    isMarkerModeActive = false;
-                    return true;
-                }
-                return false;
-            }
-
-            @Override
-            public boolean onSingleTapConfirmed(MotionEvent e) {
-                if (isMarkerModeActive && harita.isMarkerActive()) {
-                    harita.cancelMarkerPlacement();
-                    isMarkerModeActive = false;
-                    return true;
-                }
-                return false;
-            }
-        });
-
-        touchOverlay.setOnTouchListener((v, event) -> {
-            gestureDetector.onTouchEvent(event);
-
-            // Marker modu aktifse dokunma olayını tüketme (harita hareketlerine izin ver)
-            return false;
-        });
     }
-
+    private boolean ensureLoggedInOrGoLogin() {
+        FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
+        if (user == null) {
+            Toast.makeText(this, "Devam etmek için giriş yapmalısınız.", Toast.LENGTH_LONG).show();
+            startActivity(new Intent(this, Login.class));
+            finish();
+            return false;
+        }
+        return true;
+    }
     @Override
     public boolean dispatchTouchEvent(MotionEvent event) {
-        // 1. Önce mini FAB'ları kontrol et
-        if (miniFabs != null && miniFabs.handleOutsideTouch(event)) {
-            return true;
-        }
+        // Dışarı tıklamada miniFAB menüsünü kapatma (varsa)
+        if (miniFabs != null && miniFabs.handleOutsideTouch(event)) return true;
 
-        // 2. GestureDetector'ı çalıştır
-        gestureDetector.onTouchEvent(event);
+        // <-- ÖNEMLİ: gestureDetector KULLANMA!
+        // if (gestureDetector != null) gestureDetector.onTouchEvent(event); // SİL
 
-        // 3. Haritaya dokunma olayını ilet
         return super.dispatchTouchEvent(event);
     }
+
     private void initializeSpinners() {
         // Satırları saran LinearLayout referansları
         LinearLayout[] rows = {
@@ -244,13 +225,27 @@ public class SokakActivity extends FragmentActivity {
             fab.setOnClickListener(v -> {
                 // Highlight selection
                 miniFabs.selectFab((FloatingActionButton) v);
+                // initializeFABs() içinde, her miniFAB tıklamasında:
+                // FAB → Mod
+                int id = v.getId();
+                if (id == R.id.besleme_fab)      harita.setMode(Harita.MapMode.FEEDING);
+                else if (id == R.id.bolge_fab)   harita.setMode(Harita.MapMode.NEST);     // örn. “bölge”yi Yuva’ya eşliyorsan değiştir
+                else if (id == R.id.nakil_fab)   harita.setMode(Harita.MapMode.TASK);
+                // istersen burada actions.onFabClick(...) da çağrılabilir
+
+
+                 // Overlay kapısı placement modunda açık (dokunuşlar overlay'de yakalanıp haritaya gitmez)
+                if (touchOverlay != null) touchOverlay.setClickable(true);
+
                 // Your existing FAB-action logic:
-                actions.onFabClick((FloatingActionButton) v);
+                //actions.onFabClick((FloatingActionButton) v);   /* Burdaki aksyon yapısı daha sonra "Harita.java" dosyasını sadeleştirmede kullanılmalı */
             });
         }
     }
     private void animateFAB() {
         if (isFabOpen) {
+            if (touchOverlay != null) touchOverlay.setClickable(false);
+
             // Menü zaten açıksa: kapatma animasyonları
             mainFab.startAnimation(rotateBackwardAnim);
             beslemeFab.startAnimation(fabCloseAnim);
@@ -269,7 +264,8 @@ public class SokakActivity extends FragmentActivity {
             bolgeFab.setVisibility(View.GONE);
             nakilFab.setVisibility(View.GONE);
             soundFab.setVisibility(View.GONE);
-
+                  // Menü kapandı → placement modu kapansın → overlay tünel modunda kalır
+            harita.setMode(Harita.MapMode.DEFAULT);
             isFabOpen = false;
         } else {
             // Menü kapalıysa: açma animasyonları
@@ -293,6 +289,8 @@ public class SokakActivity extends FragmentActivity {
             soundFab.setClickable(true);
 
             isFabOpen = true;
+            // menü kapanırken (animateFAB() içinde kapatma dalında) en sona ekle:
+            //harita.setMode(Harita.MapMode.DEFAULT);
         }
     }    // 3.2. animateFAB() metodu: aç/kapa mantığı
 }

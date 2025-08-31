@@ -57,7 +57,7 @@ public class Messaging extends AppCompatActivity {
     private ConversationAdapter adapter;
     private List<Conversation> conversationList = new ArrayList<>();
     private FirebaseAuth auth;
-    private FirebaseUser user;
+    private FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
     private String idToken;
     private final OkHttpClient httpClient = new OkHttpClient.Builder().addInterceptor(chain -> {
         Request req = chain.request();
@@ -72,7 +72,12 @@ public class Messaging extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_inbox);
-
+        if (user == null) {
+            Toast.makeText(this, "Devam etmek için giriş yapmalısınız.", Toast.LENGTH_LONG).show();
+            startActivity(new Intent(this, Login.class));
+            finish();
+            return;
+        }
         auth = FirebaseAuth.getInstance();
         functions = FirebaseFunctions.getInstance();
 
@@ -192,6 +197,28 @@ public class Messaging extends AppCompatActivity {
 
     // ➍ Manual HTTP çağrısıyla kullanıcı listesini JSON’dan ayrıştır
     private void loadAllUsersIntoConversations() {
+            org.json.JSONObject empty = new org.json.JSONObject(); // {} body
+            Helpers.authorizedPostJson(
+                    this,
+                    CF_ALL_USERS, // https://us-central1-iyesi-a651a.cloudfunctions.net/listAllUsersHttp
+                    empty,
+                    null,
+                    true,
+                    new okhttp3.Callback() {
+                        @Override public void onFailure(okhttp3.Call call, java.io.IOException e) { /* ... */ }
+                        @Override public void onResponse(okhttp3.Call call, okhttp3.Response response) throws java.io.IOException {
+                            String body = response.body()!=null ? response.body().string() : "";
+                            runOnUiThread(() -> {
+                                if (!response.isSuccessful()) { /* ... */ return; }
+                                try {
+                                    java.util.List<com.kurmez.iyesi.kurmes.social.Profile> list = Helpers.parseProfiles(body);
+                                    // ... listeyi UI’ya bas ...
+                                } catch (org.json.JSONException ex) {
+                                    Toast.makeText(Messaging.this, "Veri işlenirken hata oluştu", Toast.LENGTH_SHORT).show();
+                                }
+                            });
+                        }
+                    });
         user.getIdToken(false).addOnSuccessListener(tknResult -> {
             String idToken = tknResult.getToken();
             RequestBody emptyBody = RequestBody.create("{}", MediaType.parse("application/json"));
@@ -247,6 +274,29 @@ public class Messaging extends AppCompatActivity {
     }
     // ➌ getRoleFunction ile rolü alıp, yetkiliyse HTTP isteğini yap
     private void checkRoleAndLoadUsers() {
+        // JSON gövdeyi güvenle hazırla
+        org.json.JSONObject body = new org.json.JSONObject();
+        try {
+            body.put("data", new org.json.JSONObject());
+        } catch (org.json.JSONException e) {
+            runOnUiThread(() ->
+                    android.widget.Toast.makeText(
+                            Messaging.this, "JSON hazırlama hatası: " + e.getMessage(),
+                            android.widget.Toast.LENGTH_LONG
+                    ).show()
+            );
+            return; // gövde hazırlanmadan istek yapma
+        }
+        Helpers.authorizedPostJson(
+                    this,
+                    "https://us-central1-iyesi-a651a.cloudfunctions.net/getRole",
+                    body,
+                    /*deviceId*/ null,
+                    /*includeAppCheck*/ true,
+                    new okhttp3.Callback() {
+                        @Override public void onFailure(okhttp3.Call call, java.io.IOException e) { /* ... */ }
+                        @Override public void onResponse(okhttp3.Call call, okhttp3.Response response) throws java.io.IOException { /* ... */ }
+                    });
         Helpers.getRoleFunction()
                 .addOnSuccessListener(role -> {
                     if ("Ülgen".equals(role) || "Tengri".equals(role)) {

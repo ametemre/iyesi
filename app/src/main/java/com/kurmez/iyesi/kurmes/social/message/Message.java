@@ -1,5 +1,6 @@
 package com.kurmez.iyesi.kurmes.social.message;
 
+import android.content.Intent;
 import android.os.Bundle;
 import com.google.firebase.appcheck.AppCheckToken;
 import com.google.firebase.appcheck.FirebaseAppCheck;
@@ -24,6 +25,7 @@ import com.google.firebase.appcheck.FirebaseAppCheck;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.auth.GetTokenResult;
+import com.kurmez.iyesi.Login;
 import com.kurmez.iyesi.R;
 import com.kurmez.iyesi.kurmes.utilities.Helpers;
 import com.kurmez.iyesi.kurmes.utilities.PrivateCom;
@@ -52,6 +54,8 @@ import okhttp3.RequestBody;
 import okhttp3.Response;
 
 public class Message extends AppCompatActivity {
+    private FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
+    private static final String GW_PREFIX = "/v1"; // basePath yoksa "" yap
     public static final String EXTRA_MODE = "mode"; // "bluetooth" veya "blockchain"
     public static final String MODE_BLUETOOTH = "bluetooth";
     public static final String MODE_BLOCKCHAIN = "blockchain";
@@ -62,6 +66,7 @@ public class Message extends AppCompatActivity {
     private static final String CF_URL = "https://us-central1-iyesi-a651a.cloudfunctions.net/appSend";
     private static final String BASE = "https://iye-gw-5bszr9sz.uc.gateway.dev"; // Gateway hostname
     private static final MediaType JSON = MediaType.parse("application/json; charset=utf-8");
+    private static String gwUrl(String path){ return BASE + GW_PREFIX + path; }
 
     // (İsterseniz tekil (singleton) client tutun)
     private final OkHttpClient httpClient = new OkHttpClient.Builder()
@@ -93,7 +98,6 @@ public class Message extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_messaging);
-        FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
         if (user == null) {
             Log.i("Kullanıcı oturumu yok","Giriş Yap");
             return;
@@ -108,7 +112,12 @@ public class Message extends AppCompatActivity {
         // ➋ Header’daki kullanıcı adını set et
         TextView headerName = findViewById(R.id.tvUsername);
         headerName.setText(targetUserName != null ? targetUserName : "Konuşma");
-
+        if (user == null) {
+            Toast.makeText(this, "Devam etmek için giriş yapmalısınız.", Toast.LENGTH_LONG).show();
+            startActivity(new Intent(this, Login.class));
+            finish();
+            return;
+        }
         // ➌ View’ları bağla
         rvMessages = findViewById(R.id.rvMessages);
         etMessage  = findViewById(R.id.etMessage);
@@ -238,6 +247,7 @@ public class Message extends AppCompatActivity {
 
             Request request = new Request.Builder()
                     // OpenAPI'nizde basePath '/v1' ise "/v1/appSend" kullanın.
+                    .url(gwUrl("/appSend"))
                     .url(BASE + "/appSend")
                     .post(body)
 
