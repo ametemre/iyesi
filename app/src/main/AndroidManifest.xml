@@ -86,7 +86,9 @@
             android:exported="false" />
         <activity
             android:name=".kurmes.Kurmes"
-            android:exported="false" />
+            android:exported="true"
+            android:enabled="@bool/feature_kurmes_enabled"
+            android:label="@string/app_name" />
         <activity
             android:name=".kurmes.Kurmes_dummy"
             android:exported="false" />

@@ -14,6 +14,7 @@ import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.functions.FirebaseFunctions;
 import com.google.firebase.functions.HttpsCallableResult;
+import com.kurmez.iyesi.kurmes.utilities.Helpers;
 import com.kurmez.iyesi.umay.sahiplendirme.Welcome;
 
 import java.util.HashMap;
@@ -44,7 +45,7 @@ public class Register extends AppCompatActivity {
         // Intent extras’tan alınır
         deviceId = getIntent().getStringExtra("deviceId");
         if (deviceId == null) {
-            Toast.makeText(this, "Eksik parameter: deviceId", Toast.LENGTH_LONG).show();
+            Helpers.showToastSafe(this, "Eksik parameter: deviceId");
             finish();
             return;
         }

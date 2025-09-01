@@ -38,6 +38,7 @@ import com.google.firebase.functions.FirebaseFunctions;
 import com.kurmez.iyesi.kurmes.social.Profile;
 import com.kurmez.iyesi.kurmes.utilities.Helpers;
 import com.kurmez.iyesi.kurmes.utilities.PrivateCom;
+import com.kurmez.iyesi.kurmes.utilities.helper.CFHelper;
 
 import org.json.JSONException;
 
@@ -58,7 +59,9 @@ public class Messaging extends AppCompatActivity {
     private List<Conversation> conversationList = new ArrayList<>();
     private FirebaseAuth auth;
     private FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
-    private String idToken;
+    private CFHelper cf;
+
+
     private final OkHttpClient httpClient = new OkHttpClient.Builder().addInterceptor(chain -> {
         Request req = chain.request();
         Log.d("HTTP-REQ", req.method() + " " + req.url());
@@ -72,6 +75,7 @@ public class Messaging extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_inbox);
+
         if (user == null) {
             Toast.makeText(this, "Devam etmek için giriş yapmalısınız.", Toast.LENGTH_LONG).show();
             startActivity(new Intent(this, Login.class));
@@ -79,8 +83,7 @@ public class Messaging extends AppCompatActivity {
             return;
         }
         auth = FirebaseAuth.getInstance();
-        functions = FirebaseFunctions.getInstance();
-
+        cf = new CFHelper(this, "iyesi-a651a", new CFHelper.Listener(){});
         rvConversations = findViewById(R.id.rvConversations);
         adapter = new ConversationAdapter(conversationList, this);
         rvConversations.setLayoutManager(new LinearLayoutManager(this));
@@ -95,13 +98,37 @@ public class Messaging extends AppCompatActivity {
         }
         conversationList.clear();
 
-        // ➋ Token’ı yenile, sonra rol kontrolü ve yükleme
-        user.getIdToken(true)
-                .addOnSuccessListener(tkn -> checkRoleAndLoadUsers())
-                .addOnFailureListener(e -> {
-                    Log.e("Messaging", "Token yenileme hatası", e);
-                    Toast.makeText(this, "Token yenilenemedi.", Toast.LENGTH_SHORT).show();
-                });
+        // Rolü (sunucudan) tazele ve UI kapısını uygula
+        new Thread(() -> {
+            String role = cf.refreshRole(); // CFHelper içinde HTTP POST /getRole çağrısı
+            runOnUiThread(() -> {
+                if ("Ülgen".equals(role) || "Tengri".equals(role)) {
+                    // Listeyi CF üzerinden çek
+                    cf.listAllUsers(/*limit=*/200, /*pageToken=*/null, new CFHelper.UsersCallback() {
+                        @Override public void onSuccess(java.util.List<com.kurmez.iyesi.kurmes.social.Profile> users) {
+                            // Profile → Conversation
+                            conversationList.clear();
+                            for (com.kurmez.iyesi.kurmes.social.Profile p : users) {
+                                conversationList.add(new Conversation(
+                                        p.getUid(),            // userId
+                                        p.getUsername(),       // username
+                                        p.getAvatarUrl(),       // profileUrl
+                                        p.getEmail(),          // lastMessage alanını geçici email ile dolduruyoruz
+                                        false
+                                ));
+                            }
+                            adapter.notifyDataSetChanged();
+                        }
+                        @Override public void onError(Throwable error) {
+                            Log.e("Messaging", "Kullanıcı listesi hatası", error);
+                            Helpers.showToastSafe(Messaging.this, "Kullanıcı listesi alınamadı");
+                        }
+                    });
+                } else {
+                    Toast.makeText(this, "Bu işlemi sadece Ülgen ve Tengri yapabilir.", Toast.LENGTH_LONG).show();
+                }
+            });
+        }).start();
         // Swipe işlemleri
         ItemTouchHelper.SimpleCallback swipeCallback = new ItemTouchHelper.SimpleCallback(0, ItemTouchHelper.LEFT | ItemTouchHelper.RIGHT) {
             @Override
@@ -193,126 +220,6 @@ public class Messaging extends AppCompatActivity {
         });
         new ItemTouchHelper(swipeCallback).attachToRecyclerView(rvConversations);
 
-    }
-
-    // ➍ Manual HTTP çağrısıyla kullanıcı listesini JSON’dan ayrıştır
-    private void loadAllUsersIntoConversations() {
-            org.json.JSONObject empty = new org.json.JSONObject(); // {} body
-            Helpers.authorizedPostJson(
-                    this,
-                    CF_ALL_USERS, // https://us-central1-iyesi-a651a.cloudfunctions.net/listAllUsersHttp
-                    empty,
-                    null,
-                    true,
-                    new okhttp3.Callback() {
-                        @Override public void onFailure(okhttp3.Call call, java.io.IOException e) { /* ... */ }
-                        @Override public void onResponse(okhttp3.Call call, okhttp3.Response response) throws java.io.IOException {
-                            String body = response.body()!=null ? response.body().string() : "";
-                            runOnUiThread(() -> {
-                                if (!response.isSuccessful()) { /* ... */ return; }
-                                try {
-                                    java.util.List<com.kurmez.iyesi.kurmes.social.Profile> list = Helpers.parseProfiles(body);
-                                    // ... listeyi UI’ya bas ...
-                                } catch (org.json.JSONException ex) {
-                                    Toast.makeText(Messaging.this, "Veri işlenirken hata oluştu", Toast.LENGTH_SHORT).show();
-                                }
-                            });
-                        }
-                    });
-        user.getIdToken(false).addOnSuccessListener(tknResult -> {
-            String idToken = tknResult.getToken();
-            RequestBody emptyBody = RequestBody.create("{}", MediaType.parse("application/json"));
-            Request request = new Request.Builder()
-                    .url(CF_ALL_USERS)
-                    .post(emptyBody)
-                    .addHeader("Authorization", "Bearer " + idToken)
-                    .build();
-
-            httpClient.newCall(request).enqueue(new Callback() {
-                @Override
-                public void onFailure(Call call, IOException e) {
-                    Log.e("HTTP-ERROR", "İstek başarısız: " + e.getMessage());
-                    runOnUiThread(() ->
-                            Toast.makeText(Messaging.this,
-                                    "Sunucuya bağlanılamadı", Toast.LENGTH_SHORT).show()
-                    );
-                }
-                @Override
-                public void onResponse(Call call, Response response) throws IOException {
-                    String body = response.body() != null ? response.body().string() : "";
-                    Log.d("HTTP-RESPONSE", "Response: " + body);
-                    runOnUiThread(() -> {
-                        if (!response.isSuccessful()) {
-                            Toast.makeText(Messaging.this,
-                                    "Sunucu hatası: " + response.code(), Toast.LENGTH_SHORT).show();
-                            return;
-                        }
-                        try {
-                            List<Profile> list = Helpers.parseProfiles(body);
-                            Log.d("Messaging", "Parsed users: " + list.size());
-                            for (Profile p : list) {
-                                // örn: sohbet ögesine username veya email koy
-                                conversationList.add(new Conversation(
-                                        p.getUid(),
-                                        p.getUsername(),
-                                        null,
-                                        p.getEmail(),
-                                        false
-                                ));
-                                Log.d("Messaging", "Total conversations: " + conversationList.size());
-                            }
-                            adapter.notifyDataSetChanged();
-                        } catch (JSONException ex) {
-                            Log.e("HTTP-PARSE", "JSON ayrıştırma hatası", ex);
-                            Toast.makeText(Messaging.this,
-                                    "Veri işlenirken hata oluştu", Toast.LENGTH_SHORT).show();
-                        }
-                    });
-                }
-            });
-        });
-    }
-    // ➌ getRoleFunction ile rolü alıp, yetkiliyse HTTP isteğini yap
-    private void checkRoleAndLoadUsers() {
-        // JSON gövdeyi güvenle hazırla
-        org.json.JSONObject body = new org.json.JSONObject();
-        try {
-            body.put("data", new org.json.JSONObject());
-        } catch (org.json.JSONException e) {
-            runOnUiThread(() ->
-                    android.widget.Toast.makeText(
-                            Messaging.this, "JSON hazırlama hatası: " + e.getMessage(),
-                            android.widget.Toast.LENGTH_LONG
-                    ).show()
-            );
-            return; // gövde hazırlanmadan istek yapma
-        }
-        Helpers.authorizedPostJson(
-                    this,
-                    "https://us-central1-iyesi-a651a.cloudfunctions.net/getRole",
-                    body,
-                    /*deviceId*/ null,
-                    /*includeAppCheck*/ true,
-                    new okhttp3.Callback() {
-                        @Override public void onFailure(okhttp3.Call call, java.io.IOException e) { /* ... */ }
-                        @Override public void onResponse(okhttp3.Call call, okhttp3.Response response) throws java.io.IOException { /* ... */ }
-                    });
-        Helpers.getRoleFunction()
-                .addOnSuccessListener(role -> {
-                    if ("Ülgen".equals(role) || "Tengri".equals(role)) {
-                        loadAllUsersIntoConversations();
-                    } else {
-                        Toast.makeText(this,
-                                "Bu işlemi sadece Ülgen ve Tengri yapabilir.",
-                                Toast.LENGTH_LONG).show();
-                    }
-                })
-                .addOnFailureListener(e -> {
-                    Log.e("Messaging", "Rol çekme hatası", e);
-                    Toast.makeText(this,
-                            "Rol bilgisi alınamadı: " + e.getMessage(),
-                            Toast.LENGTH_LONG).show();
-                });
     }
     // Demo - Bluetooth mesajlaşma aç (gerçekte kendi fonksiyonunu çağırabilirsin)
     @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)

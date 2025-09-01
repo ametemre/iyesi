@@ -1,6 +1,11 @@
 package com.kurmez.iyesi.umay.sahiplendirme;
 
+import androidx.annotation.Nullable;
+
 import com.google.firebase.firestore.Exclude;
+
+import org.json.JSONObject;
+
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
@@ -160,6 +165,40 @@ public class Soul implements Serializable {
         this.createdAt = createdAt;
         this.mediaUrls = mediaUrls != null ? mediaUrls : new ArrayList<>();
     }
+
+    @Nullable
+    public static Soul fromJson(JSONObject o) {
+        if (o == null) return null;
+
+        // Bazı durumlarda { soul:{...} } şeklinde gelebilir
+        JSONObject src = o.optJSONObject("soul");
+        if (src == null) src = o;
+
+        String species       = src.optString("species", "");
+        String breed         = src.optString("breed", "");
+        String age           = src.optString("age", "");
+        String health        = src.optString("health", "");
+        String foundDate     = src.optString("foundDate", "");
+        String foundLocation = src.optString("foundLocation", "");
+        String imageResId    = src.optString("imageResId", src.optString("imageUrl", ""));
+        String finderName    = src.optString("finderName", src.optString("finder", ""));
+        long   timestamp     = src.optLong("timestamp", src.optLong("createdAt", 0L));
+
+        // Hiç anlamlı veri yoksa null döndür (ExplorePrivate fallback'ını tetikler)
+        boolean empty = species.isEmpty() && breed.isEmpty() && age.isEmpty()
+                && health.isEmpty() && foundDate.isEmpty() && foundLocation.isEmpty()
+                && imageResId.isEmpty() && finderName.isEmpty() && timestamp == 0L;
+        if (empty) return null;
+
+        return new Soul(
+                /*name*/ null,
+                species, breed, age, health,
+                foundDate, foundLocation,
+                /*veterinary*/ null,
+                imageResId, finderName, timestamp
+        );
+    }
+
 
 
     // -----------------------------

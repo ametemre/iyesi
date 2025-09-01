@@ -48,7 +48,7 @@ public class Explore extends AppCompatActivity {
         auth = FirebaseAuth.getInstance();
         user = auth.getCurrentUser();
         if (user == null) {
-            Toast.makeText(this, "Lütfen önce giriş yapın.", Toast.LENGTH_LONG).show();
+            Helpers.showToastSafe(this, "Lütfen önce giriş yapın.");
             finish();
             return;
         }
@@ -71,7 +71,7 @@ public class Explore extends AppCompatActivity {
                     .addOnSuccessListener(role -> {
                         if (role == null) {
                             // Hata veya rol atanmadı, uyarı göster
-                            Toast.makeText(this, "Rol atanmadı!", Toast.LENGTH_SHORT).show();
+                            Helpers.showToastSafe(this, "Rol atanmadı!");
                             finish();
                             return;
                         }

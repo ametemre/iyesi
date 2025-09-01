@@ -8,10 +8,10 @@ android {
     compileSdk 35
     defaultConfig {
         applicationId "com.kurmez.iyesi"
-        minSdk 30
+        minSdk 26
         //noinspection EditedTargetSdkVersion
         targetSdk 36
-        versionCode 5
+        versionCode 6
         versionName "Alfa"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"

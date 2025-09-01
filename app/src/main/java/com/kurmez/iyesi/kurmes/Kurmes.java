@@ -37,6 +37,7 @@ import android.widget.TextView;
 
 import com.kurmez.iyesi.kurmes.utilities.Ai.Ai;
 import com.kurmez.iyesi.kurmes.utilities.MiniFabs;
+import com.kurmez.iyesi.umay.sokak.SokakActivity;
 
 import org.opencv.android.CameraActivity;
 import org.opencv.android.OpenCVLoader;
@@ -179,6 +180,12 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
         Log.i(TAG, "called Kurmes onCreate");
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_kurmes);
+        if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.R) {
+            // API 30 altı → Kurmes’i pas geç, SokakActivity’e yönlendir
+            startActivity(new Intent(this, SokakActivity.class /* paket adını sizde farklıysa güncelleyin*/));
+            finish();
+            return;
+        }
         /*
         // izinler
         // 1) helper’ı oluştur, 2) activity ve callback ata,

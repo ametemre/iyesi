@@ -11,6 +11,7 @@ import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.google.firebase.auth.FirebaseAuth;
+import com.kurmez.iyesi.kurmes.utilities.Helpers;
 import com.kurmez.iyesi.umay.sahiplendirme.Welcome;
 
 public class Login extends AppCompatActivity {
@@ -70,10 +71,10 @@ public class Login extends AppCompatActivity {
                         startActivity(intent);
                         finish();
 
-                        Toast.makeText(Login.this, "Login successful", Toast.LENGTH_SHORT).show();
+                        Helpers.showToastSafe(Login.this, "Login successful");
                     } else {
                         // Show error message
-                        Toast.makeText(Login.this, "Login failed: " + task.getException().getMessage(), Toast.LENGTH_LONG).show();
+                        Helpers.showToastSafe(Login.this, "Login failed: " + task.getException().getMessage());
                     }
                 });
     }

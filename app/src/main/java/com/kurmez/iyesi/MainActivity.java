@@ -23,6 +23,7 @@ import com.google.zxing.BarcodeFormat;
 import com.google.zxing.WriterException;
 import com.journeyapps.barcodescanner.BarcodeEncoder;
 import com.kurmez.iyesi.kurmes.Kurmes;
+import com.kurmez.iyesi.kurmes.utilities.Helpers;
 import com.kurmez.iyesi.umay.sahiplendirme.Welcome;
 
 import java.io.IOException;
@@ -147,11 +148,11 @@ public class MainActivity extends AppCompatActivity {
                     .call(payload)
                     .addOnSuccessListener(result -> {
                         privateCom.sendResponseToBluetoothDevice(this, String.valueOf(resultCode));
-                        Toast.makeText(this, "Registration completed on-chain", Toast.LENGTH_SHORT).show();
+                        Helpers.showToastSafe(this, "Registration completed on-chain");
                         navigateToWelcome();
                     })
                     .addOnFailureListener(e -> {
-                        Toast.makeText(this, "Registration failed: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                        Helpers.showToastSafe(this, "Registration failed: " + e.getMessage());
                     });
         }
     }

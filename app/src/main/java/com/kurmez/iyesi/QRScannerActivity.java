@@ -11,6 +11,7 @@ import androidx.appcompat.app.AppCompatActivity;
 import com.google.firebase.functions.FirebaseFunctions;
 import com.google.zxing.integration.android.IntentIntegrator;
 import com.google.zxing.integration.android.IntentResult;
+import com.kurmez.iyesi.kurmes.utilities.Helpers;
 
 import java.util.Map;
 
@@ -67,21 +68,21 @@ public class QRScannerActivity extends AppCompatActivity {
 
                             setResult(RESULT_OK, intent);
                             // Display a toast for feedback
-                            Toast.makeText(this, "QR Scanned: " + GuestID, Toast.LENGTH_SHORT).show();
+                            Helpers.showToastSafe(this, "QR Scanned: " + GuestID);
                         })
                         .addOnFailureListener(e ->{
-                            Toast.makeText(this, "Registration failed: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                            Helpers.showToastSafe(this, "Registration failed: " + e.getMessage());
                         });
                 finish();
             } else {
                 // No QR data scanned
-                Toast.makeText(this, "No QR Code detected!", Toast.LENGTH_SHORT).show();
+                Helpers.showToastSafe(this, "No QR Code detected!");
                 setResult(RESULT_CANCELED);
                 finish();
             }
         } else {
             // Handle case where scanning didn't start or user canceled
-            Toast.makeText(this, "Scan canceled or failed!", Toast.LENGTH_SHORT).show();
+            Helpers.showToastSafe(this, "Scan canceled or failed!");
             setResult(RESULT_CANCELED);
             finish();
         }

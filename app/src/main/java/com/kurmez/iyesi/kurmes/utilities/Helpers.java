@@ -244,6 +244,21 @@ public class Helpers {
             }
         });
     }
+    @Nullable
+    private static String toAsciiRole(@NonNull String s) {
+        String mapped = s
+                .replace('Ç','C').replace('ç','c')
+                .replace('Ğ','G').replace('ğ','g')
+                .replace('İ','I').replace('ı','i')
+                .replace('Ö','O').replace('ö','o')
+                .replace('Ş','S').replace('ş','s')
+                .replace('Ü','U').replace('ü','u');
+        for (int i = 0; i < mapped.length(); i++) {
+            char c = mapped.charAt(i);
+            if (c < 0x20 || c > 0x7E) return null; // ASCII dışı karakter varsa header eklemeyelim
+        }
+        return mapped;
+    }
 
     /* ===================== Yeni: Marker Uçları için sarmalayıcı ===================== */
 
