@@ -1,4 +1,4 @@
-package com.kurmez.iyesi.umay.sahiplendirme;
+package com.kurmez.iyesi.kayra.Classes;
 
 public class MissingPet {
     private String petName;

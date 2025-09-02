@@ -28,7 +28,7 @@ import com.kurmez.iyesi.kurmes.social.Profile;
 import com.kurmez.iyesi.kurmes.utilities.Helpers;
 import com.kurmez.iyesi.kurmes.utilities.adapters.ContentAdapter;
 import com.kurmez.iyesi.kurmes.utilities.helper.CFHelper;
-import com.kurmez.iyesi.umay.sahiplendirme.Soul;
+import com.kurmez.iyesi.kayra.Classes.Soul;
 
 import org.json.JSONArray;
 import org.json.JSONObject;

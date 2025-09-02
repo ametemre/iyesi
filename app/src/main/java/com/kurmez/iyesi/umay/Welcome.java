@@ -1,4 +1,4 @@
-package com.kurmez.iyesi.umay.sahiplendirme;
+package com.kurmez.iyesi.umay;
 
 
 
@@ -21,6 +21,7 @@ import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 import com.kurmez.iyesi.Login;
 import com.kurmez.iyesi.R;
+import com.kurmez.iyesi.kayra.Classes.Soul;
 import com.kurmez.iyesi.kurmes.social.content.Explore;
 import com.kurmez.iyesi.kurmes.social.content.ExplorePrivate;
 import com.kurmez.iyesi.kurmes.social.message.Messaging;
@@ -28,18 +29,11 @@ import com.kurmez.iyesi.kurmes.utilities.Helpers;
 import com.kurmez.iyesi.kurmes.utilities.adapters.CompanionAdapter;
 import com.kurmez.iyesi.kurmes.utilities.helper.CFHelper;
 
-import org.json.JSONArray;
-import org.json.JSONObject;
-
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
-import okhttp3.Call;
-import okhttp3.Callback;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
-import okhttp3.Response;
 
 public class Welcome extends AppCompatActivity {
     private static final String TAG = "WelcomeActivity";
@@ -143,7 +137,7 @@ public class Welcome extends AppCompatActivity {
             Toast.makeText(this, "Selected: " + selectedCompanion.getBreed(), Toast.LENGTH_SHORT).show();
 
             // Navigate to Companion activity with the selected item's data
-            Intent intent = new Intent(Welcome.this, Companion.class);
+            Intent intent = new Intent(Welcome.this, com.kurmez.iyesi.umay.sahiplendirme.Companion.class);
             intent.putExtra("species", selectedCompanion.getBreed());
             intent.putExtra("foundDate", selectedCompanion.getFoundDate());
             intent.putExtra("foundPlace", selectedCompanion.getFoundLocation());

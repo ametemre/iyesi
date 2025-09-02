@@ -31,7 +31,7 @@ import com.google.firebase.auth.FirebaseAuth;
 import com.kurmez.iyesi.umay.sahiplendirme.Founded;
 import com.kurmez.iyesi.Login;
 import com.kurmez.iyesi.R;
-import com.kurmez.iyesi.umay.sahiplendirme.Welcome;
+import com.kurmez.iyesi.umay.Welcome;
 
 import android.Manifest;
 import android.animation.ValueAnimator;

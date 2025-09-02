@@ -7,7 +7,7 @@ import android.widget.Toast;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.auth.GetTokenResult;
-import com.kurmez.iyesi.umay.sahiplendirme.Soul;
+import com.kurmez.iyesi.kayra.Classes.Soul;
 
 import org.json.JSONObject;
 

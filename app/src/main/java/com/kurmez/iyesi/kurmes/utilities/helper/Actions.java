@@ -9,7 +9,7 @@ import android.util.Log;
 
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.kurmez.iyesi.R;
-import com.kurmez.iyesi.umay.sokak.SokakActivity;
+import com.kurmez.iyesi.umay.SokakActivity;
 import com.kurmez.iyesi.kurmes.utilities.Ai.Ai;
 import com.kurmez.iyesi.kurmes.utilities.Helpers;
 import com.kurmez.iyesi.kurmes.utilities.MiniFabs;

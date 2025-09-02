@@ -1,7 +1,6 @@
 package com.kurmez.iyesi.kurmes.utilities.helper;
 
 import android.content.Context;
-import android.text.TextUtils;
 import android.util.Log;
 
 import androidx.annotation.NonNull;
@@ -12,18 +11,11 @@ import com.google.firebase.appcheck.AppCheckToken;
 import com.google.firebase.appcheck.FirebaseAppCheck;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
-import com.google.firebase.database.DataSnapshot;
-import com.google.firebase.database.DatabaseError;
 import com.google.firebase.database.DatabaseReference;
-import com.google.firebase.database.FirebaseDatabase;
-import com.google.firebase.database.Query;
-import com.google.firebase.database.ValueEventListener;
 import com.google.firebase.functions.FirebaseFunctions;
 import com.google.firebase.functions.HttpsCallableReference;
 import com.kurmez.iyesi.kurmes.social.Profile;
-import com.kurmez.iyesi.kurmes.social.content.ExplorePrivate;
-import com.kurmez.iyesi.kurmes.utilities.Helpers;
-import com.kurmez.iyesi.umay.sahiplendirme.Soul;
+import com.kurmez.iyesi.kayra.Classes.Soul;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -33,7 +25,6 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.Deque;
 import java.util.HashMap;
@@ -50,8 +41,6 @@ import okhttp3.RequestBody;
 import okhttp3.Response;
 import android.os.Handler;
 import android.os.Looper;
-import android.view.View;
-import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.Spinner;
 
@@ -86,6 +75,7 @@ public class CFHelper {
     private final List<String> pathItems = new ArrayList<>();
     private final Deque<String> pathStack = new ArrayDeque<>();
     private DatabaseReference browseRef; // gezginin o anki referansı
+    public String urlStr;
 
     private final Context appContext;
     private final OkHttpClient http;
@@ -95,10 +85,10 @@ public class CFHelper {
     private final Handler main = new Handler(Looper.getMainLooper());
 
     /** https://us-central1-<PROJECT_ID>.cloudfunctions.net */
-// 1) Alanı değiştir
-//- private final String baseHttpUrl;
-private String baseHttpUrl;
-private final String region;
+    // 1) Alanı değiştir
+    //- private final String baseHttpUrl;
+    private String baseHttpUrl;
+    private final String region;
 
 
 
@@ -107,13 +97,15 @@ private final String region;
 
     private final @Nullable Listener listener;
 
-// 2) Yeni ctor
-public CFHelper(@NonNull Context context, @NonNull String projectId, @NonNull String region, @Nullable Listener listener) {
-        this.appContext = context.getApplicationContext();
+    // alanlar
+    private String pathPrefix = ""; // yeni
+
+    public CFHelper(@NonNull Context ctx, @NonNull String projectId, @NonNull String region, @Nullable Listener listener) {
+        this.appContext = ctx.getApplicationContext();
         this.listener = listener;
         this.auth = FirebaseAuth.getInstance();
         this.appCheck = FirebaseAppCheck.getInstance();
-        this.functions = FirebaseFunctions.getInstance(region); // callable için doğru bölge
+        this.functions = FirebaseFunctions.getInstance(region); // callable doğru bölge
         this.http = new OkHttpClient.Builder()
                 .connectTimeout(15, TimeUnit.SECONDS)
                 .readTimeout(25, TimeUnit.SECONDS)
@@ -122,18 +114,35 @@ public CFHelper(@NonNull Context context, @NonNull String projectId, @NonNull St
                 .build();
         this.region = region;
         this.baseHttpUrl = "https://" + region + "-" + projectId + ".cloudfunctions.net";
-}
-
-    // 3) Geriye dönük uyumlu eski ctor
-    public CFHelper(@NonNull Context context,
-                    @NonNull String projectId,
-                    @Nullable Listener listener) {
-        this(context, projectId, "us-central1", listener);
     }
-    // (opsiyonel) Manuel override
-    public void overrideBaseHttpUrl(@NonNull String absoluteBase) {
-    this.baseHttpUrl = absoluteBase;
-}
+
+    // eski ctor’u geriye dönük koru
+    public CFHelper(@NonNull Context ctx, @NonNull String projectId, @Nullable Listener l) {
+        this(ctx, projectId, "us-central1", l);
+    }
+
+    // opsiyonel override’lar
+    public void setPathPrefix(@Nullable String prefix) {
+        if (prefix == null) prefix = "";
+        this.pathPrefix = prefix.isEmpty() ? "" : (prefix.startsWith("/") ? prefix : "/" + prefix);
+    }
+    public void overrideBaseHttpUrl(@NonNull String absoluteBase) { this.baseHttpUrl = absoluteBase; }
+    private String buildUrl(String path, @Nullable Map<String,String> query) {
+        StringBuilder url = new StringBuilder(baseHttpUrl);
+        if (!pathPrefix.isEmpty()) url.append(pathPrefix);
+        url.append(path);
+        if (query != null && !query.isEmpty()) {
+            url.append("?");
+            boolean first = true;
+            for (Map.Entry<String, String> e : query.entrySet()) {
+                if (!first) url.append("&");
+                first = false;
+                url.append(e.getKey()).append("=").append(Util.urlEncode(e.getValue()));
+            }
+        }
+        return url.toString();
+    }
+
 
     // ------------------------------------------------------------
     // Kimlik / Token
@@ -199,40 +208,53 @@ public CFHelper(@NonNull Context context, @NonNull String projectId, @NonNull St
     // ------------------------------------------------------------
     private JSONObject doGetJson(String path, @Nullable Map<String, String> query) throws Exception {
         Tokens t = refreshTokensBlocking();
-        StringBuilder url = new StringBuilder(baseHttpUrl).append(path);
-        if (query != null && !query.isEmpty()) {
-            url.append("?");
-            boolean first = true;
-            for (Map.Entry<String, String> e : query.entrySet()) {
-                if (!first) url.append("&");
-                first = false;
-                url.append(e.getKey()).append("=").append(Util.urlEncode(e.getValue()));
+        urlStr= buildUrl(path, query);
+        Log.d(TAG, "GET  " + urlStr);  // veya POST
+        try {
+            StringBuilder url = new StringBuilder(baseHttpUrl).append(path);
+            if (query != null && !query.isEmpty()) {
+                url.append("?");
+                boolean first = true;
+                for (Map.Entry<String, String> e : query.entrySet()) {
+                    if (!first) url.append("&");
+                    first = false;
+                    url.append(e.getKey()).append("=").append(Util.urlEncode(e.getValue()));
+                }
             }
-        }
-        Request req = new Request.Builder()
-                .url(url.toString())
-                .headers(buildAuthHeaders(t))
-                .get()
-                .build();
-
-        try (Response resp = http.newCall(req).execute()) {
-            String body = resp.body() != null ? resp.body().string() : "";
-            if (!resp.isSuccessful()) throw new HttpException(resp.code(), body);
-            return toJson(body);
+            Request req = new Request.Builder()
+                    .url(urlStr)
+                    .headers(buildAuthHeaders(t))
+                    .get()
+                    .build();
+            Log.d(TAG, "GET  " + urlStr); // <-- kritik log
+            try (Response resp = http.newCall(req).execute()) {
+                String body = resp.body() != null ? resp.body().string() : "";
+                if (!resp.isSuccessful()) throw new HttpException(resp.code(), body);
+                return toJson(body);
+            }
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        } catch (JSONException e) {
+            throw new RuntimeException(e);
+        } finally {
         }
     }
 
     private JSONObject doPostJson(String path, @Nullable JSONObject json) throws Exception {
         Tokens t = refreshTokensBlocking();
-        String payload = (json == null ? "{}" : json.toString());
+        String urlStr = buildUrl(path, null);
+        RequestBody body = RequestBody.create(JSON, (json == null ? "{}" : json.toString()));
+
+        //String payload = (json == null ? "{}" : json.toString());
         // OkHttp3 imzası: RequestBody.create(MediaType, String)
-        RequestBody body = RequestBody.create(JSON, payload);
+        //RequestBody body = RequestBody.create(JSON, payload);
 
         Request req = new Request.Builder()
-                .url(baseHttpUrl + path)
+                .url(urlStr)
                 .headers(buildAuthHeaders(t))
                 .post(body)
                 .build();
+        Log.d(TAG, "POST " + urlStr); // <-- kritik log
 
         try (Response resp = http.newCall(req).execute()) {
             String respBody = resp.body() != null ? resp.body().string() : "";
@@ -391,17 +413,25 @@ public CFHelper(@NonNull Context context, @NonNull String projectId, @NonNull St
             }
         });
     }
-    public void submitSoulInNeed(@NonNull JSONObject payload,
-                                 @NonNull EndpointCallback cb) {
-        endpointAsync("/submitSoulInNeed",
-                /*query=*/null,
-                /*body=*/payload,
-                /*post=*/true,
-                new EndpointCallback() {
-                    @Override public void onSuccess(JSONObject resp) { main.post(() -> cb.onSuccess(resp)); }
-                    @Override public void onError(Throwable error) { main.post(() -> cb.onError(error)); }
-                });
+    public void submitSoulInNeed(@NonNull JSONObject payload, @NonNull EndpointCallback cb) {
+
+        endpointAsync("/submitSoulInNeed", null, payload, /*post=*/true, new EndpointCallback() {
+            @Override public void onSuccess(JSONObject resp) { main.post(() -> cb.onSuccess(resp)); }
+            @Override public void onError(Throwable error) {
+                if (error instanceof HttpException && ((HttpException) error).code == 404) {
+                    try {
+                        JSONObject r = callFunction("submitSoulInNeed", payload);
+                        main.post(() -> cb.onSuccess(r));
+                    } catch (Throwable callErr) {
+                        main.post(() -> cb.onError(callErr));
+                    }
+                } else {
+                    main.post(() -> cb.onError(error));
+                }
+            }
+        });
     }
+
 
 
     /** İstersen ham JSON’a da erişmek için */
@@ -572,37 +602,52 @@ public CFHelper(@NonNull Context context, @NonNull String projectId, @NonNull St
         }
         return new JSONObject(s);
     }
-    public void checkPendingCompanion(@NonNull String deviceId,
-                                      @NonNull PendingCallback cb) {
+    public void checkPendingCompanion(@NonNull String deviceId, @NonNull PendingCallback cb) {
         Map<String, String> q = new HashMap<>();
         q.put("deviceId", deviceId);
 
-        endpointAsync("/checkPendingCompanion", q, /*body=*/null, /*post=*/false,
-                new EndpointCallback() {
-                    @Override public void onSuccess(JSONObject resp) {
-                        try {
-                            // Esnek yanıt yorumlama
-                            boolean has = resp.optBoolean("has",
-                                    resp.optBoolean("hasPending", resp.has("companion")));
-                            JSONObject comp = resp.optJSONObject("companion");
+        endpointAsync("/checkPendingCompanion", q, null, /*post=*/false, new EndpointCallback() {
+            @Override public void onSuccess(JSONObject resp) {
+                try {
+                    // Esnek yanıt yorumlama
+                    boolean has = resp.optBoolean("has",
+                            resp.optBoolean("hasPending", resp.has("companion")));
+                    JSONObject comp = resp.optJSONObject("companion");
 
-                            // Bazı backend’ler companion’ı köke koyabilir:
-                            if (comp == null && has && resp.length() > 0) {
-                                // ‘companion’ alanı yoksa ama başka alanlar varsa tüm kökü companion say
-                                comp = resp;
-                            }
+                    // Bazı backend’ler companion’ı köke koyabilir:
+                    if (comp == null && has && resp.length() > 0) {
+                        // ‘companion’ alanı yoksa ama başka alanlar varsa tüm kökü companion say
+                        comp = resp;
+                    }
 
-                            final JSONObject result = (has ? comp : null);
-                            main.post(() -> cb.onResult(result));
-                        } catch (Throwable parseErr) {
-                            main.post(() -> cb.onError(parseErr));
-                        }
+                    final JSONObject result = (has ? comp : null);
+                    main.post(() -> cb.onResult(result));
+                } catch (Throwable parseErr) {
+                    main.post(() -> cb.onError(parseErr));
+                }
+            }
+            @Override public void onError(Throwable error) {
+
+                // 404 ise callable dene
+                if (error instanceof HttpException && ((HttpException) error).code == 404) {
+                    try {
+                        JSONObject data = new JSONObject().put("deviceId", deviceId);
+                        JSONObject r = callFunction("checkPendingCompanion", data);
+                        // parse aynı:
+                        boolean has = r.optBoolean("has", r.optBoolean("hasPending", r.has("companion")));
+                        JSONObject comp = r.optJSONObject("companion");
+                        final JSONObject result = (has ? comp : null);
+                        main.post(() -> cb.onResult(result));
+                    } catch (Throwable callErr) {
+                        main.post(() -> cb.onError(callErr));
                     }
-                    @Override public void onError(Throwable error) {
-                        main.post(() -> cb.onError(error));
-                    }
-                });
+                } else {
+                    main.post(() -> cb.onError(error));
+                }
+            }
+        });
     }
+
 
     private static JSONObject toJsonFromObject(Object o) throws JSONException {
         if (o == null) return new JSONObject();

@@ -6,13 +6,12 @@ import android.text.TextUtils;
 import android.util.Patterns;
 import android.widget.EditText;
 import android.widget.ImageView;
-import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.google.firebase.auth.FirebaseAuth;
 import com.kurmez.iyesi.kurmes.utilities.Helpers;
-import com.kurmez.iyesi.umay.sahiplendirme.Welcome;
+import com.kurmez.iyesi.umay.Welcome;
 
 public class Login extends AppCompatActivity {
 

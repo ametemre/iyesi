@@ -37,7 +37,7 @@ import android.widget.TextView;
 
 import com.kurmez.iyesi.kurmes.utilities.Ai.Ai;
 import com.kurmez.iyesi.kurmes.utilities.MiniFabs;
-import com.kurmez.iyesi.umay.sokak.SokakActivity;
+import com.kurmez.iyesi.umay.SokakActivity;
 
 import org.opencv.android.CameraActivity;
 import org.opencv.android.OpenCVLoader;

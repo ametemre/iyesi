@@ -112,7 +112,7 @@ public class Founded extends AppCompatActivity {
         fillCoordsFromLastLocation();
 
         // Cloud Functions
-        cf = new CFHelper(this, "iyesi-a651a", null);
+        cf = new CFHelper(this, "iyesi-a651a", "us-central1", null);
 
         // Buttons:
         // - take_anotherphoto_button: XML onClick="onStartCamera" → Java’dan listener atamıyoruz.

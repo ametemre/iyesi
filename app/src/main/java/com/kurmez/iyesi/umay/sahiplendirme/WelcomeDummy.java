@@ -21,6 +21,7 @@ import com.google.firebase.auth.FirebaseUser;
 import com.kurmez.iyesi.Login;
 import com.kurmez.iyesi.MainActivity;
 import com.kurmez.iyesi.R;
+import com.kurmez.iyesi.kayra.Classes.Soul;
 import com.kurmez.iyesi.kurmes.social.content.ExplorePrivate;
 import com.kurmez.iyesi.kurmes.utilities.adapters.CompanionAdapter;
 

@@ -1,4 +1,4 @@
-package com.kurmez.iyesi.umay.sokak;
+package com.kurmez.iyesi.kayra.Classes;
 
 import android.Manifest;
 import android.annotation.SuppressLint;
@@ -70,39 +70,20 @@ import org.json.JSONArray;
 import androidx.appcompat.app.AlertDialog;
 import androidx.annotation.Nullable;
 
-import com.google.android.gms.tasks.Tasks;
-import com.google.firebase.appcheck.AppCheckTokenResult;
-import com.google.firebase.appcheck.FirebaseAppCheck;
+import com.kurmez.iyesi.kayra.Classes.ui.MarkerDetailsBottomSheet;
+import com.kurmez.iyesi.kayra.Classes.ui.MarkerIconFactory;
 import com.kurmez.iyesi.kurmes.utilities.Helpers;
-import org.json.JSONObject;
+
 import okhttp3.HttpUrl;
 import android.net.Uri;
-import com.google.firebase.auth.FirebaseAuth;
-import com.google.firebase.auth.FirebaseUser;
+
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
-import okhttp3.Call;
-import okhttp3.Callback;
-import okhttp3.Response;
-import com.kurmez.iyesi.umay.sokak.data.model.MarkerType;
-import android.net.Uri;
-import com.google.firebase.auth.FirebaseAuth;
-import com.google.firebase.auth.FirebaseUser;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicReference;
-import okhttp3.Call;
-import okhttp3.Callback;
-import okhttp3.Response;
+
+import com.kurmez.iyesi.kayra.Classes.model.MarkerType;
+import com.kurmez.iyesi.umay.sokak.GeoSon;
 // imports:
-import androidx.annotation.NonNull;
-import com.google.android.gms.maps.model.Marker;
-import com.google.android.gms.maps.model.LatLng;
-import okhttp3.Callback;
-import okhttp3.Call;
-import okhttp3.Response;
-import org.json.JSONObject;
 // imports
-import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 
@@ -291,8 +272,8 @@ public class Harita implements OnMapReadyCallback {
             final MarkerType finalMt = mt;
             activity.runOnUiThread(() -> {
                 try {
-                    com.kurmez.iyesi.umay.sokak.ui.MarkerDetailsBottomSheet sheet =
-                            com.kurmez.iyesi.umay.sokak.ui.MarkerDetailsBottomSheet
+                    MarkerDetailsBottomSheet sheet =
+                            MarkerDetailsBottomSheet
                                     .newInstance(markerId, finalMt); // ← asla null değil
 
                     android.os.Bundle args = sheet.getArguments();
@@ -1193,7 +1174,7 @@ public class Harita implements OnMapReadyCallback {
         if (highlightedMarker != null) {
             String uiKey = markerTypeMap.getOrDefault(highlightedMarker, "default");
             highlightedMarker.setIcon(
-                    com.kurmez.iyesi.umay.sokak.ui.MarkerIconFactory.getDefaultIcon(activity, uiKey)
+                    MarkerIconFactory.getDefaultIcon(activity, uiKey)
             );
             highlightedMarker = null;
         }
@@ -1203,7 +1184,7 @@ public class Harita implements OnMapReadyCallback {
         if (highlightedMarker != null) clearMarkerHighlight();
         String uiKey = markerTypeMap.getOrDefault(marker, "default");
         marker.setIcon(
-                com.kurmez.iyesi.umay.sokak.ui.MarkerIconFactory.getSelectedIcon(activity, uiKey)
+                MarkerIconFactory.getSelectedIcon(activity, uiKey)
         );
         highlightedMarker = marker;
     }
@@ -1225,7 +1206,7 @@ public class Harita implements OnMapReadyCallback {
         // görsel/etkileşim
         m.setDraggable(true);
         // istersen seçili renk yap:
-        m.setIcon(com.kurmez.iyesi.umay.sokak.ui.MarkerIconFactory.getSelectedIcon(activity, "default"));
+        m.setIcon(MarkerIconFactory.getSelectedIcon(activity, "default"));
 
         toast("Sürükleyin, çift dokunarak onaylayın. Tek dokunma: iptal");
     }
@@ -1307,7 +1288,7 @@ public class Harita implements OnMapReadyCallback {
                 repositionMarker.setPosition(originalPos);
             }
             // rengini eski haline getir (istenirse):
-            repositionMarker.setIcon(com.kurmez.iyesi.umay.sokak.ui.MarkerIconFactory.getDefaultIcon(activity, "default"));
+            repositionMarker.setIcon(MarkerIconFactory.getDefaultIcon(activity, "default"));
         }
         isReposition = false;
         repositionMarkerId = null;

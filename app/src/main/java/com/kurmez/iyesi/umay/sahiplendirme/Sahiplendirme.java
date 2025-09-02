@@ -12,6 +12,7 @@ import androidx.appcompat.app.AppCompatActivity;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.firestore.FirebaseFirestore;
 import com.kurmez.iyesi.R;
+import com.kurmez.iyesi.kayra.Classes.Soul;
 
 public class Sahiplendirme extends AppCompatActivity {
 

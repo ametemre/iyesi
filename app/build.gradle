@@ -8,7 +8,7 @@ android {
     compileSdk 35
     defaultConfig {
         applicationId "com.kurmez.iyesi"
-        minSdk 26
+        minSdk 21
         //noinspection EditedTargetSdkVersion
         targetSdk 36
         versionCode 7

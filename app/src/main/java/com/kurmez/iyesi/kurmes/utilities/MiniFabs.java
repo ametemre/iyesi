@@ -21,8 +21,8 @@ import com.google.firebase.auth.FirebaseAuth;
 import com.google.maps.android.data.geojson.GeoJsonLayer;
 import com.kurmez.iyesi.Login;
 import com.kurmez.iyesi.kurmes.Kurmes;
-import com.kurmez.iyesi.umay.sahiplendirme.Welcome;
-import com.kurmez.iyesi.umay.sokak.Harita;
+import com.kurmez.iyesi.umay.Welcome;
+import com.kurmez.iyesi.kayra.Classes.Harita;
 
 import android.animation.AnimatorListenerAdapter;
 import android.animation.AnimatorSet;

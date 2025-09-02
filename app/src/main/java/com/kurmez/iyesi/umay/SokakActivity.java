@@ -1,8 +1,7 @@
-package com.kurmez.iyesi.umay.sokak;
+package com.kurmez.iyesi.umay;
 
 import android.annotation.SuppressLint;
 import android.content.Intent;
-import android.graphics.Point;
 import android.os.Bundle;
 import android.view.GestureDetector;
 import android.view.MotionEvent;
@@ -19,18 +18,19 @@ import android.widget.Toast;
 
 import androidx.fragment.app.FragmentActivity;
 
-import com.google.android.gms.maps.model.LatLng;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 import com.google.maps.android.data.geojson.GeoJsonLayer;
 import com.kurmez.iyesi.Login;
 import com.kurmez.iyesi.R;
+import com.kurmez.iyesi.kayra.Classes.Harita;
+import com.kurmez.iyesi.kayra.Classes.ui.MarkerDetailsBottomSheet;
 import com.kurmez.iyesi.kurmes.Kurmes;
 import com.kurmez.iyesi.kurmes.utilities.MiniFabs;
 import com.kurmez.iyesi.kurmes.utilities.helper.Actions;
 
-public class SokakActivity extends FragmentActivity implements com.kurmez.iyesi.umay.sokak.ui.MarkerDetailsBottomSheet.Host {
+public class SokakActivity extends FragmentActivity implements MarkerDetailsBottomSheet.Host {
 
     private FloatingActionButton selectedFab = null; // Track the selected FAB
     public Kurmes kurmes;
