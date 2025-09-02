@@ -95,32 +95,45 @@ public class CFHelper {
     private final Handler main = new Handler(Looper.getMainLooper());
 
     /** https://us-central1-<PROJECT_ID>.cloudfunctions.net */
-    private final String baseHttpUrl;
+// 1) Alanı değiştir
+//- private final String baseHttpUrl;
+private String baseHttpUrl;
+private final String region;
+
+
 
     /** İstemci tarafında saklanan rol bilgisi (sunucudan getRole ile çekilir). */
     private volatile @Nullable String userRole;
 
     private final @Nullable Listener listener;
 
-    public CFHelper(@NonNull Context context,
-                    @NonNull String projectId,
-                    @Nullable Listener listener) {
+// 2) Yeni ctor
+public CFHelper(@NonNull Context context, @NonNull String projectId, @NonNull String region, @Nullable Listener listener) {
         this.appContext = context.getApplicationContext();
         this.listener = listener;
-
         this.auth = FirebaseAuth.getInstance();
         this.appCheck = FirebaseAppCheck.getInstance();
-        this.functions = FirebaseFunctions.getInstance();
-
+        this.functions = FirebaseFunctions.getInstance(region); // callable için doğru bölge
         this.http = new OkHttpClient.Builder()
                 .connectTimeout(15, TimeUnit.SECONDS)
                 .readTimeout(25, TimeUnit.SECONDS)
                 .writeTimeout(25, TimeUnit.SECONDS)
                 .retryOnConnectionFailure(true)
                 .build();
+        this.region = region;
+        this.baseHttpUrl = "https://" + region + "-" + projectId + ".cloudfunctions.net";
+}
 
-        this.baseHttpUrl = "https://us-central1-" + projectId + ".cloudfunctions.net";
+    // 3) Geriye dönük uyumlu eski ctor
+    public CFHelper(@NonNull Context context,
+                    @NonNull String projectId,
+                    @Nullable Listener listener) {
+        this(context, projectId, "us-central1", listener);
     }
+    // (opsiyonel) Manuel override
+    public void overrideBaseHttpUrl(@NonNull String absoluteBase) {
+    this.baseHttpUrl = absoluteBase;
+}
 
     // ------------------------------------------------------------
     // Kimlik / Token
@@ -173,6 +186,12 @@ public class CFHelper {
             }
         }
         return hb.build();
+    }
+    // Founded.java ile uyumlu:
+    public interface PendingCallback {
+        /** companion = null → pending yok demektir. */
+        void onResult(@Nullable JSONObject companion);
+        void onError(@NonNull Throwable error);
     }
 
     // ------------------------------------------------------------
@@ -372,6 +391,17 @@ public class CFHelper {
             }
         });
     }
+    public void submitSoulInNeed(@NonNull JSONObject payload,
+                                 @NonNull EndpointCallback cb) {
+        endpointAsync("/submitSoulInNeed",
+                /*query=*/null,
+                /*body=*/payload,
+                /*post=*/true,
+                new EndpointCallback() {
+                    @Override public void onSuccess(JSONObject resp) { main.post(() -> cb.onSuccess(resp)); }
+                    @Override public void onError(Throwable error) { main.post(() -> cb.onError(error)); }
+                });
+    }
 
 
     /** İstersen ham JSON’a da erişmek için */
@@ -541,6 +571,37 @@ public class CFHelper {
             return out;
         }
         return new JSONObject(s);
+    }
+    public void checkPendingCompanion(@NonNull String deviceId,
+                                      @NonNull PendingCallback cb) {
+        Map<String, String> q = new HashMap<>();
+        q.put("deviceId", deviceId);
+
+        endpointAsync("/checkPendingCompanion", q, /*body=*/null, /*post=*/false,
+                new EndpointCallback() {
+                    @Override public void onSuccess(JSONObject resp) {
+                        try {
+                            // Esnek yanıt yorumlama
+                            boolean has = resp.optBoolean("has",
+                                    resp.optBoolean("hasPending", resp.has("companion")));
+                            JSONObject comp = resp.optJSONObject("companion");
+
+                            // Bazı backend’ler companion’ı köke koyabilir:
+                            if (comp == null && has && resp.length() > 0) {
+                                // ‘companion’ alanı yoksa ama başka alanlar varsa tüm kökü companion say
+                                comp = resp;
+                            }
+
+                            final JSONObject result = (has ? comp : null);
+                            main.post(() -> cb.onResult(result));
+                        } catch (Throwable parseErr) {
+                            main.post(() -> cb.onError(parseErr));
+                        }
+                    }
+                    @Override public void onError(Throwable error) {
+                        main.post(() -> cb.onError(error));
+                    }
+                });
     }
 
     private static JSONObject toJsonFromObject(Object o) throws JSONException {

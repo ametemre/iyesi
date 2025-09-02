@@ -18,7 +18,6 @@ import android.util.Log;
 import android.widget.ArrayAdapter;
 import android.widget.AutoCompleteTextView;
 import android.widget.EditText;
-import android.widget.ImageView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
@@ -30,6 +29,7 @@ import com.google.android.gms.location.FusedLocationProviderClient;
 import com.google.android.gms.location.LocationServices;
 import com.kurmez.iyesi.R;
 import com.kurmez.iyesi.kurmes.utilities.adapters.ImageSliderAdapter;
+import com.kurmez.iyesi.kurmes.utilities.helper.CFHelper;
 
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -41,44 +41,31 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
-import okhttp3.Call;
-import okhttp3.Callback;
-import okhttp3.MediaType;
-import okhttp3.OkHttpClient;
-import okhttp3.Request;
-import okhttp3.RequestBody;
-import okhttp3.Response;
-
 public class Founded extends AppCompatActivity {
 
     // -------- Constants
     private static final String TAG = "Founded";
-    private static final int IMAGE_PICK = 100;
-    public static final int CAPTURE_IMAGE_ACTIVITY_REQUEST_CODE = 1034;
-    private static final int REQUEST_IMAGE_CAPTURE = 1;
     public static final int PICK_IMAGE_ACTIVITY_REQUEST_CODE = 1064;
+    public static final int REQUEST_IMAGE_CAPTURE = 1034;
+    public static final int REQUEST_READ_MEDIA_IMAGES = 2032;
     public static final int REQUEST_READ_EXTERNAL_STORAGE = 2031;
     private static final int REQUEST_FINE_LOCATION = 42;
 
-    // -------- Cloud Functions
-    private static final String CF_CHECK_PENDING =
-            "https://us-central1-iyesi-a651a.cloudfunctions.net/checkPendingCompanion";
-    private static final String CF_SUBMIT =
-            "https://us-central1-iyesi-a651a.cloudfunctions.net/submitSoulInNeed";
-
     // -------- UI / State
-    private List<Bitmap> photoList;
+    private final List<Bitmap> photoList = new ArrayList<>();
     private ImageSliderAdapter sliderAdapter;
-    private ImageView inputImageView; // (opsiyonel: kamera dönüşünde boyut hes.)
     private AutoCompleteTextView outputTextView; // species
     private EditText dateView, placeView;
 
     // Camera temp
-    File photoFile;
+    private File photoFile;
 
     // Location
     private FusedLocationProviderClient locClient;
-    private Double lastLat = null, lastLng = null; // FoundPlace yalnızca lat,lng olacak
+    private Double lastLat = null, lastLng = null; // FoundPlace sadece lat,lng
+
+    // Cloud Functions helper
+    private CFHelper cf;
 
     // ------------------------------------------------------------
     // Lifecycle
@@ -90,62 +77,53 @@ public class Founded extends AppCompatActivity {
         setContentView(R.layout.activity_founded);
 
         // Views
-        // inputImageView = findViewById(R.id.slider_image); // slider içinde göst. edildiği için opsiyonel
         outputTextView = findViewById(R.id.companion_species);
         dateView       = findViewById(R.id.companion_found_date);
         placeView      = findViewById(R.id.companion_found_place);
-
-        // Photos
-        photoList = new ArrayList<>();
-        takePhotosFromIntentOrFinish();
 
         // Slider
         ViewPager2 photoSlider = findViewById(R.id.founded_photos_slider);
         sliderAdapter = new ImageSliderAdapter(photoList, this);
         photoSlider.setAdapter(sliderAdapter);
 
-        // Permission: external read (galeri)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            if (checkSelfPermission(Manifest.permission.READ_EXTERNAL_STORAGE)
-                    != PackageManager.PERMISSION_GRANTED) {
-                requestPermissions(
-                        new String[]{Manifest.permission.READ_EXTERNAL_STORAGE},
-                        REQUEST_READ_EXTERNAL_STORAGE
-                );
-            }
-        }
+        // Foto al
+        takePhotosFromIntentOrFinish();
 
-        // Species: öneri geldiyse göster
+        // Storage izinleri (T+ için READ_MEDIA_IMAGES, altı için READ_EXTERNAL_STORAGE)
+        requestGalleryPermissionIfNeeded();
+
+        // Species tahmini geldiyse
         String predicted = getIntent().getStringExtra("predictedSpecies");
         if (predicted != null) {
             ArrayAdapter<String> adapter = new ArrayAdapter<>(
-                    this,
-                    android.R.layout.simple_dropdown_item_1line,
-                    new String[]{predicted}
-            );
+                    this, android.R.layout.simple_dropdown_item_1line, new String[]{predicted});
             outputTextView.setAdapter(adapter);
             outputTextView.setText(predicted, false);
             outputTextView.post(outputTextView::showDropDown);
         }
 
         // Found Date: bugün
-        String today = new java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.getDefault())
+        String today = new java.text.SimpleDateFormat("dd/MM/yyyy", Locale.getDefault())
                 .format(new java.util.Date());
         dateView.setText(today);
 
         // Location client & Found Place = SADECE lat,lng
         locClient = LocationServices.getFusedLocationProviderClient(this);
-        fillCoordsFromLastLocation(); // FoundPlace alanına yalnızca "lat, lng" yazdırır
+        fillCoordsFromLastLocation();
 
-        // Buttons
-        findViewById(R.id.take_anotherphoto_button).setOnClickListener(v -> finish());
+        // Cloud Functions
+        cf = new CFHelper(this, "iyesi-a651a", null);
+
+        // Buttons:
+        // - take_anotherphoto_button: XML onClick="onStartCamera" → Java’dan listener atamıyoruz.
+        // - save_companion_button: programatik bağlıyoruz.
         findViewById(R.id.save_companion_button).setOnClickListener(v -> {
             Log.d(TAG, "save_companion_button clicked!");
             saveCompanionAsync();
         });
 
-        // Pending varsa yönlendir
-        checkPendingCompanionAndRedirect();
+        // Başlangıçta pending kayıt varsa Companion’a yönlendir
+        checkPendingOnStart();
     }
 
     // ------------------------------------------------------------
@@ -156,15 +134,31 @@ public class Founded extends AppCompatActivity {
         byte[] snapshotData = getIntent().getByteArrayExtra("snapshot");
         if (snapshotData != null) {
             Bitmap snapshot = BitmapFactory.decodeByteArray(snapshotData, 0, snapshotData.length);
-            photoList.add(snapshot);
+            if (snapshot != null) photoList.add(snapshot);
         } else {
             // Çoklu veya tekli foto
             ArrayList<Bitmap> list = getIntent().getParcelableArrayListExtra("photos");
             if (list != null) photoList.addAll(list);
         }
+
         if (photoList.isEmpty()) {
             Toast.makeText(this, "No photos found", Toast.LENGTH_SHORT).show();
             finish();
+            return;
+        }
+
+        sliderAdapter.notifyDataSetChanged();
+    }
+
+    private void requestGalleryPermissionIfNeeded() {
+        if (Build.VERSION.SDK_INT >= 33) {
+            if (checkSelfPermission(Manifest.permission.READ_MEDIA_IMAGES) != PackageManager.PERMISSION_GRANTED) {
+                requestPermissions(new String[]{Manifest.permission.READ_MEDIA_IMAGES}, REQUEST_READ_MEDIA_IMAGES);
+            }
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            if (checkSelfPermission(Manifest.permission.READ_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
+                requestPermissions(new String[]{Manifest.permission.READ_EXTERNAL_STORAGE}, REQUEST_READ_EXTERNAL_STORAGE);
+            }
         }
     }
 
@@ -176,16 +170,9 @@ public class Founded extends AppCompatActivity {
             int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
 
-        if (requestCode == REQUEST_READ_EXTERNAL_STORAGE) {
-            if (permissions.length > 0 && grantResults.length > 0) {
-                boolean granted = (grantResults[0] == PackageManager.PERMISSION_GRANTED);
-                if (!granted) {
-                    Toast.makeText(this,
-                            "Galeriden resim seçmek için izin gerekli",
-                            Toast.LENGTH_SHORT).show();
-                }
-            } else {
-                Log.w(TAG, "onRequestPermissionsResult: boş permissions/grantResults");
+        if (requestCode == REQUEST_READ_MEDIA_IMAGES || requestCode == REQUEST_READ_EXTERNAL_STORAGE) {
+            if (grantResults.length > 0 && grantResults[0] != PackageManager.PERMISSION_GRANTED) {
+                Toast.makeText(this, "Galeriden resim seçmek için izin gerekli", Toast.LENGTH_SHORT).show();
             }
         } else if (requestCode == REQUEST_FINE_LOCATION) {
             if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
@@ -204,30 +191,28 @@ public class Founded extends AppCompatActivity {
         super.onActivityResult(requestCode, resultCode, data);
         if (resultCode != RESULT_OK) return;
 
-        switch (requestCode) {
-            case PICK_IMAGE_ACTIVITY_REQUEST_CODE:
-                if (data.getClipData() != null) {
-                    int count = data.getClipData().getItemCount();
-                    for (int i = 0; i < count; i++) {
-                        Uri uri = data.getClipData().getItemAt(i).getUri();
-                        Bitmap bmp = loadFromUri(uri);
-                        if (bmp != null) photoList.add(bmp);
-                    }
-                } else if (data.getData() != null) {
-                    Bitmap bmp = loadFromUri(data.getData());
+        if (requestCode == PICK_IMAGE_ACTIVITY_REQUEST_CODE) {
+            if (data.getClipData() != null) {
+                int count = data.getClipData().getItemCount();
+                for (int i = 0; i < count; i++) {
+                    Uri uri = data.getClipData().getItemAt(i).getUri(); // önemli: () olmalı
+                    Bitmap bmp = loadFromUri(uri);
                     if (bmp != null) photoList.add(bmp);
                 }
+            } else if (data.getData() != null) {
+                Bitmap bmp = loadFromUri(data.getData());
+                if (bmp != null) photoList.add(bmp);
+            }
+            sliderAdapter.notifyDataSetChanged();
+        } else if (requestCode == REQUEST_IMAGE_CAPTURE) {
+            Bitmap camBmp = data != null && data.getExtras() != null
+                    ? (Bitmap) data.getExtras().get("data")
+                    : null;
+            if (camBmp == null) camBmp = getCapturedImage(); // photoFile varsa
+            if (camBmp != null) {
+                photoList.add(camBmp);
                 sliderAdapter.notifyDataSetChanged();
-                break;
-
-            case REQUEST_IMAGE_CAPTURE:
-            case CAPTURE_IMAGE_ACTIVITY_REQUEST_CODE:
-                Bitmap camBmp = getCapturedImage();
-                if (camBmp != null) {
-                    photoList.add(camBmp);
-                    sliderAdapter.notifyDataSetChanged();
-                }
-                break;
+            }
         }
     }
 
@@ -236,51 +221,33 @@ public class Founded extends AppCompatActivity {
     // ------------------------------------------------------------
     private void saveCompanionAsync() {
         String deviceId = Settings.Secure.getString(getContentResolver(), Settings.Secure.ANDROID_ID);
-        String checkUrl = CF_CHECK_PENDING + "?deviceId=" + deviceId;
 
-        OkHttpClient http = new OkHttpClient();
-        Request checkRequest = new Request.Builder().url(checkUrl).get().build();
-
-        http.newCall(checkRequest).enqueue(new Callback() {
+        // Önce bu cihaz için pending var mı?
+        cf.checkPendingCompanion(deviceId, new CFHelper.PendingCallback() {
             @Override
-            public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
-                String body = response.body() != null ? response.body().string() : "";
-                if (body.trim().equals("false")) {
+            public void onResult(JSONObject companion) {
+                if (companion == null) {
                     runOnUiThread(() -> performSubmitCompanion(deviceId));
                 } else {
-                    try {
-                        JSONObject json = new JSONObject(body);
-                        JSONObject companion = json.getJSONObject("companion");
-                        Intent intent = new Intent(Founded.this, Companion.class);
-                        intent.putExtra("deviceId", deviceId);
-                        intent.putExtra("species", companion.optString("species"));
-                        intent.putExtra("foundDate", companion.optString("foundDate"));
-                        intent.putExtra("foundLocation", companion.optString("foundLocation"));
-                        intent.putExtra("imageResId", companion.optString("imageResId"));
-                        intent.putExtra("node", "soul_inneed");
-                        startActivity(intent);
-                        finish();
-                    } catch (JSONException e) {
-                        Log.e(TAG, "Parse error: " + e.getMessage());
-                    }
+                    runOnUiThread(() -> openCompanionFromJson(deviceId, companion));
                 }
             }
 
             @Override
-            public void onFailure(@NonNull Call call, @NonNull IOException e) {
-                Log.e(TAG, "Connection error: " + e.getMessage());
+            public void onError(Throwable error) {
+                Log.e(TAG, "checkPendingCompanion error: " + error.getMessage());
+                // Yine de kullanıcıyı bloke etmeyelim
+                runOnUiThread(() -> performSubmitCompanion(deviceId));
             }
         });
     }
 
     private void performSubmitCompanion(String deviceId) {
-        // Zorunlular (ileride AI ile tahmin edilecekler için "TODO" placeholder)
         String species = safeOrTodo(textOf(outputTextView));
         String breed   = "TODO";
         String age     = "TODO";
         String health  = "TODO";
 
-        // Otomatikler
         String foundDate = textOf(dateView);
         long   timestamp = System.currentTimeMillis();
 
@@ -299,79 +266,81 @@ public class Founded extends AppCompatActivity {
         }
         if (photoList.isEmpty()){ Toast.makeText(this,"Fotoğraf yok!",Toast.LENGTH_SHORT).show(); return; }
 
-        // Görsel → Base64
+        // Görsel → Base64 (ilk foto)
         String imgB64 = encodeToBase64(photoList.get(0), Bitmap.CompressFormat.PNG, 100);
 
-        // Payload
         JSONObject payload = new JSONObject();
         try {
-            // Soul zorunlu (senin belirttiğin alanlar)
             payload.put("species",       species);
             payload.put("breed",         breed);
             payload.put("age",           age);
             payload.put("health",        health);
 
             payload.put("foundDate",     foundDate);
-            payload.put("foundLocation", foundPlace); // ← SADECE "lat, lng" içerir
+            payload.put("foundLocation", foundPlace); // sadece "lat, lng"
             payload.put("timestamp",     timestamp);
 
-            // Ek: ham koordinatları da gönder (sunucuda işlemek kolay olur)
             if (lastLat != null && lastLng != null) {
                 payload.put("lat", lastLat);
                 payload.put("lng", lastLng);
             }
 
-            // Görsel verisi (imageResId sunucuda üretilecek)
             payload.put("imageBase64",   imgB64);
-
-            // deviceId bilgi amaçlı
             payload.put("deviceId",      deviceId);
 
-            // finderName ve imageResId → sunucu tarafında atanacak
         } catch (JSONException e) {
             e.printStackTrace();
             Toast.makeText(this,"Veri oluşturulamadı",Toast.LENGTH_SHORT).show();
             return;
         }
 
-        OkHttpClient http = new OkHttpClient();
-        RequestBody body = RequestBody.create(
-                payload.toString(),
-                MediaType.get("application/json; charset=utf-8")
-        );
-        Request request = new Request.Builder()
-                .url(CF_SUBMIT)
-                .post(body)
-                .build();
-
-        http.newCall(request).enqueue(new Callback() {
-            @Override public void onFailure(@NonNull Call call, @NonNull IOException e) {
-                runOnUiThread(() ->
-                        Toast.makeText(Founded.this,
-                                "İstek gönderilemedi: " + e.getMessage(),
-                                Toast.LENGTH_LONG).show());
-            }
-
-            @Override public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
-                String resp = response.body() != null ? response.body().string() : "";
+        cf.submitSoulInNeed(payload, new CFHelper.EndpointCallback() {
+            @Override
+            public void onSuccess(JSONObject resp) {
                 runOnUiThread(() -> {
-                    if (response.isSuccessful()) {
-                        try {
-                            String key = new JSONObject(resp).getString("key");
-                            Intent i = new Intent(Founded.this, Companion.class);
-                            i.putExtra("requestKey", key);
-                            i.putExtra("node", "soul_inneed");
-                            startActivity(i);
-                            finish();
-                        } catch (JSONException je) {
-                            Toast.makeText(Founded.this, "Yanıt çözümlenemedi", Toast.LENGTH_LONG).show();
-                        }
-                    } else {
-                        Toast.makeText(Founded.this,
-                                "Sunucu hatası: " + resp,
-                                Toast.LENGTH_LONG).show();
+                    try {
+                        String key = resp.getString("key");
+                        Intent i = new Intent(Founded.this, Companion.class);
+                        i.putExtra("requestKey", key);
+                        i.putExtra("node", "soul_inneed");
+                        startActivity(i);
+                        finish();
+                    } catch (JSONException je) {
+                        Toast.makeText(Founded.this, "Yanıt çözümlenemedi", Toast.LENGTH_LONG).show();
                     }
                 });
+            }
+
+            @Override
+            public void onError(Throwable error) {
+                runOnUiThread(() ->
+                        Toast.makeText(Founded.this,
+                                "Sunucu hatası: " + error.getMessage(),
+                                Toast.LENGTH_LONG).show());
+            }
+        });
+    }
+
+    private void openCompanionFromJson(@NonNull String deviceId, @NonNull JSONObject companion) {
+        Intent intent = new Intent(Founded.this, Companion.class);
+        intent.putExtra("deviceId", deviceId);
+        intent.putExtra("species", companion.optString("species"));
+        intent.putExtra("foundDate", companion.optString("foundDate"));
+        intent.putExtra("foundLocation", companion.optString("foundLocation"));
+        intent.putExtra("imageResId", companion.optString("imageResId"));
+        intent.putExtra("node", "soul_inneed");
+        startActivity(intent);
+        finish();
+    }
+
+    private void checkPendingOnStart() {
+        String deviceId = Settings.Secure.getString(getContentResolver(), Settings.Secure.ANDROID_ID);
+        cf.checkPendingCompanion(deviceId, new CFHelper.PendingCallback() {
+            @Override public void onResult(JSONObject companion) {
+                if (companion != null) runOnUiThread(() -> openCompanionFromJson(deviceId, companion));
+            }
+            @Override public void onError(Throwable error) {
+                Log.w(TAG, "checkPendingOnStart error: " + error.getMessage());
             }
         });
     }
@@ -388,23 +357,22 @@ public class Founded extends AppCompatActivity {
     private void fillCoordsFromLastLocation() {
         if (!hasFineLocationPermission()) {
             ActivityCompat.requestPermissions(
-                    this,
-                    new String[]{Manifest.permission.ACCESS_FINE_LOCATION},
-                    REQUEST_FINE_LOCATION
-            );
+                    this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, REQUEST_FINE_LOCATION);
             return;
         }
-        locClient.getLastLocation().addOnSuccessListener(loc -> {
-            if (loc == null) return;
-            setCoordsToPlace(loc);
-        }).addOnFailureListener(e -> Log.e(TAG, "LastLocation error: " + e.getMessage()));
+        if (locClient == null) locClient = LocationServices.getFusedLocationProviderClient(this);
+        locClient.getLastLocation()
+                .addOnSuccessListener(loc -> {
+                    if (loc != null) setCoordsToPlace(loc);
+                })
+                .addOnFailureListener(e -> Log.e(TAG, "LastLocation error: " + e.getMessage()));
     }
 
     private void setCoordsToPlace(@NonNull Location loc) {
         lastLat = loc.getLatitude();
         lastLng = loc.getLongitude();
         String txt = formatLatLng(lastLat, lastLng); // "41.01500, 28.97900"
-        placeView.setText(txt);                      // YALNIZCA lat,lng yaz
+        placeView.setText(txt);
     }
 
     private String formatLatLng(double lat, double lng) {
@@ -425,9 +393,6 @@ public class Founded extends AppCompatActivity {
         String t = s.trim();
         return t.isEmpty() ? "TODO" : t;
     }
-    private void toast(String s) {
-        Toast.makeText(this, s, Toast.LENGTH_SHORT).show();
-    }
 
     // ------------------------------------------------------------
     // Media helpers
@@ -445,7 +410,7 @@ public class Founded extends AppCompatActivity {
 
     private Bitmap loadFromUri(Uri photoUri) {
         try {
-            if (Build.VERSION.SDK_INT > 27) {
+            if (Build.VERSION.SDK_INT >= 28) {
                 ImageDecoder.Source source =
                         ImageDecoder.createSource(this.getContentResolver(), photoUri);
                 return ImageDecoder.decodeBitmap(source);
@@ -459,50 +424,12 @@ public class Founded extends AppCompatActivity {
     }
 
     // ------------------------------------------------------------
-    // Optional navigation to existing pending record
-    // ------------------------------------------------------------
-    private void checkPendingCompanionAndRedirect() {
-        String deviceId = Settings.Secure.getString(getContentResolver(), Settings.Secure.ANDROID_ID);
-        String checkUrl = CF_CHECK_PENDING + "?deviceId=" + deviceId;
-
-        new OkHttpClient().newCall(new Request.Builder().url(checkUrl).get().build())
-                .enqueue(new Callback() {
-                    @Override
-                    public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
-                        String body = response.body() != null ? response.body().string() : "";
-                        if (body.trim().equals("false")) return;
-
-                        try {
-                            JSONObject json = new JSONObject(body);
-                            JSONObject companion = json.getJSONObject("companion");
-
-                            Intent intent = new Intent(Founded.this, Companion.class);
-                            intent.putExtra("deviceId", deviceId);
-                            intent.putExtra("species", companion.optString("species"));
-                            intent.putExtra("foundDate", companion.optString("foundDate"));
-                            intent.putExtra("foundLocation", companion.optString("foundLocation"));
-                            intent.putExtra("imageResId", companion.optString("imageResId"));
-                            intent.putExtra("node", "soul_inneed");
-                            startActivity(intent);
-                            finish();
-                        } catch (JSONException e) {
-                            Log.e(TAG, "Parse error: " + e.getMessage());
-                        }
-                    }
-
-                    @Override
-                    public void onFailure(@NonNull Call call, @NonNull IOException e) {
-                        Log.e(TAG, "Connection error: " + e.getMessage());
-                    }
-                });
-    }
-
-    // ------------------------------------------------------------
-    // Pickers (optional buttons)
+    // Pickers (XML onClick’leri bunları çağırıyor)
     // ------------------------------------------------------------
     public void onPickImage(android.view.View view) {
         Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
         intent.setType("image/*");
+        intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
         if (intent.resolveActivity(getPackageManager()) != null) {
             startActivityForResult(intent, PICK_IMAGE_ACTIVITY_REQUEST_CODE);
         }
