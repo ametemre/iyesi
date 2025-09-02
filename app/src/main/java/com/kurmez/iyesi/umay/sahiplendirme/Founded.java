@@ -41,14 +41,22 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
+/**
+ * Founded — Foto(lar) + temel bilgilerle "soul_inneed" kaydı oluşturur.
+ * ExplorePrivate içinde listelenmesi için backend /submitSoulInNeed ve /listPendingCompanions ile uyumludur.
+ */
 public class Founded extends AppCompatActivity {
 
     // -------- Constants
     private static final String TAG = "Founded";
+    // Gallery picker
     public static final int PICK_IMAGE_ACTIVITY_REQUEST_CODE = 1064;
+    // Camera capture (thumbnail döner; tam çözünürlük için FileProvider kurman gerekir)
     public static final int REQUEST_IMAGE_CAPTURE = 1034;
-    public static final int REQUEST_READ_MEDIA_IMAGES = 2032;
-    public static final int REQUEST_READ_EXTERNAL_STORAGE = 2031;
+    // Storage izinleri
+    public static final int REQUEST_READ_MEDIA_IMAGES    = 2032; // API 33+
+    public static final int REQUEST_READ_EXTERNAL_STORAGE = 2031; // API 23–32
+    // Location izni
     private static final int REQUEST_FINE_LOCATION = 42;
 
     // -------- UI / State
@@ -57,12 +65,12 @@ public class Founded extends AppCompatActivity {
     private AutoCompleteTextView outputTextView; // species
     private EditText dateView, placeView;
 
-    // Camera temp
+    // Camera temp (tam çözünürlük istiyorsan FileProvider ile üret)
     private File photoFile;
 
     // Location
     private FusedLocationProviderClient locClient;
-    private Double lastLat = null, lastLng = null; // FoundPlace sadece lat,lng
+    private Double lastLat = null, lastLng = null; // FoundPlace yalnızca "lat, lng" yazılacak
 
     // Cloud Functions helper
     private CFHelper cf;
@@ -86,13 +94,13 @@ public class Founded extends AppCompatActivity {
         sliderAdapter = new ImageSliderAdapter(photoList, this);
         photoSlider.setAdapter(sliderAdapter);
 
-        // Foto al
+        // Intent’ten foto(lar)ı al (yoksa ekranı kapat)
         takePhotosFromIntentOrFinish();
 
-        // Storage izinleri (T+ için READ_MEDIA_IMAGES, altı için READ_EXTERNAL_STORAGE)
+        // Storage izinlerini iste (API’ye göre doğru izin)
         requestGalleryPermissionIfNeeded();
 
-        // Species tahmini geldiyse
+        // Species tahmini geldiyse göster
         String predicted = getIntent().getStringExtra("predictedSpecies");
         if (predicted != null) {
             ArrayAdapter<String> adapter = new ArrayAdapter<>(
@@ -107,22 +115,29 @@ public class Founded extends AppCompatActivity {
                 .format(new java.util.Date());
         dateView.setText(today);
 
-        // Location client & Found Place = SADECE lat,lng
+        // Location client & Found Place = SADECE "lat, lng"
         locClient = LocationServices.getFusedLocationProviderClient(this);
         fillCoordsFromLastLocation();
 
-        // Cloud Functions
-        cf = new CFHelper(this, "iyesi-a651a", "us-central1", null);
+        // CF Helper
+        // TODO: Projenin CFHelper yapısına göre ctor’u seç:
+        //  - Eğer CFHelper(Context, String projectId, Listener) ise:
+        //      cf = new CFHelper(this, "iyesi-a651a", null);
+        //  - Eğer bölge parametresi alan sürümü kullanıyorsan:
+        //      cf = new CFHelper(this, "iyesi-a651a", "us-central1", null);
+        cf = new CFHelper(this, "iyesi-a651a", null);
 
         // Buttons:
-        // - take_anotherphoto_button: XML onClick="onStartCamera" → Java’dan listener atamıyoruz.
-        // - save_companion_button: programatik bağlıyoruz.
+        // XML'de:
+        //  - ViewPager2: android:onClick="onPickImage"
+        //  - take_anotherphoto_button: android:onClick="onStartCamera"
+        // Save butonunu programatik bağlıyoruz:
         findViewById(R.id.save_companion_button).setOnClickListener(v -> {
             Log.d(TAG, "save_companion_button clicked!");
             saveCompanionAsync();
         });
 
-        // Başlangıçta pending kayıt varsa Companion’a yönlendir
+        // Uygulama açılışında cihaz için pending kayıt var mı? Varsa Companion’a yönlendir.
         checkPendingOnStart();
     }
 
@@ -136,7 +151,7 @@ public class Founded extends AppCompatActivity {
             Bitmap snapshot = BitmapFactory.decodeByteArray(snapshotData, 0, snapshotData.length);
             if (snapshot != null) photoList.add(snapshot);
         } else {
-            // Çoklu veya tekli foto
+            // Çoklu/tekli foto
             ArrayList<Bitmap> list = getIntent().getParcelableArrayListExtra("photos");
             if (list != null) photoList.addAll(list);
         }
@@ -146,10 +161,10 @@ public class Founded extends AppCompatActivity {
             finish();
             return;
         }
-
         sliderAdapter.notifyDataSetChanged();
     }
 
+    // Storage izin akışı (API 33+ ve altı)
     private void requestGalleryPermissionIfNeeded() {
         if (Build.VERSION.SDK_INT >= 33) {
             if (checkSelfPermission(Manifest.permission.READ_MEDIA_IMAGES) != PackageManager.PERMISSION_GRANTED) {
@@ -192,10 +207,12 @@ public class Founded extends AppCompatActivity {
         if (resultCode != RESULT_OK) return;
 
         if (requestCode == PICK_IMAGE_ACTIVITY_REQUEST_CODE) {
+            // Çoklu seçim
             if (data.getClipData() != null) {
                 int count = data.getClipData().getItemCount();
                 for (int i = 0; i < count; i++) {
-                    Uri uri = data.getClipData().getItemAt(i).getUri(); // önemli: () olmalı
+                    // DİKKAT: getUri() — parantez gerekli
+                    Uri uri = data.getClipData().getItemAt(i).getUri();
                     Bitmap bmp = loadFromUri(uri);
                     if (bmp != null) photoList.add(bmp);
                 }
@@ -205,10 +222,11 @@ public class Founded extends AppCompatActivity {
             }
             sliderAdapter.notifyDataSetChanged();
         } else if (requestCode == REQUEST_IMAGE_CAPTURE) {
-            Bitmap camBmp = data != null && data.getExtras() != null
+            // Kamera thumbnail (extras->"data") ya da photoFile varsa ondan
+            Bitmap camBmp = (data != null && data.getExtras() != null)
                     ? (Bitmap) data.getExtras().get("data")
                     : null;
-            if (camBmp == null) camBmp = getCapturedImage(); // photoFile varsa
+            if (camBmp == null) camBmp = getCapturedImage();
             if (camBmp != null) {
                 photoList.add(camBmp);
                 sliderAdapter.notifyDataSetChanged();
@@ -222,7 +240,8 @@ public class Founded extends AppCompatActivity {
     private void saveCompanionAsync() {
         String deviceId = Settings.Secure.getString(getContentResolver(), Settings.Secure.ANDROID_ID);
 
-        // Önce bu cihaz için pending var mı?
+        // 1) Önce bu cihaz için pending var mı?
+        //    Varsa Companion ekranına yönlendir, yoksa submit et.
         cf.checkPendingCompanion(deviceId, new CFHelper.PendingCallback() {
             @Override
             public void onResult(JSONObject companion) {
@@ -236,17 +255,18 @@ public class Founded extends AppCompatActivity {
             @Override
             public void onError(Throwable error) {
                 Log.e(TAG, "checkPendingCompanion error: " + error.getMessage());
-                // Yine de kullanıcıyı bloke etmeyelim
+                // TODO: 404 (function yok) veya 403 (App Check) durumunda kullanıcıyı bloke etmeyelim:
                 runOnUiThread(() -> performSubmitCompanion(deviceId));
             }
         });
     }
 
     private void performSubmitCompanion(String deviceId) {
+        // Zorunlu/AI ile doldurulacak alanlar için basit placeholder
         String species = safeOrTodo(textOf(outputTextView));
-        String breed   = "TODO";
-        String age     = "TODO";
-        String health  = "TODO";
+        String breed   = "TODO";  // TODO: modelden doldurulacak
+        String age     = "TODO";  // TODO: modelden doldurulacak
+        String health  = "TODO";  // TODO: modelden doldurulacak
 
         String foundDate = textOf(dateView);
         long   timestamp = System.currentTimeMillis();
@@ -258,6 +278,7 @@ public class Founded extends AppCompatActivity {
             placeView.setText(foundPlace);
         }
 
+        // Basit doğrulamalar
         if (species.isEmpty()) { outputTextView.setError("Cinsi girin veya TODO kalabilir"); return; }
         if (foundDate.isEmpty()){ dateView.setError("Tarihi girin"); return; }
         if (foundPlace.isEmpty()){
@@ -269,6 +290,7 @@ public class Founded extends AppCompatActivity {
         // Görsel → Base64 (ilk foto)
         String imgB64 = encodeToBase64(photoList.get(0), Bitmap.CompressFormat.PNG, 100);
 
+        // Payload
         JSONObject payload = new JSONObject();
         try {
             payload.put("species",       species);
@@ -277,28 +299,35 @@ public class Founded extends AppCompatActivity {
             payload.put("health",        health);
 
             payload.put("foundDate",     foundDate);
-            payload.put("foundLocation", foundPlace); // sadece "lat, lng"
+            payload.put("foundLocation", foundPlace); // yalnızca "lat, lng"
             payload.put("timestamp",     timestamp);
 
+            // Ham koordinatları ekle (sunucu tarafında pratik olur)
             if (lastLat != null && lastLng != null) {
                 payload.put("lat", lastLat);
                 payload.put("lng", lastLng);
             }
 
+            // Görsel verisi (imageResId sunucuda üretilecek)
             payload.put("imageBase64",   imgB64);
+
+            // Cihaz bilgisi
             payload.put("deviceId",      deviceId);
 
+            // finderName ve imageResId → sunucu tarafında atanacak
         } catch (JSONException e) {
             e.printStackTrace();
             Toast.makeText(this,"Veri oluşturulamadı",Toast.LENGTH_SHORT).show();
             return;
         }
 
+        // 2) Submit
         cf.submitSoulInNeed(payload, new CFHelper.EndpointCallback() {
             @Override
             public void onSuccess(JSONObject resp) {
                 runOnUiThread(() -> {
                     try {
+                        // TODO: backend "key" döndürmeli. Yoksa yanıt şemasını kontrol et.
                         String key = resp.getString("key");
                         Intent i = new Intent(Founded.this, Companion.class);
                         i.putExtra("requestKey", key);
@@ -321,6 +350,7 @@ public class Founded extends AppCompatActivity {
         });
     }
 
+    // Pending varsa Companion’a geç
     private void openCompanionFromJson(@NonNull String deviceId, @NonNull JSONObject companion) {
         Intent intent = new Intent(Founded.this, Companion.class);
         intent.putExtra("deviceId", deviceId);
@@ -333,6 +363,7 @@ public class Founded extends AppCompatActivity {
         finish();
     }
 
+    // Açılışta kontrol (kullanıcıyı otomatik devam ettirmek için)
     private void checkPendingOnStart() {
         String deviceId = Settings.Secure.getString(getContentResolver(), Settings.Secure.ANDROID_ID);
         cf.checkPendingCompanion(deviceId, new CFHelper.PendingCallback() {
@@ -341,6 +372,7 @@ public class Founded extends AppCompatActivity {
             }
             @Override public void onError(Throwable error) {
                 Log.w(TAG, "checkPendingOnStart error: " + error.getMessage());
+                // TODO: 404 ise muhtemelen fonksiyon deploy edilmemiştir ya da isim/region farklıdır.
             }
         });
     }
@@ -362,9 +394,7 @@ public class Founded extends AppCompatActivity {
         }
         if (locClient == null) locClient = LocationServices.getFusedLocationProviderClient(this);
         locClient.getLastLocation()
-                .addOnSuccessListener(loc -> {
-                    if (loc != null) setCoordsToPlace(loc);
-                })
+                .addOnSuccessListener(loc -> { if (loc != null) setCoordsToPlace(loc); })
                 .addOnFailureListener(e -> Log.e(TAG, "LastLocation error: " + e.getMessage()));
     }
 
@@ -405,6 +435,7 @@ public class Founded extends AppCompatActivity {
 
     private Bitmap getCapturedImage() {
         if (photoFile == null) return null;
+        // TODO: Tam çözünürlük için FileProvider ile photoFile oluşturup kamera intentine EXTRA_OUTPUT ver.
         return BitmapFactory.decodeFile(photoFile.getAbsolutePath());
     }
 
@@ -437,6 +468,7 @@ public class Founded extends AppCompatActivity {
 
     public void onStartCamera(android.view.View view) {
         Intent takePictureIntent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
+        // TODO: Tam boy fotoğraf istiyorsan FileProvider kur ve EXTRA_OUTPUT ile uri ver.
         if (takePictureIntent.resolveActivity(getPackageManager()) != null) {
             startActivityForResult(takePictureIntent, REQUEST_IMAGE_CAPTURE);
         } else {
