@@ -1,6 +1,7 @@
 package com.kurmez.iyesi.kurmes.utilities;
 
 import android.content.Context;
+import android.content.pm.PackageManager;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
@@ -12,6 +13,8 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 
+import com.google.android.gms.location.FusedLocationProviderClient;
+import com.google.android.gms.location.LocationServices;
 import com.google.android.gms.tasks.OnFailureListener;
 import com.google.android.gms.tasks.OnSuccessListener;
 import com.google.android.gms.tasks.Task;
@@ -259,6 +262,7 @@ public class Helpers {
         }
         return mapped;
     }
+
 
     /* ===================== Yeni: Marker Uçları için sarmalayıcı ===================== */
 
