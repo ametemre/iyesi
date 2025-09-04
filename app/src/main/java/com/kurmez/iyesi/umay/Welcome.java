@@ -113,7 +113,7 @@ public class Welcome extends AppCompatActivity {
             }
         });
         // (opsiyonel) rolü önceden çekip cache’e yazalım
-        cf.refreshRole();
+        new Thread(() -> cf.refreshRole()).start();
         // Veri çek
         cf.fetchPriorityPets();
     }

@@ -610,44 +610,65 @@ public class CFHelper {
         endpointAsync("/checkPendingCompanion", q, null, /*post=*/false, new EndpointCallback() {
             @Override public void onSuccess(JSONObject resp) {
                 try {
-                    // Esnek yanıt yorumlama
+                    // Esnek şema: { companion:{...} } / { has:true, companion:{...} } / bazen kök JSON
                     boolean has = resp.optBoolean("has",
                             resp.optBoolean("hasPending", resp.has("companion")));
-                    JSONObject comp = resp.optJSONObject("companion");
 
-                    // Bazı backend’ler companion’ı köke koyabilir:
-                    if (comp == null && has && resp.length() > 0) {
-                        // ‘companion’ alanı yoksa ama başka alanlar varsa tüm kökü companion say
+                    JSONObject comp = resp.optJSONObject("companion");
+                    if (comp == null && (has || resp.length() > 0)) {
+                        // companion alanı yoksa ama kökte veri varsa kökü companion say
                         comp = resp;
+                        has = true;
                     }
 
                     final JSONObject result = (has ? comp : null);
                     main.post(() -> cb.onResult(result));
                 } catch (Throwable parseErr) {
+                    // Nadiren burada da patlayabilir; aşağıdaki onError yolu ile aynı davran
                     main.post(() -> cb.onError(parseErr));
                 }
             }
-            @Override public void onError(Throwable error) {
 
-                // 404 ise callable dene
+            @Override public void onError(Throwable error) {
+                // 1) Backend "false" döndüğünde endpointAsync JSON parse ederken JSONException üretiyor.
+                // Bu durumda pending YOK olarak kabul edip null döndürüyoruz.
+                String msg = (error != null && error.getMessage() != null) ? error.getMessage() : "";
+                boolean looksLikeFalse =
+                        (error instanceof org.json.JSONException) ||
+                                msg.equalsIgnoreCase("false") ||
+                                msg.contains("Value false");
+
+                if (looksLikeFalse) {
+                    main.post(() -> cb.onResult(null));
+                    return;
+                }
+
+                // 2) 404 ise callable fallback’i dene (opsiyonel)
                 if (error instanceof HttpException && ((HttpException) error).code == 404) {
                     try {
                         JSONObject data = new JSONObject().put("deviceId", deviceId);
                         JSONObject r = callFunction("checkPendingCompanion", data);
-                        // parse aynı:
+
                         boolean has = r.optBoolean("has", r.optBoolean("hasPending", r.has("companion")));
                         JSONObject comp = r.optJSONObject("companion");
+                        if (comp == null && (has || r.length() > 0)) {
+                            comp = r; has = true;
+                        }
                         final JSONObject result = (has ? comp : null);
                         main.post(() -> cb.onResult(result));
+                        return;
                     } catch (Throwable callErr) {
                         main.post(() -> cb.onError(callErr));
+                        return;
                     }
-                } else {
-                    main.post(() -> cb.onError(error));
                 }
+
+                // 3) Diğer hatalar
+                main.post(() -> cb.onError(error));
             }
         });
     }
+
 
 
     private static JSONObject toJsonFromObject(Object o) throws JSONException {
