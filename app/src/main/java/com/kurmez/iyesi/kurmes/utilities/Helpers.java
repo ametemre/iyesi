@@ -1,5 +1,6 @@
 package com.kurmez.iyesi.kurmes.utilities;
 
+import android.app.Activity;
 import android.content.Context;
 import android.content.pm.PackageManager;
 import android.os.Handler;
@@ -13,8 +14,6 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 
-import com.google.android.gms.location.FusedLocationProviderClient;
-import com.google.android.gms.location.LocationServices;
 import com.google.android.gms.tasks.OnFailureListener;
 import com.google.android.gms.tasks.OnSuccessListener;
 import com.google.android.gms.tasks.Task;
@@ -24,7 +23,9 @@ import com.google.firebase.appcheck.AppCheckToken;
 import com.google.firebase.appcheck.FirebaseAppCheck;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
+import com.kurmez.iyesi.App;
 import com.kurmez.iyesi.R;
+import com.kurmez.iyesi.kayra.TopActivity;
 import com.kurmez.iyesi.kurmes.social.Profile;
 
 import org.json.JSONArray;
@@ -69,7 +70,7 @@ public class Helpers {
             String idToken = getTokenResult.getToken();
             OkHttpClient client = new OkHttpClient();
             Request request = new Request.Builder()
-                    .url("https://us-central1-iyesi-a651a.cloudfunctions.net/getRole")
+                    .url("https://us-central1-iyesi-e8d4f.cloudfunctions.net/getRole")
                     .addHeader("Authorization", "Bearer " + idToken)
                     .post(RequestBody.create("{\"data\":{}}",
                             MediaType.parse("application/json")))
@@ -268,7 +269,7 @@ public class Helpers {
 
     /**
      * markerCreate uçuna uygun gövdeyi hazırlar ve gönderir.
-     * baseUrl ör.: "https://us-central1-iyesi-a651a.cloudfunctions.net"
+     * baseUrl ör.: "https://us-central1-iyesi-e8d4f.cloudfunctions.net"
      */
     public static void createMarkerOnCloud(
             Context ctx,
@@ -299,6 +300,46 @@ public class Helpers {
             } else {
                 showToastSafe(ctx, "İstek hazırlanamadı: " + e.getMessage());
             }
+        }
+    }
+    public final class UIHelper {
+
+        // Güvenli Context seçimi: Activity > Application
+        private static Context pickUiContext(@Nullable Context ctx) {
+            if (ctx instanceof Activity) return ctx;
+            Activity top = TopActivity.activity(); // bizim lifecycle tracker
+            if (top != null && !top.isFinishing()) return top;
+            return App.app(); // son çare (Toast gibi işler için ok)
+        }
+
+        // Örnek: Toast
+        public static void toast(@Nullable Context ctx, String msg) {
+            Context c = pickUiContext(ctx);
+            new android.os.Handler(android.os.Looper.getMainLooper())
+                    .post(() -> android.widget.Toast.makeText(c, msg, android.widget.Toast.LENGTH_SHORT).show());
+        }
+
+        // Örnek: Dialog (Activity şart)
+        public static void confirm(@Nullable Activity act,
+                                   String title, String msg,
+                                   Runnable onOk) {
+            Activity a = (act != null) ? act : TopActivity.activity();
+            if (a == null || a.isFinishing()) return; // Activity yoksa dialog açma
+
+            a.runOnUiThread(() ->
+                    new androidx.appcompat.app.AlertDialog.Builder(a)
+                            .setTitle(title).setMessage(msg)
+                            .setPositiveButton("OK", (d, w) -> { if (onOk != null) onOk.run(); })
+                            .setNegativeButton("İptal", null)
+                            .show()
+            );
+        }
+
+        // Örnek: Activity başlatma
+        public static void openSettings(@Nullable Activity act) {
+            Activity a = (act != null) ? act : TopActivity.activity();
+            if (a == null || a.isFinishing()) return;
+            a.startActivity(new android.content.Intent(android.provider.Settings.ACTION_SETTINGS));
         }
     }
 

@@ -20,8 +20,7 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
-import com.google.android.gms.tasks.OnSuccessListener;
-import com.google.firebase.appcheck.FirebaseAppCheck;
+
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.auth.GetTokenResult;
@@ -63,7 +62,7 @@ public class Message extends AppCompatActivity {
     public static final String EXTRA_TARGET_USER_NAME = "targetUserName";
     // class alanları
     //private static final MediaType JSON = MediaType.get("application/json; charset=utf-8");
-    private static final String CF_URL = "https://us-central1-iyesi-a651a.cloudfunctions.net/appSend";
+    private static final String CF_URL = "https://us-central1-iyesi-e8d4f.cloudfunctions.net/appSend";
     private static final String BASE = "https://iye-gw-5bszr9sz.uc.gateway.dev"; // Gateway hostname
     private static final MediaType JSON = MediaType.parse("application/json; charset=utf-8");
     private static String gwUrl(String path){ return BASE + GW_PREFIX + path; }

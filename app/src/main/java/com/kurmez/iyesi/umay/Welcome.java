@@ -1,5 +1,9 @@
 package com.kurmez.iyesi.umay;
 
+import com.kurmez.iyesi.kurmes.utilities.helper.CFHelper;
+import com.kurmez.iyesi.kayra.Classes.Soul; // tek ve doğru Soul
+import androidx.annotation.NonNull;
+import java.util.List;
 
 
 import android.content.Context;
@@ -15,6 +19,7 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.google.firebase.auth.FirebaseAuth;
@@ -37,7 +42,7 @@ import okhttp3.Request;
 
 public class Welcome extends AppCompatActivity {
     private static final String TAG = "WelcomeActivity";
-    private static final String CF_GET_PRIORITY = "https://us-central1-iyesi-a651a.cloudfunctions.net/getPriorityPets";
+    private static final String CF_GET_PRIORITY = "https://us-central1-iyesi-e8d4f.cloudfunctions.net/getPriorityPets";
     private CFHelper cf;
     private ImageView imgWelcome;
     private ImageButton quitButton;
@@ -62,27 +67,24 @@ public class Welcome extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_welcome_v2);
 
-        // UI bileşenlerini bağla
+        // UI bileşenleri
         imgWelcome = findViewById(R.id.img_welcome);
         quitButton = findViewById(R.id.quit);
         messageButton = findViewById(R.id.message);
         notificationButton = findViewById(R.id.notification);
         listView = findViewById(R.id.list_view);
         username = findViewById(R.id.username_validation);
-        // Adapter kurulumu
+
         adapter = new CompanionAdapter(this, companions);
         listView.setAdapter(adapter);
 
-        // UI event listener'ları
         setupUIListeners();
 
-
-        // İnternet bağlantısını kontrol et
+        // İnternet kontrolü
         ConnectivityManager cm = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
         NetworkInfo netInfo = cm != null ? cm.getActiveNetworkInfo() : null;
         if (netInfo == null || !netInfo.isConnected()) {
             Helpers.showToastSafe(this, "İnternet bağlantısı yok. Lütfen bağlantınızı kontrol edin.");
-            // Yine de UI açılabilir, sadece veri çekimi engellenir
         }
 
         // Login kontrolü
@@ -96,26 +98,36 @@ public class Welcome extends AppCompatActivity {
         } else {
             username.setText(user.getEmail());
         }
-        // CFHelper kurulumu (proje id’nizi kullanın)
-        cf = new CFHelper(this, "iyesi-a651a", new CFHelper.Listener(){
-            @Override public void onPriorityPets(@NonNull java.util.List<Soul> pets) {
-                // UI’yi ana threade taşı
-                        runOnUiThread(() -> {
-                            companions.clear();
-                            companions.addAll(pets);
-                            adapter.notifyDataSetChanged();
-                        });
-            }
-            @Override public void onCallFailed(@NonNull String api, @NonNull Throwable err) {
-                runOnUiThread(() ->
-                        Helpers.showToastSafe(Welcome.this, "Sunucuya bağlanılamadı")
-                );
-            }
-        });
-        // (opsiyonel) rolü önceden çekip cache’e yazalım
-        new Thread(() -> cf.refreshRole()).start();
-        // Veri çek
-        cf.fetchPriorityPets();
+
+        // CFHelper
+
+        cf = new CFHelper(
+                    this /* context */,
+                    "PROJECT_ID",        // örn: iyesi-a651a
+                    "us-central1",       // bölge
+                    new CFHelper.Listener<Soul>() {
+                        @Override
+                        public void onPriorityPets(@NonNull List<Soul> pets) {
+                            // TODO: UI’ni güncelle
+                        }
+                        @Override
+                        public void onCallFailed(@NonNull String apiName, @NonNull Throwable error) {
+                            // TODO: hata göster
+                        }
+                        @Override
+                        public void onRoleRefreshed(@Nullable String role) {
+                            // opsiyonel
+                        }
+                    }
+            );
+            // opsiyonel ama önerilir: cihaz kimliğini header’a ekleyin
+            //cf.setDeviceId(deviceIdString);
+
+            // Rolü arka planda ve token’lar hazır olunca çek
+            // cf.refreshRoleWhenReady();
+
+            // Liste verilerini çek
+            cf.fetchPriorityPets();
     }
     private void setupUIListeners() {
         imgWelcome.setOnClickListener(v -> {
@@ -141,7 +153,7 @@ public class Welcome extends AppCompatActivity {
             intent.putExtra("species", selectedCompanion.getBreed());
             intent.putExtra("foundDate", selectedCompanion.getFoundDate());
             intent.putExtra("foundPlace", selectedCompanion.getFoundLocation());
-            intent.putExtra("photoUrl", selectedCompanion.getImageResId());
+            intent.putExtra("photoUrl", selectedCompanion.getImageUrl());
             intent.putExtra("profileId", selectedCompanion.getFinderName());
             startActivity(intent);
         });

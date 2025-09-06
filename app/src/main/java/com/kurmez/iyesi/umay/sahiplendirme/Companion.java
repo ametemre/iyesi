@@ -50,7 +50,7 @@ public class Companion extends AppCompatActivity {
         }
         if (node == null) node = "soul_inneed";
 
-        String url = "https://us-central1-iyesi-a651a.cloudfunctions.net/getCompanionByDevice?deviceId=" + deviceId + "&node=" + node;
+        String url = "https://us-central1-iyesi-e8d4f.cloudfunctions.net/getCompanionByDevice?deviceId=" + deviceId + "&node=" + node;
 
         // 3. Veri çek
         new OkHttpClient().newCall(new Request.Builder().url(url).build())

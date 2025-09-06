@@ -70,7 +70,7 @@ public class WelcomeDummy extends AppCompatActivity {
     private String idToken;
 
     // --- Cloud Function uç noktaları (güncellendi) ---
-    private static final String CF_GET_PRIORITY = "https://us-central1-iyesi-a651a.cloudfunctions.net/getPriorityPets";
+    private static final String CF_GET_PRIORITY = "https://us-central1-iyesi-e8d4f.cloudfunctions.net/getPriorityPets";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {

@@ -80,6 +80,7 @@
 
     <com.google.android.material.floatingactionbutton.FloatingActionButton
         android:id="@+id/fab_9"
+        android:src="@drawable/coban"
         style="@style/MiniFabStyle"/>
     <!-- Camera View -->
     <org.opencv.android.JavaCamera2View

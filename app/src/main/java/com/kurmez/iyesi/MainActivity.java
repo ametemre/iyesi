@@ -23,6 +23,7 @@ import com.google.zxing.BarcodeFormat;
 import com.google.zxing.WriterException;
 import com.journeyapps.barcodescanner.BarcodeEncoder;
 import com.kurmez.iyesi.kurmes.Kurmes;
+import com.kurmez.iyesi.kurmes.ui.SoulsManagerActivity;
 import com.kurmez.iyesi.kurmes.utilities.Helpers;
 import com.kurmez.iyesi.umay.Welcome;
 
@@ -234,7 +235,12 @@ public class MainActivity extends AppCompatActivity {
      * Opens the Kurmes activity for real-time image recognition if the user is unregistered.
      */
     private void navigateToKurmes() {
-        Intent intent = new Intent(this, Kurmes.class); // Navigate to Kurmes activity
+        Intent intent = null; // Navigate to Kurmes activity
+        if (!isRegistered) {
+            intent = new Intent(this, SoulsManagerActivity.class);
+        }else{
+            intent = new Intent(this, Kurmes.class);
+        }
         startActivity(intent);
         finish();
     }

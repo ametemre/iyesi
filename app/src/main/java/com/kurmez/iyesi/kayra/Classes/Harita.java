@@ -131,7 +131,7 @@ public class Harita implements OnMapReadyCallback {
     private LatLng centerPoint;
     private final double radiusMeters = 50000; // Örneğin 50 km
     private static final Map<String, BitmapDescriptor> iconCache = new HashMap<>();
-    private static final String CF_BASE = "https://us-central1-iyesi-a651a.cloudfunctions.net";
+    private static final String CF_BASE = "https://us-central1-iyesi-e8d4f.cloudfunctions.net";
 
     private final java.util.List<com.google.android.gms.maps.model.Marker> renderedMarkers = new java.util.ArrayList<>();
 
@@ -363,7 +363,7 @@ public class Harita implements OnMapReadyCallback {
                     // Cloud Functions: markerCreate
                     Helpers.createMarkerOnCloud(
                             activity,
-                            CF_BASE, // sınıf başında sabitle: "https://us-central1-iyesi-a651a.cloudfunctions.net"
+                            CF_BASE, // sınıf başında sabitle: "https://us-central1-iyesi-e8d4f.cloudfunctions.net"
                             marker.getPosition().latitude,
                             marker.getPosition().longitude,
                             selectedType,

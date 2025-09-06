@@ -14,6 +14,7 @@ import com.google.firebase.appcheck.debug.DebugAppCheckProviderFactory;
 import com.google.firebase.appcheck.playintegrity.PlayIntegrityAppCheckProviderFactory;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
+import com.kurmez.iyesi.kayra.TopActivity;
 
 import org.json.JSONObject;
 
@@ -30,24 +31,29 @@ import okhttp3.Response;
 
 public class App extends Application {
     private static final String TAG = "MyApp";
+    private static App sInstance;
 
     @Override
     public void onCreate() {
         super.onCreate();
+        sInstance = this;
+        TopActivity.init(this);
 
         FirebaseApp.initializeApp(this);
 
-        FirebaseAppCheck appCheck = FirebaseAppCheck.getInstance();
+
         if (BuildConfig.DEBUG) {
             FirebaseAppCheck.getInstance()
                     .installAppCheckProviderFactory(
-                            com.google.firebase.appcheck.debug.DebugAppCheckProviderFactory.getInstance());
+                            DebugAppCheckProviderFactory.getInstance());
         } else {
             FirebaseAppCheck.getInstance()
                     .installAppCheckProviderFactory(
-                            com.google.firebase.appcheck.playintegrity.PlayIntegrityAppCheckProviderFactory.getInstance());
+                            PlayIntegrityAppCheckProviderFactory.getInstance());
         }
+
     }
+    public static Context app() { return sInstance; } // Uygulama context'i
 
     /**
      * Eğer cihazda Google Play Services uygunsa ProviderInstaller'ı başlatır,
@@ -93,9 +99,9 @@ public class App extends Application {
 
                         RequestBody body = RequestBody.create(
                                 payload.toString(), MediaType.get("application/json; charset=utf-8"));
-
+                        Log.i("App Check token", appCheckToken.toString());
                         Request req = new Request.Builder()
-                                .url("https://us-central1-iyesi-a651a.cloudfunctions.net/appSend")
+                                .url("https://us-central1-iyesi-e8d4f.cloudfunctions.net/appSend")
                                 .addHeader("Authorization", "Bearer " + idToken)     // Firebase Auth
                                 .addHeader("X-Firebase-AppCheck", appCheckToken)      // App Check
                                 .post(body)
@@ -118,6 +124,7 @@ public class App extends Application {
         }).addOnFailureListener(e -> {
             Log.e("Message", "Auth ID token alınamadı", e);
         });
+
     }
 
 }

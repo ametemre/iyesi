@@ -74,9 +74,12 @@
             android:value="@integer/google_play_services_version" /> <!-- Google Maps API anahtarı -->
         <meta-data
             android:name="com.google.android.geo.API_KEY"
-            android:value="AIzaSyBP4FOeMzLyIXiSu7EGO6xjV7P-Sz_4KFs" /> <!-- Aktiviteler -->
+            android:value="AIzaSyBbU_M5LP-eJoDPJYcQaACCfDwuzGK8Cx4" /> <!-- Aktiviteler -->
         <activity
             android:name=".umay.SokakActivity"
+            android:exported="false" />
+        <activity
+            android:name=".kurmes.ui.SoulsManagerActivity"
             android:exported="false" />
         <activity
             android:name=".kurmes.social.message.Messaging"

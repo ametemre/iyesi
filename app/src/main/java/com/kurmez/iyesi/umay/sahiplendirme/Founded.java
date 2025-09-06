@@ -102,7 +102,7 @@ public class Founded extends AppCompatActivity {
         speciesInput = findViewById(R.id.companion_species);
         dateView     = findViewById(R.id.companion_found_date);
         placeView    = findViewById(R.id.companion_found_place);
-        cf = new CFHelper(this, "iyesi-a651a", null);
+        cf = new CFHelper(this, "iyesi-e8d4f", null);
 
 // onCreate(...) içinde, super.onCreate(...)’dan SONRA:
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this);

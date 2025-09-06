@@ -45,7 +45,7 @@ import java.util.Map;
 public class ExplorePrivate extends AppCompatActivity {
     private static final String TAG = "ExplorePrivate";
     // bir sabit tanımla
-    private static final String RTDB_URL = "https://iyesi-a651a.firebaseio.com"; // konsoldaki link
+    private static final String RTDB_URL = "https://iyesi-e8d4f.firebaseio.com"; // konsoldaki link
     private static final List<String> ALLOWED_ROLES = Arrays.asList(
             "İye", "Körmös", "Ülgen", "Tengri",
             "İYE", "iye", "Körmes", "Kormos", "KORMOS", "KÖRMÖS",
@@ -90,7 +90,7 @@ public class ExplorePrivate extends AppCompatActivity {
             header.setOnClickListener(v -> startActivity(new Intent(this, Profile.class)));
         }
 
-        cf = new CFHelper(this, "iyesi-a651a", null);
+        cf = new CFHelper(this, "iyesi-e8d4f", null);
         pendingRef = db.getReference("Pending/Companion/soul_inneed");
         FusedLocationProviderClient loc = LocationServices.getFusedLocationProviderClient(this);
 

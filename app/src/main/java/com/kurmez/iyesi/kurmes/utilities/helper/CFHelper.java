@@ -1,10 +1,13 @@
 package com.kurmez.iyesi.kurmes.utilities.helper;
 
 import android.content.Context;
+import android.os.Handler;
+import android.os.Looper;
 import android.util.Log;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+
 
 import com.google.android.gms.tasks.Tasks;
 import com.google.firebase.appcheck.AppCheckToken;
@@ -14,6 +17,7 @@ import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.functions.FirebaseFunctions;
 import com.google.firebase.functions.HttpsCallableReference;
+import com.kurmez.iyesi.App;
 import com.kurmez.iyesi.kurmes.social.Profile;
 import com.kurmez.iyesi.kayra.Classes.Soul;
 
@@ -39,11 +43,6 @@ import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.RequestBody;
 import okhttp3.Response;
-import android.os.Handler;
-import android.os.Looper;
-import android.widget.ArrayAdapter;
-import android.widget.Spinner;
-
 
 /**
  * CFHelper — Cloud Functions istemci yardımcı sınıfı
@@ -54,14 +53,19 @@ import android.widget.Spinner;
  * - HTTP (onRequest) ve Callable (onCall) uçları desteklenir.
  */
 public class CFHelper {
-
+    // Örn: kaynak erişimi, SharedPreferences vs. — UI yok
+    public static void saveFlag(@Nullable Context ctx, String key, boolean v) {
+        Context app = ctx != null ? ctx.getApplicationContext() : App.app();
+        app.getSharedPreferences("cf", Context.MODE_PRIVATE)
+                .edit().putBoolean(key, v).apply();
+    }
     // ------------------------------------------------------------
-    // Listener (UI geri bildirimleri için)
+    // Listener (UI geri bildirimleri için) — JENERİK
     // ------------------------------------------------------------
-    public interface Listener {
+    public interface Listener<T> {
         default void onRoleRefreshed(@Nullable String role) {}
         default void onCallFailed(@NonNull String apiName, @NonNull Throwable error) {}
-        default void onPriorityPets(@NonNull java.util.List<Soul> pets) {}
+        default void onPriorityPets(@NonNull List<T> pets) {}
     }
 
     // ------------------------------------------------------------
@@ -69,13 +73,13 @@ public class CFHelper {
     // ------------------------------------------------------------
     private static final String TAG = "CFHelper";
     private static final MediaType JSON = MediaType.parse("application/json; charset=utf-8");
-    // alanlara ekleyin
-    private Spinner dbPathSpinner;
-    private ArrayAdapter<String> pathAdapter;
-    private final List<String> pathItems = new ArrayList<>();
-    private final Deque<String> pathStack = new ArrayDeque<>();
-    private DatabaseReference browseRef; // gezginin o anki referansı
-    public String urlStr;
+
+    // (Bazı eski UI bağımlılıkları için muhafaza edilen alanlar — kullanılmıyorsa zararsız)
+    @Nullable private android.widget.Spinner dbPathSpinner;
+    @Nullable private android.widget.ArrayAdapter<String> pathAdapter;
+    @NonNull  private final List<String> pathItems = new ArrayList<>();
+    @NonNull  private final Deque<String> pathStack = new ArrayDeque<>();
+    @Nullable private DatabaseReference browseRef; // gezginin o anki referansı
 
     private final Context appContext;
     private final OkHttpClient http;
@@ -84,23 +88,29 @@ public class CFHelper {
     private final FirebaseFunctions functions;
     private final Handler main = new Handler(Looper.getMainLooper());
 
-    /** https://us-central1-<PROJECT_ID>.cloudfunctions.net */
-    // 1) Alanı değiştir
-    //- private final String baseHttpUrl;
-    private String baseHttpUrl;
+    private String baseHttpUrl; // örn: https://us-central1-<PROJECT_ID>.cloudfunctions.net
     private final String region;
-
-
+    private String pathPrefix = ""; // ops. /v1 gibi
 
     /** İstemci tarafında saklanan rol bilgisi (sunucudan getRole ile çekilir). */
     private volatile @Nullable String userRole;
 
-    private final @Nullable Listener listener;
+    /** Opsiyonel cihaz kimliği — header olarak iletilir. */
+    private volatile @Nullable String deviceId;
 
-    // alanlar
-    private String pathPrefix = ""; // yeni
+    /** Uygulamaya dönecek callback — bu sınıfta Soul için tipledik. */
+    private final @Nullable Listener<Soul> listener;
 
-    public CFHelper(@NonNull Context ctx, @NonNull String projectId, @NonNull String region, @Nullable Listener listener) {
+    /** Son çağrının (GET) URL’ini debug için tutmak istersen */
+    public @Nullable String urlStr;
+
+    // ------------------------------------------------------------
+    // Yapıcılar
+    // ------------------------------------------------------------
+    public CFHelper(@NonNull Context ctx,
+                    @NonNull String projectId,
+                    @NonNull String region,
+                    @Nullable Listener<Soul> listener) {
         this.appContext = ctx.getApplicationContext();
         this.listener = listener;
         this.auth = FirebaseAuth.getInstance();
@@ -114,35 +124,34 @@ public class CFHelper {
                 .build();
         this.region = region;
         this.baseHttpUrl = "https://" + region + "-" + projectId + ".cloudfunctions.net";
+
     }
 
-    // eski ctor’u geriye dönük koru
-    public CFHelper(@NonNull Context ctx, @NonNull String projectId, @Nullable Listener l) {
-        this(ctx, projectId, "us-central1", l);
+    // eski ctor’u geriye dönük koru (region=us-central1)
+    public CFHelper(@NonNull Context ctx,
+                    @NonNull String projectId,
+                    @Nullable Listener<Soul> listener) {
+        this(ctx, projectId, "us-central1", listener);
     }
 
-    // opsiyonel override’lar
+    // ------------------------------------------------------------
+    // Opsiyonel ayarlar
+    // ------------------------------------------------------------
+    /** /v1 gibi bir prefix istiyorsan ayarla. Boş veya null ise kaldırır. */
     public void setPathPrefix(@Nullable String prefix) {
         if (prefix == null) prefix = "";
         this.pathPrefix = prefix.isEmpty() ? "" : (prefix.startsWith("/") ? prefix : "/" + prefix);
     }
-    public void overrideBaseHttpUrl(@NonNull String absoluteBase) { this.baseHttpUrl = absoluteBase; }
-    private String buildUrl(String path, @Nullable Map<String,String> query) {
-        StringBuilder url = new StringBuilder(baseHttpUrl);
-        if (!pathPrefix.isEmpty()) url.append(pathPrefix);
-        url.append(path);
-        if (query != null && !query.isEmpty()) {
-            url.append("?");
-            boolean first = true;
-            for (Map.Entry<String, String> e : query.entrySet()) {
-                if (!first) url.append("&");
-                first = false;
-                url.append(e.getKey()).append("=").append(Util.urlEncode(e.getValue()));
-            }
-        }
-        return url.toString();
+
+    /** Prod/Emu/Proxy ortamları için taban URL’i override et. */
+    public void overrideBaseHttpUrl(@NonNull String absoluteBase) {
+        this.baseHttpUrl = absoluteBase;
     }
 
+    /** Cihaz kimliği header’ı için (X-Device-Id). */
+    public void setDeviceId(@Nullable String deviceId) {
+        this.deviceId = (deviceId == null || deviceId.trim().isEmpty()) ? null : deviceId.trim();
+    }
 
     // ------------------------------------------------------------
     // Kimlik / Token
@@ -160,7 +169,7 @@ public class CFHelper {
         FirebaseUser user = auth.getCurrentUser();
         if (user == null) throw new IllegalStateException("Not authenticated");
 
-        // Force refresh for every call (isteğe göre)
+        // Force refresh for every call
         String idTok = Tasks.await(user.getIdToken(true)).getToken();
         if (idTok == null || idTok.isEmpty()) throw new IllegalStateException("Empty ID token");
 
@@ -190,17 +199,33 @@ public class CFHelper {
         // İstemci tarafı gözlem için rol header’ı (ASCII zorunluluğu!)
         if (userRole != null && !userRole.isEmpty()) {
             String asciiRole = toAsciiRole(userRole);
-            if (asciiRole != null) {
-                hb.add("X-User-Role", asciiRole);
-            }
+            if (asciiRole != null) hb.add("X-User-Role", asciiRole);
         }
+
+        if (deviceId != null && !deviceId.isEmpty()) {
+            hb.add("X-Device-Id", deviceId);
+        }
+
         return hb.build();
     }
-    // Founded.java ile uyumlu:
-    public interface PendingCallback {
-        /** companion = null → pending yok demektir. */
-        void onResult(@Nullable JSONObject companion);
-        void onError(@NonNull Throwable error);
+
+    // ------------------------------------------------------------
+    // URL yardımcıları
+    // ------------------------------------------------------------
+    private String buildUrl(@NonNull String path, @Nullable Map<String,String> query) {
+        StringBuilder url = new StringBuilder(baseHttpUrl);
+        if (!pathPrefix.isEmpty()) url.append(pathPrefix);
+        url.append(path);
+        if (query != null && !query.isEmpty()) {
+            url.append("?");
+            boolean first = true;
+            for (Map.Entry<String, String> e : query.entrySet()) {
+                if (!first) url.append("&");
+                first = false;
+                url.append(e.getKey()).append("=").append(Util.urlEncode(e.getValue()));
+            }
+        }
+        return url.toString();
     }
 
     // ------------------------------------------------------------
@@ -208,54 +233,38 @@ public class CFHelper {
     // ------------------------------------------------------------
     private JSONObject doGetJson(String path, @Nullable Map<String, String> query) throws Exception {
         Tokens t = refreshTokensBlocking();
-        urlStr= buildUrl(path, query);
-        Log.d(TAG, "GET  " + urlStr);  // veya POST
-        try {
-            StringBuilder url = new StringBuilder(baseHttpUrl).append(path);
-            if (query != null && !query.isEmpty()) {
-                url.append("?");
-                boolean first = true;
-                for (Map.Entry<String, String> e : query.entrySet()) {
-                    if (!first) url.append("&");
-                    first = false;
-                    url.append(e.getKey()).append("=").append(Util.urlEncode(e.getValue()));
-                }
-            }
-            Request req = new Request.Builder()
-                    .url(urlStr)
-                    .headers(buildAuthHeaders(t))
-                    .get()
-                    .build();
-            Log.d(TAG, "GET  " + urlStr); // <-- kritik log
-            try (Response resp = http.newCall(req).execute()) {
-                String body = resp.body() != null ? resp.body().string() : "";
-                if (!resp.isSuccessful()) throw new HttpException(resp.code(), body);
-                return toJson(body);
-            }
-        } catch (IOException e) {
+        String url = buildUrl(path, query);
+        this.urlStr = url;
+        Log.d(TAG, "GET  " + url);
+
+        Request req = new Request.Builder()
+                .url(url)
+                .headers(buildAuthHeaders(t))
+                .get()
+                .build();
+
+        try (Response resp = http.newCall(req).execute()) {
+            String body = resp.body() != null ? resp.body().string() : "";
+            if (!resp.isSuccessful()) throw new HttpException(resp.code(), body);
+            return toJson(body);
+        } catch (IOException | JSONException e) {
             throw new RuntimeException(e);
-        } catch (JSONException e) {
-            throw new RuntimeException(e);
-        } finally {
         }
     }
 
     private JSONObject doPostJson(String path, @Nullable JSONObject json) throws Exception {
         Tokens t = refreshTokensBlocking();
-        String urlStr = buildUrl(path, null);
-        RequestBody body = RequestBody.create(JSON, (json == null ? "{}" : json.toString()));
-
-        //String payload = (json == null ? "{}" : json.toString());
-        // OkHttp3 imzası: RequestBody.create(MediaType, String)
-        //RequestBody body = RequestBody.create(JSON, payload);
+        String url = buildUrl(path, null);
+        String payload = (json == null ? "{}" : json.toString());
+        RequestBody body = RequestBody.create(JSON, payload);
 
         Request req = new Request.Builder()
-                .url(urlStr)
+                .url(url)
                 .headers(buildAuthHeaders(t))
                 .post(body)
                 .build();
-        Log.d(TAG, "POST " + urlStr); // <-- kritik log
 
+        Log.d(TAG, "POST " + url);
         try (Response resp = http.newCall(req).execute()) {
             String respBody = resp.body() != null ? resp.body().string() : "";
             if (!resp.isSuccessful()) throw new HttpException(resp.code(), respBody);
@@ -267,13 +276,14 @@ public class CFHelper {
     // Callable yardımcıları
     // ------------------------------------------------------------
     private JSONObject callFunction(String name, @Nullable JSONObject data) throws Exception {
-        // Callable tarafında SDK token’ı taşır; ama biz yine de force refresh yapıyoruz
+        // Callable tarafında SDK token’ı taşır; yine de force refresh yapıyoruz
         refreshTokensBlocking();
         HttpsCallableReference ref = functions.getHttpsCallable(name);
         Map<String, Object> map = (data == null) ? Collections.emptyMap() : Util.jsonToMap(data);
         Object result = Tasks.await(ref.call(map)).getData();
         return toJsonFromObject(result);
     }
+
     // ------------------------------------------------------------
     // Genel endpoint yürütücüsü (async)
     // ------------------------------------------------------------
@@ -282,13 +292,11 @@ public class CFHelper {
         void onError(Throwable error);
     }
 
-    private void endpointAsync(
-            @NonNull String path,
-            @Nullable Map<String,String> query,
-            @Nullable JSONObject body,
-            boolean post,
-            @NonNull EndpointCallback cb
-    ) {
+    private void endpointAsync(@NonNull String path,
+                               @Nullable Map<String,String> query,
+                               @Nullable JSONObject body,
+                               boolean post,
+                               @NonNull EndpointCallback cb) {
         new Thread(() -> {
             try {
                 JSONObject resp = post ? doPostJson(path, body) : doGetJson(path, query);
@@ -300,7 +308,7 @@ public class CFHelper {
     }
 
     // ------------------------------------------------------------
-    // Yüksek seviye API’ler
+    // Dış API’ler
     // ------------------------------------------------------------
 
     /** Sunucudan rolü çek ve sınıf değişkenine yaz. */
@@ -319,10 +327,9 @@ public class CFHelper {
     }
 
     // ---------- Messaging / Users ----------
-
     public interface UsersCallback {
-        void onSuccess(java.util.List<Profile> users);
-        void onError(Throwable error);
+        void onSuccess(@NonNull List<Profile> users);
+        void onError(@NonNull Throwable error);
     }
 
     /** /listAllUsersHttp (POST) → List<Profile> */
@@ -338,8 +345,8 @@ public class CFHelper {
         endpointAsync("/listAllUsersHttp", null, body, /*post=*/true, new EndpointCallback() {
             @Override public void onSuccess(JSONObject resp) {
                 try {
-                    java.util.List<Profile> list = parseUsers(resp); // parse BACKGROUND'da
-                    main.post(() -> cb.onSuccess(list));             // callback UI'da
+                    List<Profile> list = parseUsers(resp); // BG
+                    main.post(() -> cb.onSuccess(list));   // UI
                 } catch (Throwable e) {
                     main.post(() -> cb.onError(e));
                 }
@@ -350,7 +357,6 @@ public class CFHelper {
 
     private ArrayList<Profile> parseUsers(@NonNull JSONObject root) throws Exception {
         ArrayList<Profile> out = new ArrayList<>();
-        // Toleranslı okuma: success/ok bayrakları opsiyonel olabilir
         boolean success = root.optBoolean("success", true);
         boolean ok      = root.optBoolean("ok", true);
 
@@ -385,7 +391,6 @@ public class CFHelper {
             String location  = it.optString("location", "");
             String phone     = it.optString("phone", "");
             String role      = it.optString("role", it.optString("userRole", ""));
-            // Avatar: doğrudan avatarUrl varsa onu kullan; yoksa photoUrl/photoURL
             String avatarUrl = it.optString("avatarUrl",
                     it.optString("photoUrl",
                             it.optString("photoURL", "")));
@@ -396,13 +401,12 @@ public class CFHelper {
     }
 
     // ---------- Sahiplendirme / Priority Pets ----------
-
     /** GET /getPriorityPets ve sonucu Listener’a List<Soul> olarak aktarır. */
     public void fetchPriorityPets() {
         endpointAsync("/getPriorityPets", null, null, /*post=*/false, new EndpointCallback() {
             @Override public void onSuccess(JSONObject resp) {
                 try {
-                    java.util.List<Soul> list = parsePriorityPets(resp); // BACKGROUND
+                    List<Soul> list = parsePriorityPets(resp); // BG
                     if (listener != null) main.post(() -> listener.onPriorityPets(list)); // UI
                 } catch (Throwable parseErr) {
                     if (listener != null) main.post(() -> listener.onCallFailed("getPriorityPets.parse", parseErr));
@@ -413,29 +417,8 @@ public class CFHelper {
             }
         });
     }
-    public void submitSoulInNeed(@NonNull JSONObject payload, @NonNull EndpointCallback cb) {
 
-
-        endpointAsync("/submitSoulInNeed", null, payload, /*post=*/true, new EndpointCallback() {
-            @Override public void onSuccess(JSONObject resp) { main.post(() -> cb.onSuccess(resp)); }
-            @Override public void onError(Throwable error) {
-                if (error instanceof HttpException && ((HttpException) error).code == 404) {
-                    try {
-                        JSONObject r = callFunction("submitSoulInNeed", payload);
-                        main.post(() -> cb.onSuccess(r));
-                    } catch (Throwable callErr) {
-                        main.post(() -> cb.onError(callErr));
-                    }
-                } else {
-                    main.post(() -> cb.onError(error));
-                }
-            }
-        });
-    }
-
-
-
-    /** İstersen ham JSON’a da erişmek için */
+    /** İstersen ham JSON’a da erişmek için. */
     public JSONObject getPriorityPets() throws Exception {
         return doGetJson("/getPriorityPets", null);
     }
@@ -477,6 +460,25 @@ public class CFHelper {
             out.add(pc);
         }
         return out;
+    }
+
+    /** POST /submitSoulInNeed — 404’te callable fallback dener. */
+    public void submitSoulInNeed(@NonNull JSONObject payload, @NonNull EndpointCallback cb) {
+        endpointAsync("/submitSoulInNeed", null, payload, /*post=*/true, new EndpointCallback() {
+            @Override public void onSuccess(JSONObject resp) { main.post(() -> cb.onSuccess(resp)); }
+            @Override public void onError(Throwable error) {
+                if (error instanceof HttpException && ((HttpException) error).code == 404) {
+                    try {
+                        JSONObject r = callFunction("submitSoulInNeed", payload);
+                        main.post(() -> cb.onSuccess(r));
+                    } catch (Throwable callErr) {
+                        main.post(() -> cb.onError(callErr));
+                    }
+                } else {
+                    main.post(() -> cb.onError(error));
+                }
+            }
+        });
     }
 
     // ---------- Marker uçları (örnek sarmalayıcılar) ----------
@@ -552,11 +554,78 @@ public class CFHelper {
         return callFunction("echoMe", new JSONObject());
     }
 
+    // ---------- Pending companion (deviceId ile) ----------
+    public interface PendingCallback {
+        /** companion = null → pending yok demektir. */
+        void onResult(@Nullable JSONObject companion);
+        void onError(@NonNull Throwable error);
+    }
+
+    public void checkPendingCompanion(@NonNull String deviceId, @NonNull PendingCallback cb) {
+        Map<String, String> q = new HashMap<>();
+        q.put("deviceId", deviceId);
+
+        endpointAsync("/checkPendingCompanion", q, null, /*post=*/false, new EndpointCallback() {
+            @Override public void onSuccess(JSONObject resp) {
+                try {
+                    boolean has = resp.optBoolean("has",
+                            resp.optBoolean("hasPending", resp.has("companion")));
+
+                    JSONObject comp = resp.optJSONObject("companion");
+                    if (comp == null && (has || resp.length() > 0)) {
+                        comp = resp; has = true;
+                    }
+                    final JSONObject result = (has ? comp : null);
+                    main.post(() -> cb.onResult(result));
+                } catch (Throwable parseErr) {
+                    main.post(() -> cb.onError(parseErr));
+                }
+            }
+
+            @Override public void onError(Throwable error) {
+                String msg = (error != null && error.getMessage() != null) ? error.getMessage() : "";
+                boolean looksLikeFalse =
+                        (error instanceof org.json.JSONException) ||
+                                msg.equalsIgnoreCase("false") ||
+                                msg.contains("Value false");
+
+                if (looksLikeFalse) {
+                    main.post(() -> cb.onResult(null));
+                    return;
+                }
+
+                if (error instanceof HttpException && ((HttpException) error).code == 404) {
+                    try {
+                        JSONObject data = new JSONObject().put("deviceId", deviceId);
+                        JSONObject r = callFunction("checkPendingCompanion", data);
+
+                        boolean has = r.optBoolean("has",
+                                r.optBoolean("hasPending", r.has("companion")));
+                        JSONObject comp = r.optJSONObject("companion");
+                        if (comp == null && (has || r.length() > 0)) {
+                            comp = r; has = true;
+                        }
+                        final JSONObject result = (has ? comp : null);
+                        main.post(() -> cb.onResult(result));
+                        return;
+                    } catch (Throwable callErr) {
+                        main.post(() -> cb.onError(callErr));
+                        return;
+                    }
+                }
+
+                main.post(() -> cb.onError(error));
+            }
+        });
+    }
+
     // ------------------------------------------------------------
-    // Dış API: role getter/setter
+    // Getter/Setter
     // ------------------------------------------------------------
     public @Nullable String getUserRole() { return userRole; }
     public void setUserRole(@Nullable String role) { this.userRole = role; }
+    public @NonNull  String getRegion() { return region; }
+    public @NonNull  String getBaseHttpUrl() { return baseHttpUrl; }
 
     // ------------------------------------------------------------
     // Hatalar
@@ -603,73 +672,6 @@ public class CFHelper {
         }
         return new JSONObject(s);
     }
-    public void checkPendingCompanion(@NonNull String deviceId, @NonNull PendingCallback cb) {
-        Map<String, String> q = new HashMap<>();
-        q.put("deviceId", deviceId);
-
-        endpointAsync("/checkPendingCompanion", q, null, /*post=*/false, new EndpointCallback() {
-            @Override public void onSuccess(JSONObject resp) {
-                try {
-                    // Esnek şema: { companion:{...} } / { has:true, companion:{...} } / bazen kök JSON
-                    boolean has = resp.optBoolean("has",
-                            resp.optBoolean("hasPending", resp.has("companion")));
-
-                    JSONObject comp = resp.optJSONObject("companion");
-                    if (comp == null && (has || resp.length() > 0)) {
-                        // companion alanı yoksa ama kökte veri varsa kökü companion say
-                        comp = resp;
-                        has = true;
-                    }
-
-                    final JSONObject result = (has ? comp : null);
-                    main.post(() -> cb.onResult(result));
-                } catch (Throwable parseErr) {
-                    // Nadiren burada da patlayabilir; aşağıdaki onError yolu ile aynı davran
-                    main.post(() -> cb.onError(parseErr));
-                }
-            }
-
-            @Override public void onError(Throwable error) {
-                // 1) Backend "false" döndüğünde endpointAsync JSON parse ederken JSONException üretiyor.
-                // Bu durumda pending YOK olarak kabul edip null döndürüyoruz.
-                String msg = (error != null && error.getMessage() != null) ? error.getMessage() : "";
-                boolean looksLikeFalse =
-                        (error instanceof org.json.JSONException) ||
-                                msg.equalsIgnoreCase("false") ||
-                                msg.contains("Value false");
-
-                if (looksLikeFalse) {
-                    main.post(() -> cb.onResult(null));
-                    return;
-                }
-
-                // 2) 404 ise callable fallback’i dene (opsiyonel)
-                if (error instanceof HttpException && ((HttpException) error).code == 404) {
-                    try {
-                        JSONObject data = new JSONObject().put("deviceId", deviceId);
-                        JSONObject r = callFunction("checkPendingCompanion", data);
-
-                        boolean has = r.optBoolean("has", r.optBoolean("hasPending", r.has("companion")));
-                        JSONObject comp = r.optJSONObject("companion");
-                        if (comp == null && (has || r.length() > 0)) {
-                            comp = r; has = true;
-                        }
-                        final JSONObject result = (has ? comp : null);
-                        main.post(() -> cb.onResult(result));
-                        return;
-                    } catch (Throwable callErr) {
-                        main.post(() -> cb.onError(callErr));
-                        return;
-                    }
-                }
-
-                // 3) Diğer hatalar
-                main.post(() -> cb.onError(error));
-            }
-        });
-    }
-
-
 
     private static JSONObject toJsonFromObject(Object o) throws JSONException {
         if (o == null) return new JSONObject();
@@ -688,7 +690,6 @@ public class CFHelper {
                 return s;
             }
         }
-        @SuppressWarnings("unchecked")
         static Map<String, Object> jsonToMap(JSONObject json) {
             Map<String, Object> map = new HashMap<>();
             if (json == null) return map;

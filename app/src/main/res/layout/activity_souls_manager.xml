@@ -1,0 +1,25 @@
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:orientation="vertical" android:padding="12dp"
+    android:layout_width="match_parent" android:layout_height="match_parent">
+
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content">
+        <Button android:id="@+id/btnRefresh" android:text="Yenile"
+            android:layout_width="wrap_content" android:layout_height="wrap_content"/>
+        <Space android:layout_width="12dp" android:layout_height="wrap_content"/>
+        <Button android:id="@+id/btnNew" android:text="Yeni"
+            android:layout_width="wrap_content" android:layout_height="wrap_content"/>
+        <Space android:layout_width="12dp" android:layout_height="wrap_content"/>
+        <Button android:id="@+id/btnSeed" android:text="Seed"
+            android:layout_width="wrap_content" android:layout_height="wrap_content"/>
+        <ProgressBar android:id="@+id/progressBar"
+            style="?android:attr/progressBarStyleSmall"
+            android:visibility="gone"
+            android:layout_marginStart="12dp"
+            android:layout_width="wrap_content" android:layout_height="wrap_content"/>
+    </LinearLayout>
+
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/recyclerSouls"
+        android:layout_width="match_parent" android:layout_height="0dp"
+        android:layout_weight="1"/>
+</LinearLayout>

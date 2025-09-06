@@ -51,7 +51,7 @@ import okhttp3.RequestBody;
 import okhttp3.Response;
 
 public class Messaging extends AppCompatActivity {
-    private static final String CF_ALL_USERS = "https://us-central1-iyesi-a651a.cloudfunctions.net/listAllUsersHttp";
+    private static final String CF_ALL_USERS = "https://us-central1-iyesi-e8d4f.cloudfunctions.net/listAllUsersHttp";
     private ProfileActivity profileActivity;
     private FirebaseFunctions functions;
     private RecyclerView rvConversations;
@@ -83,7 +83,7 @@ public class Messaging extends AppCompatActivity {
             return;
         }
         auth = FirebaseAuth.getInstance();
-        cf = new CFHelper(this, "iyesi-a651a", new CFHelper.Listener(){});
+        cf = new CFHelper(this, "iyesi-e8d4f",null, new CFHelper.Listener(){});
         rvConversations = findViewById(R.id.rvConversations);
         adapter = new ConversationAdapter(conversationList, this);
         rvConversations.setLayoutManager(new LinearLayoutManager(this));
