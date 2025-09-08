@@ -10,7 +10,7 @@ import android.widget.ImageView;
 import android.widget.TextView;
 
 import com.bumptech.glide.Glide;
-import com.kurmez.iyesi.kayra.Classes.Soul;
+import com.kurmez.iyesi.kayra.Classes.data.Soul;
 import com.kurmez.iyesi.R;
 
 import java.util.List;

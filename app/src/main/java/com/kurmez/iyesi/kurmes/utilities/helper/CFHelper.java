@@ -3,6 +3,7 @@ package com.kurmez.iyesi.kurmes.utilities.helper;
 import android.content.Context;
 import android.os.Handler;
 import android.os.Looper;
+import android.util.Base64;
 import android.util.Log;
 
 import androidx.annotation.NonNull;
@@ -19,7 +20,7 @@ import com.google.firebase.functions.FirebaseFunctions;
 import com.google.firebase.functions.HttpsCallableReference;
 import com.kurmez.iyesi.App;
 import com.kurmez.iyesi.kurmes.social.Profile;
-import com.kurmez.iyesi.kayra.Classes.Soul;
+import com.kurmez.iyesi.kayra.Classes.data.Soul;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -184,6 +185,19 @@ public class CFHelper {
         }
         return new Tokens(idTok, appCheckTok);
     }
+    // ekleyin / güncelleyin
+    public interface TokenCallback { void onReady(@NonNull String idToken, @NonNull String appCheckToken); void onError(@NonNull Exception e); }
+
+    public void getTokens(@NonNull TokenCallback cb) {
+        FirebaseUser u = FirebaseAuth.getInstance().getCurrentUser();
+        if (u == null) { cb.onError(new IllegalStateException("No user")); return; }
+        u.getIdToken(true).addOnSuccessListener(r -> {
+            String idToken = r.getToken();
+            FirebaseAppCheck.getInstance().getAppCheckToken(true)
+                    .addOnSuccessListener(t -> cb.onReady(idToken, t.getToken()))
+                    .addOnFailureListener(cb::onError);
+        }).addOnFailureListener(cb::onError);
+    }
 
     private Headers buildAuthHeaders(@NonNull Tokens t) {
         Headers.Builder hb = new Headers.Builder()
@@ -310,21 +324,104 @@ public class CFHelper {
     // ------------------------------------------------------------
     // Dış API’ler
     // ------------------------------------------------------------
-
-    /** Sunucudan rolü çek ve sınıf değişkenine yaz. */
-    public @Nullable String refreshRole() {
+    private static String getCustomClaims(String idToken) {
         try {
-            JSONObject r = doPostJson("/getRole", new JSONObject());
-            String role = r.optString("role", null);
-            this.userRole = (role != null && role.isEmpty()) ? null : role;
-            if (listener != null) listener.onRoleRefreshed(this.userRole);
-            return this.userRole;
-        } catch (Throwable e) {
-            if (listener != null) listener.onCallFailed("getRole", e);
-            Log.e(TAG, "refreshRole failed", e);
-            return null;
+            String[] parts = idToken.split("\\.");
+            if (parts.length >= 2) {
+                String payload = parts[1];
+                byte[] decoded = Base64.decode(payload, Base64.URL_SAFE);
+                return new String(decoded, StandardCharsets.UTF_8);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
         }
+        return null;
     }
+    public interface RoleCallback {
+        void onRoleFetched(@Nullable String role);
+    }
+    private @Nullable String extractRoleFromJson(@Nullable JSONObject src) {
+        if (src == null) return null;
+
+        // 1) Düz alanlar
+        String role = src.optString("role", null);
+        if (role != null && !role.trim().isEmpty()) return role.trim();
+
+        // 2) roles[]
+        org.json.JSONArray rolesArr = src.optJSONArray("roles");
+        if (rolesArr != null && rolesArr.length() > 0) {
+            String v = rolesArr.optString(0, null);
+            if (v != null && !v.trim().isEmpty()) return v.trim();
+        }
+
+        // 3) customAttributes (stringleşmiş JSON ya da obje)
+        Object ca = src.opt("customAttributes");
+        if (ca instanceof String) {
+            try {
+                JSONObject caObj = new JSONObject((String) ca);
+                String v = extractRoleFromJson(caObj);
+                if (v != null) return v;
+            } catch (Exception ignore) {}
+        } else if (ca instanceof JSONObject) {
+            String v = extractRoleFromJson((JSONObject) ca);
+            if (v != null) return v;
+        }
+
+        // 4) claims objesi
+        JSONObject claims = src.optJSONObject("claims");
+        if (claims != null) {
+            String v = extractRoleFromJson(claims);
+            if (v != null) return v;
+        }
+
+        // 5) user objesi içinde olabilir
+        JSONObject user = src.optJSONObject("user");
+        if (user != null) {
+            String v = extractRoleFromJson(user);
+            if (v != null) return v;
+        }
+
+        return null;
+    }
+
+    public void refreshRole(@NonNull RoleCallback callback) {
+        new Thread(() -> {
+            try {
+                JSONObject r = null;
+                try {
+                    r = doGetJson("/getRole", null); // bazı projelerde çalışır
+                } catch (Throwable getErr) {
+                    // GET 405 vs. durumunda POST fallback
+                    try {
+                        r = doPostJson("/getRole", new JSONObject());
+                    } catch (Throwable postErr) {
+                        throw postErr; // ikisi de patlarsa dış yakalama çalışır
+                    }
+                }
+
+                // Gelen JSON’u tek noktadan çöz
+                String role = extractRoleFromJson(r);
+
+                // Unicode normalize + trim
+                if (role != null) {
+                    role = role.trim();
+                    if (role.isEmpty()) role = null;
+                }
+
+                this.userRole = role;
+
+                if (listener != null) main.post(() -> listener.onRoleRefreshed(this.userRole));
+                final String outRole = this.userRole;
+                main.post(() -> callback.onRoleFetched(outRole));
+            } catch (Throwable e) {
+                if (listener != null) main.post(() -> listener.onCallFailed("getRole", e));
+                Log.e(TAG, "refreshRole failed", e);
+                main.post(() -> callback.onRoleFetched(null));
+            }
+        }).start();
+    }
+
+
 
     // ---------- Messaging / Users ----------
     public interface UsersCallback {
@@ -336,13 +433,11 @@ public class CFHelper {
     public void listAllUsers(@Nullable Integer limit,
                              @Nullable String pageToken,
                              @NonNull UsersCallback cb) {
-        JSONObject body = new JSONObject();
-        try {
-            if (limit != null) body.put("limit", limit);
-            if (pageToken != null) body.put("pageToken", pageToken);
-        } catch (JSONException ignore) {}
+        Map<String, String> q = new HashMap<>();
+        if (limit != null) q.put("limit", String.valueOf(limit));
+        if (pageToken != null) q.put("pageToken", pageToken);
 
-        endpointAsync("/listAllUsersHttp", null, body, /*post=*/true, new EndpointCallback() {
+        endpointAsync("/listAllUsersHttp", q, null, /*post=*/false, new EndpointCallback() {
             @Override public void onSuccess(JSONObject resp) {
                 try {
                     List<Profile> list = parseUsers(resp); // BG
@@ -354,6 +449,7 @@ public class CFHelper {
             @Override public void onError(Throwable error) { main.post(() -> cb.onError(error)); }
         });
     }
+
 
     private ArrayList<Profile> parseUsers(@NonNull JSONObject root) throws Exception {
         ArrayList<Profile> out = new ArrayList<>();
@@ -464,22 +560,79 @@ public class CFHelper {
 
     /** POST /submitSoulInNeed — 404’te callable fallback dener. */
     public void submitSoulInNeed(@NonNull JSONObject payload, @NonNull EndpointCallback cb) {
-        endpointAsync("/submitSoulInNeed", null, payload, /*post=*/true, new EndpointCallback() {
+        fetchTokens(/*forceRefresh=*/false, new TokensCallback() {
+            @Override public void onReady(@NonNull String idToken, @Nullable String appCheck) {
+                callSubmit(payload, idToken, appCheck, /*retryOn401=*/true, cb);
+            }
+            @Override public void onError(@NonNull Throwable e) { main.post(() -> cb.onError(e)); }
+        });
+    }
+
+    private void callSubmit(JSONObject payload, String idToken, @Nullable String appCheck,
+                            boolean retryOn401, @NonNull EndpointCallback cb) {
+
+        // endpointAsync'e header enjekte edilebiliyorsa bu parametreyi kullan:
+        Map<String, String> headers = new HashMap<>();
+        headers.put("Authorization", "Bearer " + idToken);
+        if (appCheck != null) headers.put("X-Firebase-AppCheck", appCheck);
+
+        endpointAsync("/submitSoulInNeed", headers, payload, /*post=*/true, new EndpointCallback() {
             @Override public void onSuccess(JSONObject resp) { main.post(() -> cb.onSuccess(resp)); }
+
             @Override public void onError(Throwable error) {
-                if (error instanceof HttpException && ((HttpException) error).code == 404) {
-                    try {
-                        JSONObject r = callFunction("submitSoulInNeed", payload);
-                        main.post(() -> cb.onSuccess(r));
-                    } catch (Throwable callErr) {
-                        main.post(() -> cb.onError(callErr));
+                if (error instanceof HttpException) {
+                    int code = ((HttpException) error).code;
+                    if (code == 401 && retryOn401) {
+                        // ID token'ı zorla yenile, tekrar dene
+                        fetchTokens(/*forceRefresh=*/true, new TokensCallback() {
+                            @Override public void onReady(@NonNull String newId, @Nullable String newApp) {
+                                callSubmit(payload, newId, newApp, /*retryOn401=*/false, cb);
+                            }
+                            @Override public void onError(@NonNull Throwable e2) { main.post(() -> cb.onError(e2)); }
+                        });
+                        return;
+                    } else if (code == 404) {
+                        // Bölge/route uyuşmazlığı: callable fallback
+                        try {
+                            JSONObject r = callFunction("submitSoulInNeed", payload);
+                            main.post(() -> cb.onSuccess(r));
+                        } catch (Throwable callErr) {
+                            main.post(() -> cb.onError(callErr));
+                        }
+                        return;
                     }
-                } else {
-                    main.post(() -> cb.onError(error));
                 }
+                main.post(() -> cb.onError(error));
             }
         });
     }
+
+    /** ID + AppCheck token toplayıcı (kısa). */
+    private void fetchTokens(boolean forceRefresh, @NonNull TokensCallback cb) {
+        FirebaseUser u = FirebaseAuth.getInstance().getCurrentUser();
+        if (u == null) { cb.onError(new IllegalStateException("No Firebase user")); return; }
+
+        u.getIdToken(forceRefresh).addOnCompleteListener(t1 -> {
+            if (!t1.isSuccessful() || t1.getResult() == null) {
+                cb.onError(t1.getException() != null ? t1.getException() : new RuntimeException("ID token failed"));
+                return;
+            }
+            String idToken = t1.getResult().getToken();
+
+            com.google.firebase.appcheck.FirebaseAppCheck.getInstance()
+                    .getAppCheckToken(/* forceRefresh */ forceRefresh)
+                    .addOnCompleteListener(t2 -> {
+                        String appToken = (t2.isSuccessful() && t2.getResult() != null) ? t2.getResult().getToken() : null;
+                        cb.onReady(idToken, appToken);
+                    });
+        });
+    }
+
+    interface TokensCallback {
+        void onReady(@NonNull String idToken, @Nullable String appCheck);
+        void onError(@NonNull Throwable e);
+    }
+
 
     // ---------- Marker uçları (örnek sarmalayıcılar) ----------
     public JSONObject markersNearby(double lat, double lng, int radiusM, int limit,

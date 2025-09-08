@@ -7,7 +7,7 @@ import android.widget.Toast;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.auth.GetTokenResult;
-import com.kurmez.iyesi.kayra.Classes.Soul;
+import com.kurmez.iyesi.kayra.Classes.data.Soul;
 
 import org.json.JSONObject;
 
@@ -35,6 +35,7 @@ public class WelcomeClient {
             .readTimeout(30, TimeUnit.SECONDS)
             .writeTimeout(15, TimeUnit.SECONDS)
             .addInterceptor(chain -> {
+
                 Request req = chain.request();
                 Log.d(TAG, "HTTP Request: " + req.method() + " " + req.url());
                 Log.d(TAG, "Authorization Header: " + req.header("Authorization"));

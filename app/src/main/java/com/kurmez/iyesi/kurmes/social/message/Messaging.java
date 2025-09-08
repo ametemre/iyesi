@@ -32,7 +32,10 @@ import com.kurmez.iyesi.R;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 
 import com.google.firebase.functions.FirebaseFunctions;
 import com.kurmez.iyesi.kurmes.social.Profile;
@@ -83,7 +86,7 @@ public class Messaging extends AppCompatActivity {
             return;
         }
         auth = FirebaseAuth.getInstance();
-        cf = new CFHelper(this, "iyesi-e8d4f",null, new CFHelper.Listener(){});
+        cf = new CFHelper(this, "iyesi-e8d4f","us-central1", new CFHelper.Listener(){});
         rvConversations = findViewById(R.id.rvConversations);
         adapter = new ConversationAdapter(conversationList, this);
         rvConversations.setLayoutManager(new LinearLayoutManager(this));
@@ -97,37 +100,51 @@ public class Messaging extends AppCompatActivity {
             return;
         }
         conversationList.clear();
-
+        FirebaseAuth.getInstance().getCurrentUser().getIdToken(true);
         // Rolü (sunucudan) tazele ve UI kapısını uygula
         new Thread(() -> {
-            String role = cf.refreshRole(); // CFHelper içinde HTTP POST /getRole çağrısı
-            runOnUiThread(() -> {
-                if ("Ülgen".equals(role) || "Tengri".equals(role)) {
-                    // Listeyi CF üzerinden çek
-                    cf.listAllUsers(/*limit=*/200, /*pageToken=*/null, new CFHelper.UsersCallback() {
-                        @Override public void onSuccess(java.util.List<com.kurmez.iyesi.kurmes.social.Profile> users) {
-                            // Profile → Conversation
-                            conversationList.clear();
-                            for (com.kurmez.iyesi.kurmes.social.Profile p : users) {
-                                conversationList.add(new Conversation(
-                                        p.getUid(),            // userId
-                                        p.getUsername(),       // username
-                                        p.getAvatarUrl(),       // profileUrl
-                                        p.getEmail(),          // lastMessage alanını geçici email ile dolduruyoruz
-                                        false
-                                ));
-                            }
-                            adapter.notifyDataSetChanged();
-                        }
-                        @Override public void onError(Throwable error) {
-                            Log.e("Messaging", "Kullanıcı listesi hatası", error);
-                            Helpers.showToastSafe(Messaging.this, "Kullanıcı listesi alınamadı");
-                        }
+            Log.i("ThreadBaşladı", "Role: ... ");
+            cf.refreshRole(role -> {
+                Log.i("CustomClaims", "Role: " + role);
+                // UI kapısı aynı kalsın...
+                if (Objects.equals(role, "Ülgen") || Objects.equals(role, "Tengri")) {
+                    runOnUiThread(() -> {
+                        FirebaseFunctions.getInstance()
+                                .getHttpsCallable("listAllUsers")
+                                .call(new HashMap<String, Object>() {{
+                                    put("limit", 200);
+                                    put("pageToken", null);
+                                }})
+                                .addOnSuccessListener(result -> {
+                                    @SuppressWarnings("unchecked")
+                                    Map<String, Object> data = (Map<String, Object>) result.getData();
+                                    @SuppressWarnings("unchecked")
+                                    List<Map<String, Object>> users =
+                                            (List<Map<String, Object>>) data.get("users");
+
+                                    conversationList.clear();
+                                    for (Map<String, Object> u : users) {
+                                        String uid = (String) u.get("uid");
+                                        String username = (String) u.getOrDefault("username", uid);
+                                        String email = (String) u.get("email");
+                                        String avatar = (String) u.get("avatarUrl");
+                                        conversationList.add(new Conversation(
+                                                uid, username, avatar, email, false
+                                        ));
+                                    }
+                                    adapter.notifyDataSetChanged();
+                                    Log.d("CustomClaims", "Role: " + role);
+                                })
+                                .addOnFailureListener(e -> {
+                                    Log.e("Messaging", "Kullanıcı listesi hatası", e);
+                                    Helpers.showToastSafe(Messaging.this, "Kullanıcı listesi alınamadı");
+                                });
                     });
                 } else {
                     Toast.makeText(this, "Bu işlemi sadece Ülgen ve Tengri yapabilir.", Toast.LENGTH_LONG).show();
                 }
-            });
+
+            }); // CFHelper içinde HTTP POST /getRole çağrısı
         }).start();
         // Swipe işlemleri
         ItemTouchHelper.SimpleCallback swipeCallback = new ItemTouchHelper.SimpleCallback(0, ItemTouchHelper.LEFT | ItemTouchHelper.RIGHT) {

@@ -32,7 +32,10 @@ import androidx.viewpager2.widget.ViewPager2;
 
 import com.google.android.gms.location.FusedLocationProviderClient;
 import com.google.android.gms.location.LocationServices;
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseUser;
 import com.kurmez.iyesi.R;
+import com.kurmez.iyesi.kayra.Classes.data.Soul;
 import com.kurmez.iyesi.kurmes.utilities.adapters.ImageSliderAdapter;
 import com.kurmez.iyesi.kurmes.utilities.helper.CFHelper;
 
@@ -55,6 +58,8 @@ import java.util.List;
  */
 
 public class Founded extends AppCompatActivity {
+    // class içinde:
+    private volatile boolean isSubmitting = false;
 
     // -------- Constants
     private static final String TAG = "Founded";
@@ -65,6 +70,7 @@ public class Founded extends AppCompatActivity {
     // Storage izinleri
     public static final String PERM_READ_EXTERNAL = Manifest.permission.READ_EXTERNAL_STORAGE;         // API<33
     public static final String PERM_READ_MEDIA_IMAGES = Manifest.permission.READ_MEDIA_IMAGES;         // API 33+
+    private FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
 
     // -------- CF Helper
     private CFHelper cf;
@@ -113,14 +119,8 @@ public class Founded extends AppCompatActivity {
 
         // Intent’ten foto(lar)ı al (yoksa ekranı kapat)
         takePhotosFromIntentOrFinish();
-        boolean hasIncomingPhoto =
-                getIntent().hasExtra("snapshot") ||
-                        getIntent().hasExtra("photoUris") ||
-                        getIntent().hasExtra("photoPaths");
-
-        if (!hasIncomingPhoto) {
-            checkPendingOnStart();  // sadece foto gelmemişse
-        }
+        boolean hasIncomingPhoto = getIntent().hasExtra("snapshot") || getIntent().hasExtra("photoUris") || getIntent().hasExtra("photoPaths");
+        if (dateView.getText() == null || dateView.getText().toString().trim().isEmpty()) {dateView.setText(todayIsoDate());}
 // varsa, onStart kontrolünü tetikleme — kaydet butonunda bir kez kontrol edeceğiz
 
         // Storage izinlerini iste (API’ye göre doğru izin)
@@ -148,7 +148,76 @@ public class Founded extends AppCompatActivity {
         checkPendingOnStart();
     }
 
-    // ------------------------------------------------------------
+    // ------------------------------------------------------------import
+    // helper: büyük resmi downscale et
+    private static Bitmap downscale(Bitmap src, int maxSide) {
+        int w = src.getWidth(), h = src.getHeight();
+        float scale = Math.min(1f, maxSide / (float)Math.max(w, h));
+        if (scale >= 0.999f) return src;
+        int nw = Math.round(w * scale), nh = Math.round(h * scale);
+        return Bitmap.createScaledBitmap(src, nw, nh, true);
+    }
+
+    // helper: EXIF rotasyon (API<29)
+    private static int getExifRotation(@NonNull InputStream is) {
+        try {
+            android.media.ExifInterface exif = new android.media.ExifInterface(is);
+            int o = exif.getAttributeInt(android.media.ExifInterface.TAG_ORIENTATION,
+                    android.media.ExifInterface.ORIENTATION_NORMAL);
+            switch (o) {
+                case android.media.ExifInterface.ORIENTATION_ROTATE_90:  return 90;
+                case android.media.ExifInterface.ORIENTATION_ROTATE_180: return 180;
+                case android.media.ExifInterface.ORIENTATION_ROTATE_270: return 270;
+            }
+        } catch (Exception ignore) {}
+        return 0;
+    }
+
+    private static Bitmap rotate(Bitmap src, int degrees) {
+        if (degrees == 0) return src;
+        android.graphics.Matrix m = new android.graphics.Matrix();
+        m.postRotate(degrees);
+        return Bitmap.createBitmap(src, 0, 0, src.getWidth(), src.getHeight(), m, true);
+    }
+
+    private Bitmap decodeBitmapFromUri(Uri uri) {
+        try {
+            if (Build.VERSION.SDK_INT >= 28) {
+                ImageDecoder.Source src = ImageDecoder.createSource(getContentResolver(), uri);
+                Bitmap raw = ImageDecoder.decodeBitmap(src, (decoder, info, s) -> {
+                    decoder.setAllocator(ImageDecoder.ALLOCATOR_SOFTWARE);
+                });
+                // API28+’da EXIF rotasyonu ImageDecoder çoğu cihazda uygular,
+                // ama garanti değil; yine de tek tip downscale uygula:
+                return downscale(raw, 1600);
+            } else {
+                InputStream is = getContentResolver().openInputStream(uri);
+                if (is == null) return null;
+                // EXIF okumak için bir kopya stream aç
+                byte[] bytes = readAllBytes(is);
+                Bitmap raw = BitmapFactory.decodeByteArray(bytes, 0, bytes.length);
+                InputStream is2 = new java.io.ByteArrayInputStream(bytes);
+                int degrees = getExifRotation(is2);
+                if (is2 != null) is2.close();
+                Bitmap fixed = rotate(raw, degrees);
+                return downscale(fixed, 1600);
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "decode error: " + e.getMessage());
+            return null;
+        }
+    }
+
+    private static byte[] readAllBytes(InputStream is) throws Exception {
+        java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
+        byte[] buf = new byte[8192];
+        int n;
+        while ((n = is.read(buf)) > 0) baos.write(buf, 0, n);
+        is.close();
+        return baos.toByteArray();
+    }
+
+    // ------------------------------------------------------------import
     // Photos intake
     // ------------------------------------------------------------
     private void takePhotosFromIntentOrFinish() {
@@ -200,42 +269,35 @@ public class Founded extends AppCompatActivity {
         if (pickMultiple != null) pickMultiple.launch("image/*");
     }
 
-
-    private Bitmap decodeBitmapFromUri(Uri uri) {
-        try {
-            if (Build.VERSION.SDK_INT >= 28) {
-                ImageDecoder.Source src = ImageDecoder.createSource(getContentResolver(), uri);
-                return ImageDecoder.decodeBitmap(src);
-            } else {
-                InputStream is = getContentResolver().openInputStream(uri);
-                Bitmap b = BitmapFactory.decodeStream(is);
-                if (is != null) is.close();
-                return b;
-            }
-        } catch (Exception e) {
-            Log.e(TAG, "decode error: " + e.getMessage());
-            return null;
-        }
-    }
-
     // ------------------------------------------------------------
     // Save flow
     // ------------------------------------------------------------
     void saveCompanionAsync() {
-        String deviceId = Settings.Secure.getString(getContentResolver(), Settings.Secure.ANDROID_ID);
-
+        boolean isUnauthenticated = (user == null);
+        String id;
+        if (!isUnauthenticated) {
+            String userID = user.getUid();
+            id = userID;
+            // Oturum AÇIK → pending akışını atla, doğrudan submit et
+            Log.i(TAG, "Authenticated user detected (uid=" + user.getUid() + "), skipping pending check.");
+            performSubmitCompanion(userID);
+            return;
+        }else {
+            String deviceId = Settings.Secure.getString(getContentResolver(), Settings.Secure.ANDROID_ID);
+            id = deviceId;
+        }
         // 1) Önce bu cihaz için pending var mı?
         //    Varsa Companion ekranına yönlendir, yoksa submit et.
-        Log.i(TAG, "CF checkPendingCompanion START (save) deviceId=" + deviceId);
-        cf.checkPendingCompanion(deviceId, new CFHelper.PendingCallback() {
+        Log.i(TAG, "CF checkPendingCompanion START (save) deviceId=" + id);
+        cf.checkPendingCompanion(id, new CFHelper.PendingCallback() {
             @Override
             public void onResult(JSONObject companion) {
                 Log.i(TAG, "CF checkPendingCompanion END (save) OK has=" + (companion != null));
 
                 if (companion == null) {
-                    runOnUiThread(() -> performSubmitCompanion(deviceId));
+                    runOnUiThread(() -> performSubmitCompanion(id));
                 } else {
-                    runOnUiThread(() -> openCompanionFromJson(deviceId, companion));
+                    runOnUiThread(() -> openCompanionFromJson(id, companion));
                 }
             }
 
@@ -245,7 +307,7 @@ public class Founded extends AppCompatActivity {
                 Log.i(TAG, "CF checkPendingCompanion END (save) ERROR code=" + code + " msg=" + (error==null ? "null" : String.valueOf(error.getMessage())));
                 if (code == 404) {
                     // Pending yokmuş gibi kabul et → submit et
-                    runOnUiThread(() -> performSubmitCompanion(deviceId));
+                    runOnUiThread(() -> performSubmitCompanion(id));
                 } else if (code == 401 || code == 403) {
                     runOnUiThread(() -> Toast.makeText(Founded.this,
                             "Doğrulama hatası (" + code + "). Lütfen oturum açın ve uygulamayı doğrulayın.",
@@ -259,95 +321,146 @@ public class Founded extends AppCompatActivity {
         });
     }
 
-    private void performSubmitCompanion(String deviceId) {
-        // Zorunlu/AI ile doldurulacak alanlar için basit placeholder
-        String species = safeOrTodo(textOf(speciesInput));
-        String breed   = "TODO";  // TODO: modelden doldurulacak
-        String age     = "TODO";  // TODO: modelden doldurulacak
-        String health  = "TODO";  // TODO: modelden doldurulacak
-
-        String foundDate = textOf(dateView);
-        long   timestamp = System.currentTimeMillis();
-
-        // FoundPlace: SADECE "lat, lng"
-        String foundPlace = textOf(placeView);
-        if (foundPlace.isEmpty() && lastLat != null && lastLng != null) {
-            foundPlace = formatLatLng(lastLat, lastLng);
-            placeView.setText(foundPlace);
-        }
-
-        // Basit doğrulamalar
-        if (species.isEmpty()) { speciesInput.setError("Cinsi girin veya TODO kalabilir"); return; }
-        if (foundDate.isEmpty()){ dateView.setError("Tarihi girin"); return; }
-        if (foundPlace.isEmpty()){
-            Toast.makeText(this, "Konum alınamadı. Lütfen izin verin veya elle girin.", Toast.LENGTH_LONG).show();
+    private void performSubmitCompanion(String actorId) {
+        if (isSubmitting) {
+            Log.d(TAG, "performSubmitCompanion: already submitting, ignore duplicate tap.");
             return;
         }
-        if (photoList.isEmpty()){ Toast.makeText(this,"Fotoğraf yok!",Toast.LENGTH_SHORT).show(); return; }
 
-        // Görsel → Base64 (ilk foto)
-        String imgB64 = encodeToBase64(photoList.get(0), Bitmap.CompressFormat.PNG, 85);
+        // 0) UI kilidi
+        setSubmitting(true);
 
-        // Payload
-        JSONObject payload = new JSONObject();
         try {
-            payload.put("species",       species);
-            payload.put("breed",         breed);
-            payload.put("age",           age);
-            payload.put("health",        health);
+            // 1) Alanları topla
+            String species    = safeOrTodo(textOf(speciesInput));
+            String breed      = "TODO";  // model dolduracak
+            String age        = "TODO";  // model dolduracak
+            String health     = "TODO";  // model dolduracak
+            String foundDateI = textOf(dateView);
+            String foundPlace = textOf(placeView);
 
-            payload.put("foundDate",     foundDate);
-            payload.put("foundLocation", foundPlace); // yalnızca "lat, lng"
-            payload.put("timestamp",     timestamp);
-
-            if (lastLat != null && lastLng != null) {
-                payload.put("lat", lastLat);
-                payload.put("lng", lastLng);
+            // 2) Tarihi ISO-8601'e normalize et (girildiyse)
+            String foundDate = foundDateI.isEmpty() ? todayIsoDate() : normalizeFoundDate(foundDateI);
+            if (!foundDate.equals(foundDateI)) {
+                dateView.setText(foundDate); // UI'yı da senkronla
+            }
+            // 3) Konumu belirle: (a) kullanıcı girişi parse, yoksa (b) lastLat/lng, yoksa hata
+            double latNum, lngNum;
+            double[] parsed = parseLatLng(foundPlace);
+            if (parsed != null) {
+                latNum = parsed[0]; lngNum = parsed[1];
+                foundPlace = formatLatLng(latNum, lngNum); // normalize
+            } else if (lastLat != null && lastLng != null) {
+                latNum = lastLat; lngNum = lastLng;
+                foundPlace = formatLatLng(latNum, lngNum);
+                placeView.setText(foundPlace);
+            } else {
+                Toast.makeText(this, "Konum alınamadı. Lütfen izin verin veya 'lat, lng' girin.", Toast.LENGTH_LONG).show();
+                setSubmitting(false);
+                return;
             }
 
-            // Görsel verisi (imageResId sunucuda üretilecek)
-            payload.put("imageBase64",   imgB64);
-
-            // Cihaz bilgisi
-            payload.put("deviceId",      deviceId);
-
-            // finderName ve imageResId → sunucu tarafında atanacak
-        } catch (JSONException e) {
-            e.printStackTrace();
-            Toast.makeText(this,"Veri oluşturulamadı",Toast.LENGTH_SHORT).show();
-            return;
-        }
-
-        // 2) Submit
-        Log.i(TAG, "CF submitSoulInNeed START");
-        cf.submitSoulInNeed(payload, new CFHelper.EndpointCallback() {
-            @Override
-            public void onSuccess(JSONObject resp) {
-                Log.i(TAG, "CF submitSoulInNeed END OK");
-                runOnUiThread(() -> {
-                    try {
-                        // TODO: backend "key" döndürmeli. Yoksa yanıt şemasını kontrol et.
-                        String key = resp.getString("key");
-                        Intent i = new Intent(Founded.this, Companion.class);
-                        i.putExtra("requestKey", key);
-                        i.putExtra("node", "soul_inneed");
-                        startActivity(i);
-                        finish();
-                    } catch (JSONException je) {
-                        Toast.makeText(Founded.this, "Yanıt çözümlenemedi", Toast.LENGTH_LONG).show();
-                    }
-                });
+            // 4) Zorunlu alan kontrolleri (species boşsa otomatik "TODO" bırakıyoruz; foundDate zorunlu)
+            if (foundDate.isEmpty()) {
+                dateView.setError("Tarih gerekli (yyyy-MM-dd)");
+                setSubmitting(false);
+                return;
+            }
+            if (photoList.isEmpty()) {
+                Toast.makeText(this, "Fotoğraf yok!", Toast.LENGTH_SHORT).show();
+                setSubmitting(false);
+                return;
             }
 
-            @Override
-            public void onError(Throwable error) {
-                Log.i(TAG, "CF submitSoulInNeed END ERROR: " + (error==null? "-" : String.valueOf(error.getMessage())));
-                runOnUiThread(() ->
+            // 5) Görseli akıllı şekilde JPEG Base64'e çevir
+            String imgB64 = encodeBitmapSmart(photoList.get(0));
+
+            // 6) Payload
+            long timestamp = System.currentTimeMillis();
+            //---------------------------------------------------------------------------------------import
+
+// Soul modeline birebir doldur
+            Soul soul = new Soul.Builder()
+                    .species(species)
+                    .breed(breed)
+                    .age(age)
+                    .health(health)
+                    .foundDate(foundDate)               // ISO-8601 (yyyy-MM-dd)
+                    .foundLocation(foundPlace)          // "lat, lng" string
+                    .timestamp(timestamp)               // zorunlu zaman damgası
+                    .ts(timestamp)                      // sorgular için (opsiyonel ama faydalı)
+                    .status("pending")                  // yeni kayıtlar için varsayılan durum
+                    .latLng(latNum, lngNum)             // hem GeoPoint hem kökte lat/lng çıkacak
+                    .build();
+
+// Soul → JSONObject (toJson: location{lat,lng} + kökte lat/lng’yi yazar)
+            JSONObject payload = soul.toJson();
+
+// Taşıma katmanına ait alanları (modele yazmadan) üstte ekle
+            payload.put("imageBase64", encodeBitmapSmart(photoList.get(0))); // sadece upload için
+            payload.put("actorKind",  (user != null) ? "uid" : "device");    // backend ayırt etsin
+            payload.put("deviceId",   actorId);                              // uid veya ANDROID_ID
+
+// (opsiyonel ama tutarlı olur) akış tipini belirtmek istersen:
+            payload.put("requestKind", "soul_inneed");
+
+// 7) Submit (değişmedi)
+            Log.i(TAG, "CF submitSoulInNeed START");
+            //---------------------------------------------------------------------------------------import
+            cf.submitSoulInNeed(payload, new CFHelper.EndpointCallback() {
+                @Override
+                public void onSuccess(JSONObject resp) {
+                    Log.i(TAG, "CF submitSoulInNeed END OK");
+                    runOnUiThread(() -> {
+                        setSubmitting(false);
+                        try {
+                            String key = resp.getString("key"); // backend bu alanı dönmeli
+                            Intent i = new Intent(Founded.this, Companion.class);
+                            i.putExtra("requestKey", key);
+                            i.putExtra("node", "soul_inneed");
+                            startActivity(i);
+                            finish();
+                        } catch (JSONException je) {
+                            Toast.makeText(Founded.this, "Yanıt çözümlenemedi", Toast.LENGTH_LONG).show();
+                        }
+                    });
+                }
+
+                @Override
+                public void onError(Throwable error) {
+                    Log.i(TAG, "CF submitSoulInNeed END ERROR: " + (error==null? "-" : String.valueOf(error.getMessage())));
+                    runOnUiThread(() -> {
+                        setSubmitting(false);
                         Toast.makeText(Founded.this,
                                 "Sunucu hatası: " + (error==null? "-" : error.getMessage()),
-                                Toast.LENGTH_LONG).show());
+                                Toast.LENGTH_LONG).show();
+                    });
+                }
+            });
+
+        } catch (Throwable t) {
+            Log.e(TAG, "performSubmitCompanion fatal: ", t);
+            setSubmitting(false);
+            Toast.makeText(this, "Beklenmeyen hata: " + t.getMessage(), Toast.LENGTH_LONG).show();
+        }
+    }
+    @NonNull
+    private String todayIsoDate() {
+        try {
+            if (android.os.Build.VERSION.SDK_INT >= 26) {
+                java.time.ZoneId zone = java.time.ZoneId.of("Europe/Istanbul"); // isteğe bağlı: sabit TR
+                return java.time.LocalDate.now(zone)
+                        .format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE);
+            } else {
+                java.text.SimpleDateFormat fmt = new java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US);
+                fmt.setTimeZone(java.util.TimeZone.getTimeZone("Europe/Istanbul")); // isteğe bağlı: sabit TR
+                return fmt.format(new java.util.Date());
             }
-        });
+        } catch (Throwable t) {
+            // Beklenmedik durumda sistem varsayılanı
+            java.text.SimpleDateFormat fmt = new java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US);
+            return fmt.format(new java.util.Date());
+        }
     }
 
     // Pending varsa Companion’a geç
@@ -523,4 +636,91 @@ public class Founded extends AppCompatActivity {
             }
         }
     }
+    // --- foundDate → ISO-8601 (yyyy-MM-dd)
+    @NonNull
+    private String normalizeFoundDate(@NonNull String in) {
+        String s = in.trim();
+        if (s.isEmpty()) return s;
+        try {
+            if (Build.VERSION.SDK_INT >= 26) {
+                // yaygın biçimler: dd.MM.yyyy, dd/MM/yyyy, yyyy-MM-dd
+                java.time.format.DateTimeFormatter[] fmts = new java.time.format.DateTimeFormatter[]{
+                        java.time.format.DateTimeFormatter.ofPattern("d.M.yyyy"),
+                        java.time.format.DateTimeFormatter.ofPattern("d/M/yyyy"),
+                        java.time.format.DateTimeFormatter.ISO_LOCAL_DATE
+                };
+                java.time.LocalDate d = null;
+                for (java.time.format.DateTimeFormatter f : fmts) {
+                    try { d = java.time.LocalDate.parse(s, f); break; } catch (Exception ignore) {}
+                }
+                if (d == null) {
+                    // son çare: gün/ay/yıl sıralamasını tahmin etmeye çalışma → olduğu gibi bırak
+                    return s;
+                }
+                return d.format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE); // yyyy-MM-dd
+            } else {
+                java.text.ParseException last = null;
+                String[] patterns = {"d.M.yyyy", "d/M/yyyy", "yyyy-MM-dd"};
+                for (String p : patterns) {
+                    try {
+                        java.text.SimpleDateFormat inFmt = new java.text.SimpleDateFormat(p, java.util.Locale.US);
+                        inFmt.setLenient(false);
+                        java.util.Date d = inFmt.parse(s);
+                        java.text.SimpleDateFormat outFmt = new java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US);
+                        outFmt.setLenient(false);
+                        return outFmt.format(d);
+                    } catch (java.text.ParseException e) { last = e; }
+                }
+                if (last != null) Log.w(TAG, "normalizeFoundDate: " + last.getMessage());
+                return s;
+            }
+        } catch (Throwable t) {
+            Log.w(TAG, "normalizeFoundDate err: " + t.getMessage());
+            return s;
+        }
+    }
+
+    // --- "lat, lng" serbest girişini parse et (boşsa null)
+    @Nullable
+    private double[] parseLatLng(@Nullable String input) {
+        if (input == null) return null;
+        String s = input.trim();
+        if (s.isEmpty()) return null;
+        // virgül veya boşluk ayırıcıya toleranslı:
+        s = s.replaceAll("[\\s]+", " ");
+        String[] parts = s.split("[, ]+");
+        if (parts.length < 2) return null;
+        try {
+            double lat = Double.parseDouble(parts[0]);
+            double lng = Double.parseDouble(parts[1]);
+            if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return null;
+            return new double[]{lat, lng};
+        } catch (Exception ignore) {
+            return null;
+        }
+    }
+
+    // --- JPEG(85) + 1600px limit + 1.5MB hedefleyerek kalite ayarla
+    private String encodeBitmapSmart(@NonNull Bitmap bmp) {
+        Bitmap scaled = downscale(bmp, 1600);
+        int quality = 85;
+        byte[] out;
+        do {
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            scaled.compress(Bitmap.CompressFormat.JPEG, quality, baos);
+            out = baos.toByteArray();
+            // 1.5 MB hedef; çok büyükse kaliteyi azalt
+            if (out.length > (1_500_000) && quality > 60) {
+                quality -= 5;
+            } else break;
+        } while (quality >= 60);
+        return Base64.encodeToString(out, Base64.NO_WRAP);
+    }
+
+    private void setSubmitting(boolean submitting) {
+        isSubmitting = submitting;
+        View btn = findViewById(R.id.save_companion_button);
+        if (btn != null) btn.setEnabled(!submitting);
+    }
+
 }

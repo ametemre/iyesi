@@ -1,7 +1,7 @@
 package com.kurmez.iyesi.umay;
 
 import com.kurmez.iyesi.kurmes.utilities.helper.CFHelper;
-import com.kurmez.iyesi.kayra.Classes.Soul; // tek ve doğru Soul
+import com.kurmez.iyesi.kayra.Classes.data.Soul; // tek ve doğru Soul
 import androidx.annotation.NonNull;
 import java.util.List;
 
@@ -18,7 +18,6 @@ import android.widget.ListView;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 
@@ -26,16 +25,13 @@ import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 import com.kurmez.iyesi.Login;
 import com.kurmez.iyesi.R;
-import com.kurmez.iyesi.kayra.Classes.Soul;
 import com.kurmez.iyesi.kurmes.social.content.Explore;
 import com.kurmez.iyesi.kurmes.social.content.ExplorePrivate;
 import com.kurmez.iyesi.kurmes.social.message.Messaging;
 import com.kurmez.iyesi.kurmes.utilities.Helpers;
 import com.kurmez.iyesi.kurmes.utilities.adapters.CompanionAdapter;
-import com.kurmez.iyesi.kurmes.utilities.helper.CFHelper;
 
 import java.util.ArrayList;
-import java.util.List;
 
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
@@ -54,6 +50,7 @@ public class Welcome extends AppCompatActivity {
     private CompanionAdapter adapter;
     private final List<Soul> companions = new ArrayList<>();
     private final OkHttpClient httpClient = new OkHttpClient.Builder().addInterceptor(chain -> {
+
                 Request req = chain.request();
                 Log.d("HTTP-REQ", req.method() + " " + req.url());
                 for (String name : req.headers().names()) {

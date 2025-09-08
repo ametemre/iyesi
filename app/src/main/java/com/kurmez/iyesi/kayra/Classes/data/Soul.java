@@ -1,4 +1,4 @@
-package com.kurmez.iyesi.kayra.Classes;
+package com.kurmez.iyesi.kayra.Classes.data;
 
 import android.os.Parcel;
 import android.os.Parcelable;
@@ -20,12 +20,12 @@ import java.util.Objects;
  *
  * Tasarım hedefleri:
  * - Firestore ile doğal eşleme (no-arg ctor, public getters/setters)
- * - "PendingCompanions" mantığı için: iyeId==null → İyesi yok (pending adayı)
+ * - "PendingCompanions" mantığı: iyeId == null → İyesi yok (pending adayı)
  * - Harita sorguları için: location (GeoPoint), geohash (String), ts (Long)
  * - Liste/Intent taşımak için: Parcelable
  *
  * NOT:
- * - "status" alanı için örnek değerler: "pending", "adoptable", "found", "assigned"...
+ * - "status" örnekleri: "pending", "adoptable", "found", "assigned"...
  * - "id" Firestore docId olarak DTO seviyesinde tutulabilir (opsiyonel).
  */
 @Keep
@@ -42,13 +42,10 @@ public class Soul implements Parcelable {
     @Nullable private String foundLocation;
     @Nullable private String veterinary;
 
-    // Görsel alan adı bazı yerlerde imageResId olarak geçiyor — imageUrl ile eşliyoruz.
+    // Görsel alanı: bazı yerlerde imageResId olarak geçebilir → imageUrl ile eşliyoruz.
     @Nullable private String imageUrl;
     @Nullable private String finderName;
-
-    /** Sunucudan/CF’den gelen zaman damgası (ms). */
     private long timestamp;                   // CFHelper.parsePriorityPets ile uyumlu
-    /** Veri katmanında sorgu penceresi için kullanılacak alan (epoch ms). */
     @Nullable private Long ts;
 
     // ---------- İlişki/Durum ----------
@@ -207,6 +204,15 @@ public class Soul implements Parcelable {
     @Nullable public Double getLat() { return location != null ? location.getLatitude() : null; }
     @Nullable public Double getLng() { return location != null ? location.getLongitude() : null; }
 
+    /** Kolaylık: lat/lng verildiğinde GeoPoint oluştur. */
+    public void setLatLng(@Nullable Double lat, @Nullable Double lng) {
+        if (lat == null || lng == null) {
+            this.location = null;
+        } else {
+            this.location = new GeoPoint(lat, lng);
+        }
+    }
+
     // ---------- Parcelable ----------
     protected Soul(Parcel in) {
         id = readNullableString(in);
@@ -307,6 +313,7 @@ public class Soul implements Parcelable {
         public Builder iyeId(@Nullable String v) { s.setIyeId(v); return this; }
         public Builder status(@Nullable String v) { s.setStatus(v); return this; }
         public Builder location(@Nullable GeoPoint v) { s.setLocation(v); return this; }
+        public Builder latLng(@Nullable Double lat, @Nullable Double lng) { s.setLatLng(lat, lng); return this; }
         public Builder geohash(@Nullable String v) { s.setGeohash(v); return this; }
         public Builder adminPath(@Nullable String v) { s.setAdminPath(v); return this; }
         public Soul build() { return s; }
@@ -339,7 +346,43 @@ public class Soul implements Parcelable {
         return m;
     }
 
-    // ---------- JSON → Model yardımcıları ----------
+    /** JSON seri hale getirici — CF'a göndermek için pratik. */
+    @NonNull
+    public JSONObject toJson() {
+        JSONObject o = new JSONObject();
+        try {
+            if (id != null) o.put("id", id);
+            if (name != null) o.put("name", name);
+            if (species != null) o.put("species", species);
+            if (breed != null) o.put("breed", breed);
+            if (age != null) o.put("age", age);
+            if (health != null) o.put("health", health);
+            if (foundDate != null) o.put("foundDate", foundDate);
+            if (foundLocation != null) o.put("foundLocation", foundLocation);
+            if (veterinary != null) o.put("veterinary", veterinary);
+            if (imageUrl != null) o.put("imageUrl", imageUrl);
+            if (finderName != null) o.put("finderName", finderName);
+            o.put("timestamp", timestamp);
+            if (ts != null) o.put("ts", ts);
+            if (iyeId != null) o.put("iyeId", iyeId);
+            if (status != null) o.put("status", status);
+            if (geohash != null) o.put("geohash", geohash);
+            if (adminPath != null) o.put("adminPath", adminPath);
+
+            // Hem location{lat,lng} hem de kökte lat/lng ile uyumlu olalım:
+            if (location != null) {
+                JSONObject loc = new JSONObject();
+                loc.put("lat", location.getLatitude());
+                loc.put("lng", location.getLongitude());
+                o.put("location", loc);
+                o.put("lat", location.getLatitude());
+                o.put("lng", location.getLongitude());
+            }
+        } catch (Exception ignore) { }
+        return o;
+    }
+
+    // ---------- JSON / Map → Model yardımcıları ----------
     /** Sunucu/CF JSON’unu esnek biçimde çözer. imageResId veya imageUrl anahtarlarını destekler. */
     @NonNull
     public static Soul fromJson(@Nullable JSONObject o) {
@@ -394,7 +437,52 @@ public class Soul implements Parcelable {
         return s;
     }
 
-    // ---------- equals/hashCode (id varsa ona göre) ----------
+    /** Firestore’dan gelen Map yapısını çözer (Snapshot → Map). */
+    @NonNull
+    public static Soul fromMap(@Nullable Map<String, Object> map) {
+        Soul s = new Soul();
+        if (map == null) return s;
+
+        Object v;
+        s.id = optString(map.get("id"));
+        s.name = optString(map.get("name"));
+        s.species = optString(map.get("species"));
+        s.breed = optString(map.get("breed"));
+        s.age = optString(map.get("age"));
+        s.health = optString(map.get("health"));
+        s.foundDate = optString(map.get("foundDate"));
+        s.foundLocation = optString(map.get("foundLocation"));
+        s.veterinary = optString(map.get("veterinary"));
+        s.imageUrl = optString(map.get("imageUrl"));
+        s.finderName = optString(map.get("finderName"));
+
+        s.timestamp = optLong(map.get("timestamp"), 0L);
+        s.ts = map.get("ts") == null ? null : optLong(map.get("ts"), 0L);
+
+        s.iyeId = optString(map.get("iyeId"));
+        s.status = optString(map.get("status"));
+
+        v = map.get("location");
+        if (v instanceof Map) {
+            Map<?,?> loc = (Map<?, ?>) v;
+            Double lat = toDouble(loc.get("lat"));
+            Double lng = toDouble(loc.get("lng"));
+            if (lat != null && lng != null) s.location = new GeoPoint(lat, lng);
+        }
+        // Bazı feedler kökte lat/lng döndürebilir.
+        Double lat = toDouble(map.get("lat"));
+        Double lng = toDouble(map.get("lng"));
+        if (s.location == null && lat != null && lng != null) {
+            s.location = new GeoPoint(lat, lng);
+        }
+
+        s.geohash = optString(map.get("geohash"));
+        s.adminPath = optString(map.get("adminPath"));
+
+        return s;
+    }
+
+    // ---------- equals / hashCode ----------
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
@@ -443,5 +531,23 @@ public class Soul implements Parcelable {
     private static long safeLong(@NonNull JSONObject o, @NonNull String key, long def) {
         try { return o.isNull(key) ? def : o.getLong(key); }
         catch (Exception ignore) { return def; }
+    }
+
+    @Nullable
+    private static String optString(@Nullable Object v) {
+        return v == null ? null : String.valueOf(v);
+    }
+
+    private static long optLong(@Nullable Object v, long def) {
+        if (v instanceof Number) return ((Number) v).longValue();
+        try { return v == null ? def : Long.parseLong(String.valueOf(v)); }
+        catch (Exception ignore) { return def; }
+    }
+
+    @Nullable
+    private static Double toDouble(@Nullable Object v) {
+        if (v instanceof Number) return ((Number) v).doubleValue();
+        try { return v == null ? null : Double.parseDouble(String.valueOf(v)); }
+        catch (Exception ignore) { return null; }
     }
 }

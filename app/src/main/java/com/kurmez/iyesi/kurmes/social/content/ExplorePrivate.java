@@ -29,7 +29,7 @@ import com.kurmez.iyesi.kurmes.social.Profile;
 import com.kurmez.iyesi.kurmes.utilities.Helpers;
 import com.kurmez.iyesi.kurmes.utilities.adapters.ContentAdapter;
 import com.kurmez.iyesi.kurmes.utilities.helper.CFHelper;
-import com.kurmez.iyesi.kayra.Classes.Soul;
+import com.kurmez.iyesi.kayra.Classes.data.Soul;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -55,6 +55,8 @@ public class ExplorePrivate extends AppCompatActivity {
     private final List<Content> items = new ArrayList<>();
     private final List<Soul> souls = new ArrayList<>();
     private final List<String> keys = new ArrayList<>();
+
+    private static final boolean FEATURE_PENDING_COMPANIONS = false;
 
     private RecyclerView recyclerView;
     private ContentAdapter adapter;
@@ -103,6 +105,7 @@ public class ExplorePrivate extends AppCompatActivity {
         loc.getLastLocation().addOnSuccessListener(l -> {
             double lat = (l != null) ? l.getLatitude()  : 41.015137; // fallback
             double lng = (l != null) ? l.getLongitude() : 28.97953;
+
             fetchPendingViaCF(lat, lng);  // zaten sende var
         });
 
@@ -120,8 +123,14 @@ public class ExplorePrivate extends AppCompatActivity {
 
     private void resolveRoleAndFetch() {
         new Thread(() -> {
-            String role = cf.refreshRole();
-            runOnUiThread(() -> handleRole(role));
+            cf.refreshRole(role -> {
+                if (role != null) {
+                    runOnUiThread(() -> handleRole(role));
+                    Log.d("CustomClaims", "Role: " + role);
+                } else {
+                    Log.d("CustomClaims", "Role bulunamadı");
+                }
+            });
         }).start();
     }
 
@@ -233,6 +242,14 @@ public class ExplorePrivate extends AppCompatActivity {
     }
 
     private void fetchPendingViaCF(double lat, double lng) {
+        // fetchPendingViaCF(...) çağrıldığında en başa
+        if (!FEATURE_PENDING_COMPANIONS) {
+            Log.i("ExplorePrivate", "PendingCompanions devre dışı (flag).");
+            // UI'yi boş liste ile güncellemek istiyorsan:
+            // adapter.submitList(Collections.emptyList());
+            return;
+        }
+
         new Thread(() -> {
             try {
                 JSONObject json = cf.listPendingCompanions(lat, lng, 50000, 100);

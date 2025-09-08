@@ -41,24 +41,57 @@ public class App extends Application {
 
         FirebaseApp.initializeApp(this);
 
-
+        // App Check provider seçimi
         if (BuildConfig.DEBUG) {
             FirebaseAppCheck.getInstance()
-                    .installAppCheckProviderFactory(
-                            DebugAppCheckProviderFactory.getInstance());
+                    .installAppCheckProviderFactory(DebugAppCheckProviderFactory.getInstance());
         } else {
             FirebaseAppCheck.getInstance()
-                    .installAppCheckProviderFactory(
-                            PlayIntegrityAppCheckProviderFactory.getInstance());
+                    .installAppCheckProviderFactory(PlayIntegrityAppCheckProviderFactory.getInstance());
         }
 
+        // 🔹 BAŞLANGIÇ KONTROLLERİ
+        startupChecks();  // <-- ekle
+
+        // (İsteğe bağlı) developer log’u
+        FirebaseAppCheck.getInstance().getAppCheckToken(true)
+                .addOnSuccessListener(t -> Log.d("APPCHECK", "Token alındı, uzunluk=" + (t != null && t.getToken() != null ? t.getToken().length() : 0)))
+                .addOnFailureListener(e -> Log.w("APPCHECK", "Token alınamadı: " + e.getMessage()));
     }
+    private void startupChecks() {
+        // 1) TLS Provider (Play Services varsa)
+        safeInstallProviderIfNeeded(this);
+
+        // 2) App Check token ısındırma (cache’den çekmeyi dene, yoksa üret)
+        FirebaseAppCheck.getInstance()
+                .getAppCheckToken(false) // önce cache
+                .addOnFailureListener(e -> FirebaseAppCheck.getInstance().getAppCheckToken(true));
+
+        // 3) Auth state kontrol + gerekirse ID token ısındırma
+        FirebaseAuth auth = FirebaseAuth.getInstance();
+        FirebaseAuth.AuthStateListener listener = new FirebaseAuth.AuthStateListener() {
+            @Override public void onAuthStateChanged(@androidx.annotation.NonNull FirebaseAuth fa) {
+                FirebaseUser u = fa.getCurrentUser();
+                if (u != null) {
+                    // ID token’ı önceden üret, CF çağrısında gecikme olmasın
+                    u.getIdToken(false).addOnFailureListener(err -> u.getIdToken(true));
+                } else {
+                    Log.w(TAG, "Kullanıcı oturumu yok (startup). Giriş ekranında yakalanmalı.");
+                }
+                // Tek seferlik ısındırma için listener'ı kaldır
+                fa.removeAuthStateListener(this);
+            }
+        };
+        auth.addAuthStateListener(listener);
+    }
+
     public static Context app() { return sInstance; } // Uygulama context'i
 
     /**
      * Eğer cihazda Google Play Services uygunsa ProviderInstaller'ı başlatır,
      * değilse atlayıp DEVELOPER_ERROR log'larını önler.
      */
+
     private void safeInstallProviderIfNeeded(Context ctx) {
         GoogleApiAvailability api = GoogleApiAvailability.getInstance();
         int status = api.isGooglePlayServicesAvailable(ctx);
@@ -93,7 +126,7 @@ public class App extends Application {
             String idToken = idTok.getToken();
 
             // 2) App Check token
-            FirebaseAppCheck.getInstance().getAppCheckToken(false)
+            FirebaseAppCheck.getInstance().getAppCheckToken(true)
                     .addOnSuccessListener(appTok -> {
                         String appCheckToken = appTok.getToken();
 
@@ -112,6 +145,8 @@ public class App extends Application {
                                 Log.e("Message", "İstek hatası", e);
                             }
                             @Override public void onResponse(Call call, Response rsp) throws IOException {
+                                String b = rsp.body() != null ? rsp.body().string() : "";
+                                Log.d("Message", "HTTP " + rsp.code() + " | body=" + b);
                                 Log.d("Message", "HTTP " + rsp.code() + " " + rsp.message());
                             }
                         });

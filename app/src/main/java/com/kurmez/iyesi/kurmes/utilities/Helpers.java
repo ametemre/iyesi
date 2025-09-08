@@ -156,7 +156,7 @@ public class Helpers {
         TaskCompletionSource<String> tcs = new TaskCompletionSource<>();
         try {
             FirebaseAppCheck.getInstance()
-                    .getAppCheckToken(false)
+                    .getAppCheckToken(true)
                     .addOnSuccessListener(new OnSuccessListener<AppCheckToken>() {
                         @Override public void onSuccess(AppCheckToken token) {
                             tcs.setResult(token != null ? token.getToken() : "");

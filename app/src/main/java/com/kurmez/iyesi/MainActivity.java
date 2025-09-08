@@ -65,6 +65,24 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
+        if (user != null) {
+            try {
+                org.json.JSONObject payload = new org.json.JSONObject()
+                        .put("kind", "health_check")
+                        .put("ts", System.currentTimeMillis())
+                        .put("note", "startup_warmup");  // opsiyonel
+                user.reload() // profil/claim meta güncellensin
+                        .addOnSuccessListener(__ ->
+                                user.getIdToken(true) // force refresh
+                                        .addOnSuccessListener(tokenResult -> {
+                                            String idToken = tokenResult.getToken();
+                                            Log.d("Role:", idToken);
+                                        }));
+                // App.app() Context döndürüyor; App'e cast edip çağırıyoruz
+                ((App) App.app()).sendRequestWithAppCheckAndAuth(payload);
+            } catch (Exception ignore) {}
+        }
+
         Log.d("AUTH", user == null ? "Kullanıcı yok" : "Kullanıcı var: " + user.getUid());
 
         // 1) helper’ı oluştur, 2) activity ve callback ata,
@@ -81,6 +99,8 @@ public class MainActivity extends AppCompatActivity {
         functions = FirebaseFunctions.getInstance();   // ← burayı ekleyin
         // Find the ImageButton
         ImageButton patiEnterButton = findViewById(R.id.pati_enter);
+// Kullanıcı login ise küçük bir "health_check" at
+
 
         // Set click listener for the button
         patiEnterButton.setOnClickListener(v -> {
@@ -236,7 +256,7 @@ public class MainActivity extends AppCompatActivity {
      */
     private void navigateToKurmes() {
         Intent intent = null; // Navigate to Kurmes activity
-        if (!isRegistered) {
+        if (isRegistered) {
             intent = new Intent(this, SoulsManagerActivity.class);
         }else{
             intent = new Intent(this, Kurmes.class);
