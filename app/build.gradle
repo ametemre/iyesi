@@ -8,7 +8,7 @@ android {
     compileSdk 35
     defaultConfig {
         applicationId "com.kurmez.iyesi"
-        minSdk 27
+        minSdk 26
         //noinspection EditedTargetSdkVersion
         targetSdk 36
         versionCode 9
@@ -102,4 +102,20 @@ dependencies {
     testImplementation libs.junit
     androidTestImplementation libs.ext.junit
     androidTestImplementation libs.espresso.core
+
+    // Firebase BOM (tek versiyonla hepsini yönetir)
+    implementation platform('com.google.firebase:firebase-bom:33.4.0')
+
+    // App Check çekirdeği
+    implementation 'com.google.firebase:firebase-appcheck'
+
+    // Üretim sağlayıcısı (Play Integrity)
+    implementation 'com.google.firebase:firebase-appcheck-playintegrity'
+
+    // Geliştirme için Debug provider (yalnızca debug build’larda)
+    debugImplementation 'com.google.firebase:firebase-appcheck-debug'
+
+    // (Çağırıyorsan) Functions, Auth vs.
+    implementation 'com.google.firebase:firebase-auth'
+    implementation 'com.google.firebase:firebase-functions'
 }

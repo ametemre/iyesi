@@ -41,6 +41,12 @@ public class App extends Application {
 
         FirebaseApp.initializeApp(this);
 
+        FirebaseAppCheck appCheck = FirebaseAppCheck.getInstance();
+        if (BuildConfig.DEBUG) {
+            appCheck.installAppCheckProviderFactory(DebugAppCheckProviderFactory.getInstance()); // debug cihazlarda
+        } else {
+            appCheck.installAppCheckProviderFactory(PlayIntegrityAppCheckProviderFactory.getInstance()); // prod
+        }/*
         // App Check provider seçimi
         if (BuildConfig.DEBUG) {
             FirebaseAppCheck.getInstance()
@@ -48,7 +54,7 @@ public class App extends Application {
         } else {
             FirebaseAppCheck.getInstance()
                     .installAppCheckProviderFactory(PlayIntegrityAppCheckProviderFactory.getInstance());
-        }
+        }*/
 
         // 🔹 BAŞLANGIÇ KONTROLLERİ
         startupChecks();  // <-- ekle

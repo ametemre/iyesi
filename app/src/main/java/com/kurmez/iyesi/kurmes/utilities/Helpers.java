@@ -160,15 +160,18 @@ public class Helpers {
                     .addOnSuccessListener(new OnSuccessListener<AppCheckToken>() {
                         @Override public void onSuccess(AppCheckToken token) {
                             tcs.setResult(token != null ? token.getToken() : "");
+                            Log.v("AppCheck Loaded...",tcs.toString());
                         }
                     })
                     .addOnFailureListener(new OnFailureListener() {
                         @Override public void onFailure(@NonNull Exception e) {
                             tcs.setResult(""); // AppCheck kapalı/başarısız → boş
+                            Log.e("AppCheckError",e.getMessage());
                         }
                     });
         } catch (Throwable t) {
             tcs.setResult("");
+            Log.e("AppCheckError",t.getMessage());
         }
         return tcs.getTask();
     }
@@ -222,17 +225,17 @@ public class Helpers {
             boolean includeAppCheck,
             Callback callback
     ) {
-        Task<String> tId = getIdTokenOnce();
+        Task<String> tId = (FirebaseAuth.getInstance().getCurrentUser() != null)
+                ? getIdTokenOnce() : Tasks.forResult("");  // misafir ise boş bırak
         Task<String> tApp = includeAppCheck ? getAppCheckTokenSoft() : Tasks.forResult("");
         Tasks.whenAllSuccess(tId, tApp).addOnSuccessListener(list -> {
             String idToken = (String) list.get(0);
             String appCheck = includeAppCheck ? (String) list.get(1) : "";
 
-            Request.Builder rb = new Request.Builder()
-                    .url(fullUrl)
-                    .get()
-                    .addHeader("Authorization", "Bearer " + idToken);
-
+            Request.Builder rb = new Request.Builder().url(fullUrl).get();
+            if (idToken != null && !idToken.isEmpty()) {
+                rb.addHeader("Authorization", "Bearer " + idToken);
+            }
             if (includeAppCheck && appCheck != null && !appCheck.isEmpty()) {
                 rb.addHeader("X-Firebase-AppCheck", appCheck);
             }
