@@ -1,6 +1,7 @@
 package com.kurmez.iyesi.kurmes.social.content;
 
 import android.content.Intent;
+import android.net.Uri;
 import android.os.Bundle;
 import android.provider.ContactsContract;
 import android.util.Log;
@@ -15,7 +16,6 @@ import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.functions.FirebaseFunctions;
 import com.google.firebase.functions.HttpsCallableResult;
-import com.google.firebase.firestore.FirebaseFirestore;
 import com.kurmez.iyesi.R;
 import com.kurmez.iyesi.kurmes.utilities.Helpers;
 import com.kurmez.iyesi.kurmes.utilities.adapters.ContentAdapter;
@@ -28,16 +28,17 @@ import java.util.Map;
 
 public class Explore extends AppCompatActivity {
     private static final String TAG = "ExploreActivity";
-    List<String> allowedRoles = Arrays.asList("İye", "Körmes", "Ülgen", "Tengri", "Ağaç");
+
+    private final List<String> allowedRoles =
+            Arrays.asList("İye", "Körmes", "Ülgen", "Tengri", "Ağaç");
+
     private FirebaseAuth auth;
     private FirebaseUser user;
     private FirebaseFunctions functions;
-    private FirebaseFirestore firestore;
-    private String userRole;
 
     private RecyclerView recyclerView;
     private ContentAdapter adapter;
-    private List<Content> contentList = new ArrayList<>();
+    private final List<Content> contentList = new ArrayList<>();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -53,43 +54,48 @@ public class Explore extends AppCompatActivity {
             return;
         }
 
-        // 2) Firestore init (profil için)
-        firestore = FirebaseFirestore.getInstance();
-
-        // 3) UI setup
+        // 2) UI
         recyclerView = findViewById(R.id.recycler_explore);
         recyclerView.setLayoutManager(new LinearLayoutManager(this));
         adapter = new ContentAdapter(contentList, this);
         recyclerView.setAdapter(adapter);
 
-        // Profil header tıklaması
+        // Profil header tıklaması: Kişisel profil görünümünü aç
         View profileHeader = findViewById(R.id.profile_header);
-        profileHeader.setOnClickListener(v -> startActivity(new Intent(this, ContactsContract.Profile.class)));
+        profileHeader.setOnClickListener(v -> {
+            try {
+                Intent viewProfile = new Intent(Intent.ACTION_VIEW, ContactsContract.Profile.CONTENT_URI);
+                startActivity(viewProfile);
+            } catch (Exception e) {
+                // Bazı cihazlarda Contacts uygulaması olmayabilir
+                Toast.makeText(this, "Profil açılamadı: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+            }
+        });
 
-        // 4) Kullanıcı rolünü çek ve gönderileri yükle
-            Helpers.getRoleFunction()
-                    .addOnSuccessListener(role -> {
-                        if (role == null) {
-                            // Hata veya rol atanmadı, uyarı göster
-                            Helpers.showToastSafe(this, "Rol atanmadı!");
-                            finish();
-                            return;
-                        }
-                        // Role kontrolü:
-                        if (!allowedRoles.contains(role)) {
-                            Toast.makeText(this, "Bu sayfaya erişim yetkiniz yok: " + role, Toast.LENGTH_SHORT).show();
-                            finish();
-                            return;
-                        }
-
-                        // 5) Cloud Functions init ve veri çek
-                        functions = FirebaseFunctions.getInstance();
-                        fetchPublicCompletedPosts();
-                    })
-                    .addOnFailureListener(e -> {
-                        Toast.makeText(this, "Rol sorgusu hatası: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+        // 3) Rolü çek → yetki kontrolü → gönderileri yükle
+        Helpers.getRoleFunction()
+                .addOnSuccessListener(role -> {
+                    if (role == null) {
+                        Helpers.showToastSafe(this, "Rol atanmadı!");
                         finish();
-                    });
+                        return;
+                    }
+                    if (!allowedRoles.contains(role)) {
+                        Toast.makeText(this, "Bu sayfaya erişim yetkiniz yok: " + role, Toast.LENGTH_SHORT).show();
+                        finish();
+                        return;
+                    }
+
+                    // Cloud Functions (bölge: us-central1)
+                    functions = FirebaseFunctions.getInstance("us-central1");
+                    fetchPublicCompletedPosts();
+                })
+                .addOnFailureListener(e -> {
+                    Toast.makeText(this, "Rol sorgusu hatası: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                    finish();
+                });
+
+        // 4) Header menü aksiyonu (yenile)
         Helpers.ConversationHeaderHelper.setupHeader(this, R.menu.menu_explore_options, item -> {
             if (item.getItemId() == R.id.action_refresh) {
                 fetchPublicCompletedPosts();
@@ -99,8 +105,11 @@ public class Explore extends AppCompatActivity {
         });
     }
 
+    /* ------------------------------ Data Fetch ------------------------------ */
 
     private void fetchPublicCompletedPosts() {
+        if (functions == null) return;
+
         Map<String, Object> payload = new HashMap<>();
         payload.put("onlyCompleted", true);
         payload.put("onlyPublic", true);
@@ -114,35 +123,67 @@ public class Explore extends AppCompatActivity {
                         return;
                     }
                     HttpsCallableResult result = task.getResult();
-                    parsePosts(result.getData());
+                    parsePosts(result != null ? result.getData() : null);
                 });
     }
 
     @SuppressWarnings("unchecked")
     private void parsePosts(Object data) {
         contentList.clear();
+
+        if (!(data instanceof Map)) {
+            adapter.notifyDataSetChanged();
+            return;
+        }
+
         try {
             Map<String, Object> resultMap = (Map<String, Object>) data;
-            List<Map<String, Object>> posts = (List<Map<String, Object>>) resultMap.get("posts");
-            if (posts != null) {
-                for (Map<String, Object> post : posts) {
-                    Boolean isPublic = (Boolean) post.get("isPublic");
-                    String status = (String) post.get("status");
-                    if (!Boolean.TRUE.equals(isPublic) || !"completed".equalsIgnoreCase(status)) {
-                        continue;
-                    }
-                    String mediaUrl = post.get("mediaUrl") != null ? (String) post.get("mediaUrl") : "";
-                    String contentText = post.get("content") != null ? (String) post.get("content") : "";
-                    String ownerId = post.get("ownerId") != null ? (String) post.get("ownerId") : "";
-                    String displayText = contentText + "\nKayıt sahibi: " + ownerId;
+            Object postsObj = resultMap.get("posts");
 
-                    Content item = new Content(mediaUrl, displayText, 0, 0, false);
-                    contentList.add(item);
+            if (!(postsObj instanceof List)) {
+                adapter.notifyDataSetChanged();
+                return;
+            }
+
+            List<?> posts = (List<?>) postsObj;
+            for (Object o : posts) {
+                if (!(o instanceof Map)) continue;
+
+                Map<String, Object> post = (Map<String, Object>) o;
+
+                boolean isPublic = toBoolean(post.get("isPublic"));
+                String status = toString(post.get("status"));
+
+                if (!isPublic || !"completed".equalsIgnoreCase(status)) {
+                    continue;
                 }
+
+                String mediaUrl = toString(post.get("mediaUrl"));
+                String contentText = toString(post.get("content"));
+                String ownerId = toString(post.get("ownerId"));
+
+                String displayText = contentText + "\nKayıt sahibi: " + ownerId;
+
+                Content item = new Content(mediaUrl, displayText, 0, 0, false);
+                contentList.add(item);
             }
         } catch (ClassCastException e) {
             Log.e(TAG, "parsePosts hatası", e);
         }
+
         adapter.notifyDataSetChanged();
+    }
+
+    /* ------------------------------ Helpers -------------------------------- */
+
+    private static String toString(Object o) {
+        return o == null ? "" : String.valueOf(o);
+    }
+
+    private static boolean toBoolean(Object o) {
+        if (o instanceof Boolean) return (Boolean) o;
+        if (o == null) return false;
+        String s = String.valueOf(o);
+        return "true".equalsIgnoreCase(s) || "1".equals(s);
     }
 }

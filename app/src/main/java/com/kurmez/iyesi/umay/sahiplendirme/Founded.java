@@ -444,6 +444,53 @@ public class Founded extends AppCompatActivity {
             Toast.makeText(this, "Beklenmeyen hata: " + t.getMessage(), Toast.LENGTH_LONG).show();
         }
     }
+    // Founded.java (class içine ekle)
+    private void submitWithRetry(@NonNull JSONObject payload, boolean retried) {
+        Log.i(TAG, "CF submitSoulInNeed START" + (retried ? " (retry-with-placeholder)" : ""));
+        cf.submitSoulInNeed(payload, new CFHelper.EndpointCallback() {
+            @Override public void onSuccess(JSONObject resp) {
+                Log.i(TAG, "CF submitSoulInNeed END OK");
+                runOnUiThread(() -> {
+                    setSubmitting(false);
+                    try {
+                        String key = resp.getString("key");
+                        Intent i = new Intent(Founded.this, Companion.class);
+                        i.putExtra("requestKey", key);
+                        i.putExtra("node", "soul_inneed");
+                        startActivity(i);
+                        finish();
+                    } catch (Exception je) {
+                        Toast.makeText(Founded.this, "Yanıt çözümlenemedi", Toast.LENGTH_LONG).show();
+                    }
+                });
+            }
+
+            @Override public void onError(Throwable error) {
+                String msg = (error == null ? "" : String.valueOf(error.getMessage()));
+                Log.i(TAG, "CF submitSoulInNeed END ERROR: " + msg);
+
+                // Fallback: image-upload-failed ise 1 kez placeholder'la tekrar dene
+                if (!retried && msg.contains("image-upload-failed")) {
+                    try {
+                        // imageBase64'i kaldır, yerine imageUrl koy
+                        payload.remove("imageBase64");
+                        payload.put("imageUrl", R.drawable.holder);
+                        // akışı sürdür
+                        submitWithRetry(payload, true);
+                        return;
+                    } catch (Exception ignore) {}
+                }
+
+                runOnUiThread(() -> {
+                    setSubmitting(false);
+                    Toast.makeText(Founded.this,
+                            "Sunucu hatası: " + (msg.isEmpty() ? "-" : msg),
+                            Toast.LENGTH_LONG).show();
+                });
+            }
+        });
+    }
+
     @NonNull
     private String todayIsoDate() {
         try {

@@ -1,7 +1,10 @@
 package com.kurmez.iyesi.kayra.Classes.data;
 
+import static org.opencv.android.NativeCameraView.TAG;
+
 import android.os.Parcel;
 import android.os.Parcelable;
+import android.util.Log;
 
 import androidx.annotation.Keep;
 import androidx.annotation.NonNull;
@@ -11,7 +14,9 @@ import com.google.firebase.firestore.GeoPoint;
 
 import org.json.JSONObject;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
@@ -550,4 +555,45 @@ public class Soul implements Parcelable {
         try { return v == null ? null : Double.parseDouble(String.valueOf(v)); }
         catch (Exception ignore) { return null; }
     }
+    @NonNull
+    public static List<Soul> parseSouls(org.json.JSONObject json) {
+        List<Soul> out = new ArrayList<>();
+        try {
+            var arr = json.optJSONArray("items");
+            if (arr == null) return out;
+            for (int i = 0; i < arr.length(); i++) {
+                var o = arr.optJSONObject(i);
+                if (o == null) continue;
+
+                // JSON alanları: server tarafında items[i] içinde beklenen olası alanlar
+                String id            = o.optString("id", null);
+                String species       = o.optString("species", null);
+                String breed         = o.optString("breed", null);
+                String status        = o.optString("status", null);
+                String imageUrl      = o.optString("imageUrl", null);
+
+                // Bu üçü UI’de kullandığın isimler: foundDate/foundLocation/finderName
+                String foundDate     = o.optString("foundDate", o.optString("date", null));
+                String foundLocation = o.optString("foundLocation", o.optString("locationName", null));
+                String finderName    = o.optString("finderName", o.optString("ownerName", null));
+
+                // Soul objesini oluştur (boş ctor + setter’lar varsayıldı)
+                Soul s = new Soul();
+                try { s.setId(id); } catch (Throwable ignore) {}
+                try { s.setSpecies(species); } catch (Throwable ignore) {}
+                try { s.setBreed(breed); } catch (Throwable ignore) {}
+                try { s.setStatus(status); } catch (Throwable ignore) {}
+                try { s.setImageUrl(imageUrl); } catch (Throwable ignore) {}
+                try { s.setFoundDate(foundDate); } catch (Throwable ignore) {}
+                try { s.setFoundLocation(foundLocation); } catch (Throwable ignore) {}
+                try { s.setFinderName(finderName); } catch (Throwable ignore) {}
+
+                out.add(s);
+            }
+        } catch (Throwable t) {
+            Log.e(TAG, "parseSouls failed", t);
+        }
+        return out;
+    }
+
 }
