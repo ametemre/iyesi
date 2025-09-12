@@ -25,11 +25,11 @@ import com.google.firebase.database.DataSnapshot;
 import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
 import com.kurmez.iyesi.R;
+import com.kurmez.iyesi.kayra.Classes.data.Soul;
 import com.kurmez.iyesi.kurmes.social.Profile;
 import com.kurmez.iyesi.kurmes.utilities.Helpers;
 import com.kurmez.iyesi.kurmes.utilities.adapters.ContentAdapter;
 import com.kurmez.iyesi.kurmes.utilities.helper.CFHelper;
-import com.kurmez.iyesi.kayra.Classes.data.Soul;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -41,22 +41,38 @@ import java.util.Map;
 
 /**
  * Lists pending companion records for privileged roles and allows quick actions on each item.
+ * "İlgi gerektiren" kayıtlar (eksik alan, yeni kayıt, foto yok vb.) üstte gösterilir.
+ * GİRİŞ/ÇIKIŞ noktaları yoğun biçimde Log ile işaretlendi.
  */
 public class ExplorePrivate extends AppCompatActivity {
-    private static final String TAG = "ExplorePrivate";
-    // bir sabit tanımla
-    private static final String RTDB_URL = "https://iyesi-e8d4f.firebaseio.com"; // konsoldaki link
-    private static final List<String> ALLOWED_ROLES = Arrays.asList(
-            "İye", "Körmös", "Ülgen", "Tengri",
-            "İYE", "iye", "Körmes", "Kormos", "KORMOS", "KÖRMÖS",
-            "ULGEN", "ÜLGEN", "Ulgen", "TENGRI", "TENGRİ"
-    );
 
+    /* ========================== LOG & FLAGS ========================== */
+    private static final String L = "ExplorePrivate";
+    private static final boolean VERBOSE_JSON = true;   // JSON’ları detaylı bas
+    private static final int MAX_LOG_CHARS = 4000;      // Logcat chunk sınırı
+
+    /* ============================ MODEL ============================== */
+    private static class Row {
+        String key;
+        Soul soul;
+        String imageUrl;
+        int score;
+        long ts;
+        String displayText;
+    }
+
+    /* ======================= CONST / PERMISSIONS ===================== */
+    private static final String RTDB_URL = "https://iyesi-e8d4f.firebaseio.com";
+    private static final List<String> ALLOWED_ROLES = Arrays.asList(
+            "İye", "Körmös", "Körmes", "Ülgen", "Tengri", "Ağaç"
+    );
+    private static final boolean FEATURE_PENDING_COMPANIONS = false;
+    private static final int REQ_LOC = 42;
+
+    /* ============================ STATE ============================== */
     private final List<Content> items = new ArrayList<>();
     private final List<Soul> souls = new ArrayList<>();
     private final List<String> keys = new ArrayList<>();
-
-    private static final boolean FEATURE_PENDING_COMPANIONS = false;
 
     private RecyclerView recyclerView;
     private ContentAdapter adapter;
@@ -65,22 +81,29 @@ public class ExplorePrivate extends AppCompatActivity {
     private FirebaseUser user;
     private String userRole;
     private DatabaseReference pendingRef;
+    private FusedLocationProviderClient fused;
 
+    /* =========================== LIFECYCLE =========================== */
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        long t0 = System.currentTimeMillis();
+        Log.i(L, "onCreate() → GİRİŞ");
+
         setContentView(R.layout.activity_explore_private);
-
-
-// kullanım
-        FirebaseDatabase db = FirebaseDatabase.getInstance(RTDB_URL);
 
         user = FirebaseAuth.getInstance().getCurrentUser();
         if (user == null) {
+            Log.w(L, "onCreate() → ÇIKIŞ (USER NULL) | Giriş gerekli");
             Toast.makeText(this, "Bu sayfayı görüntülemek için giriş yapmalısınız.", Toast.LENGTH_LONG).show();
             finish();
             return;
         }
+        Log.d(L, "onCreate() user=" + user.getUid() + " email=" + user.getEmail());
+
+        FirebaseDatabase db = FirebaseDatabase.getInstance(RTDB_URL);
+        pendingRef = db.getReference("Pending/Companion/soul_inneed");
+        Log.d(L, "RTDB path = " + pendingRef.getPath().toString());
 
         recyclerView = findViewById(R.id.recycler_private_explore);
         recyclerView.setLayoutManager(new LinearLayoutManager(this));
@@ -89,63 +112,122 @@ public class ExplorePrivate extends AppCompatActivity {
 
         View header = findViewById(R.id.profile_header);
         if (header != null) {
-            header.setOnClickListener(v -> startActivity(new Intent(this, Profile.class)));
+            header.setOnClickListener(v -> {
+                Log.d(L, "Header click → Profile");
+                startActivity(new Intent(this, Profile.class));
+            });
         }
 
         cf = new CFHelper(this, "iyesi-e8d4f", null);
-        pendingRef = db.getReference("Pending/Companion/soul_inneed");
-        FusedLocationProviderClient loc = LocationServices.getFusedLocationProviderClient(this);
+        fused = LocationServices.getFusedLocationProviderClient(this);
 
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
                 != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, 42);
-            return;
+            Log.i(L, "Konum izni yok → requestPermissions");
+            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, REQ_LOC);
+        } else {
+            Log.d(L, "Konum izni mevcut → requestLastLocationMaybeFetch()");
+            requestLastLocationMaybeFetch();
         }
-
-        loc.getLastLocation().addOnSuccessListener(l -> {
-            double lat = (l != null) ? l.getLatitude()  : 41.015137; // fallback
-            double lng = (l != null) ? l.getLongitude() : 28.97953;
-
-            fetchPendingViaCF(lat, lng);  // zaten sende var
-        });
 
         attachItemTouchHandlers();
         resolveRoleAndFetch();
-    }
-    // Sınıf içine, TAG altına ekle
-    private static void logLong(String tag, String msg) {
-        if (msg == null) return;
-        final int max = 4000;
-        for (int i = 0; i < msg.length(); i += max) {
-            Log.i(tag, msg.substring(i, Math.min(i + max, msg.length())));
-        }
+
+        Log.i(L, "onCreate() → ÇIKIŞ (" + (System.currentTimeMillis() - t0) + " ms)");
     }
 
+    /* ======================= PRIORITY SCORING ======================== */
+    private static int computeAttentionScore(@NonNull Soul s) {
+        int score = 0;
+        if (isEmpty(s.getHealth())) score += 3;
+        if (isEmpty(s.getAge()))    score += 2;
+        if (isEmpty(s.getSpecies())) score += 2;
+        if (isEmpty(s.getBreed()))   score += 1;
+        String img = !isEmpty(s.getImageResId()) ? s.getImageResId() : s.getImageUrl();
+        if (isEmpty(img)) score += 2;
+        if (isEmpty(s.getFoundLocation())) score += 2;
+        long now = System.currentTimeMillis();
+        long ts  = s.getTimestamp() > 0 ? s.getTimestamp() : 0;
+        long dt  = ts > 0 ? (now - ts) : Long.MAX_VALUE;
+        final long H = 60L * 60L * 1000L;
+        if (dt <= 24 * H)       score += 2;
+        else if (dt <= 72 * H)  score += 1;
+        String h = s.getHealth() == null ? "" : s.getHealth().toLowerCase();
+        if (h.contains("critical") || h.contains("acil") || h.contains("urgent")) score += 2;
+        return score;
+    }
+
+    private static boolean isEmpty(String s) { return s == null || s.isEmpty(); }
+    private static String  nz(String s)      { return s == null ? "" : s; }
+    private String safe(String s)            { return s == null ? "-" : s; }
+
+    /* ======================= ROLE / ACCESS FLOW ======================= */
     private void resolveRoleAndFetch() {
-        new Thread(() -> {
-            cf.refreshRole(role -> {
-                if (role != null) {
-                    runOnUiThread(() -> handleRole(role));
-                    Log.d("CustomClaims", "Role: " + role);
-                } else {
-                    Log.d("CustomClaims", "Role bulunamadı");
-                }
-            });
-        }).start();
+        Log.i(L, "resolveRoleAndFetch() → GİRİŞ");
+        new Thread(() -> cf.refreshRole(role -> {
+            Log.d(L, "refreshRole() → ÇIKIŞ role=" + role);
+            if (role != null) {
+                runOnUiThread(() -> handleRole(role));
+            } else {
+                Log.w(L, "Role bulunamadı → finish()");
+                runOnUiThread(() -> {
+                    Toast.makeText(this, "Rol bulunamadı", Toast.LENGTH_SHORT).show();
+                    finish();
+                });
+            }
+        })).start();
     }
 
+    private void handleRole(String role) {
+        long t0 = System.currentTimeMillis();
+        Log.i(L, "handleRole() → GİRİŞ roleRaw=" + role);
+
+        if (role == null || !isAllowed(role)) {
+            Log.w(L, "Erişim reddedildi: " + role);
+            Toast.makeText(this, "Bu sayfaya erişim yetkiniz yok: " + role, Toast.LENGTH_LONG).show();
+            finish();
+            return;
+        }
+        userRole = normalizeRole(role);
+        Log.d(L, "role normalized=" + userRole + " → fetchAllFromRTDB()");
+        fetchAllFromRTDB();
+
+        Log.i(L, "handleRole() → ÇIKIŞ (" + (System.currentTimeMillis() - t0) + " ms)");
+    }
+
+    private boolean isAllowed(String roleRaw) {
+        if (roleRaw == null) return false;
+        for (String r : ALLOWED_ROLES) {
+            if (r.equalsIgnoreCase(roleRaw)) return true;
+        }
+        return false;
+    }
+
+    private String normalizeRole(String r) {
+        if (r == null) return "İye";
+        if (r.equalsIgnoreCase("Tengri")) return "Tengri";
+        if (r.equalsIgnoreCase("Ülgen") || r.equalsIgnoreCase("Ulgen")) return "Ülgen";
+        if (r.equalsIgnoreCase("Körmös") || r.equalsIgnoreCase("Körmes") || r.equalsIgnoreCase("Kormos")) return "Körmös";
+        if (r.equalsIgnoreCase("Ağaç") || r.equalsIgnoreCase("Agac")) return "Ağaç";
+        return "İye";
+    }
+
+    /* ============================ RTDB FETCH ========================== */
     /**
-     * RTDB'den tüm kayıtları oku ve listele
+     * RTDB'den tüm kayıtları oku, skorla ve listele (önceliklendirilmiş).
+     * GİRİŞ: path, çocuk sayısı
+     * ÇIKIŞ: sıralı kayıt adedi, örnek anahtarlar
      */
     private void fetchAllFromRTDB() {
+        long t0 = System.currentTimeMillis();
+        Log.i(L, "fetchAllFromRTDB() → GİRİŞ path=" + pendingRef.getPath());
+
         pendingRef.get()
                 .addOnSuccessListener(snap -> {
-                    Log.i(TAG, "RTDB get() OK. children=" + snap.getChildrenCount());
+                    long t1 = System.currentTimeMillis();
+                    Log.i(L, "RTDB get() OK in " + (t1 - t0) + " ms | children=" + snap.getChildrenCount());
 
-                    items.clear();
-                    souls.clear();
-                    keys.clear();
-
+                    List<Row> rows = new ArrayList<>();
                     int idx = 0;
                     for (DataSnapshot child : snap.getChildren()) {
                         idx++;
@@ -154,26 +236,17 @@ public class ExplorePrivate extends AppCompatActivity {
                         @SuppressWarnings("unchecked")
                         Map<String, Object> map = (Map<String, Object>) child.getValue();
                         if (map == null) {
-                            Log.i(TAG, "child[" + idx + "] key=" + key + " -> value=null (skip)");
+                            Log.w(L, "child[" + idx + "] key=" + key + " → value=null (skip)");
                             continue;
                         }
 
-                        // Ham JSON
                         JSONObject o = new JSONObject(map);
                         try { o.put("id", key); } catch (Exception ignore) {}
-                        String raw = o.toString();
 
-                        // Uzun JSON'u parça parça logla (Logcat limiti ~4K)
-                        final int CHUNK = 4000;
-                        for (int i = 0; i < raw.length(); i += CHUNK) {
-                            Log.i(TAG, "child[" + idx + "] key=" + key + " json=" +
-                                    raw.substring(i, Math.min(i + CHUNK, raw.length())));
-                        }
+                        if (VERBOSE_JSON) logChunked("RTDB.child[" + idx + "]." + key, o.toString());
 
-                        // Parse → Soul
                         Soul s = Soul.fromJson(o);
                         if (s == null) {
-                            // Fallback: alan adları farklı ise minimum alanlarla oluştur
                             s = new Soul(
                                     null,
                                     o.optString("species"),
@@ -189,73 +262,72 @@ public class ExplorePrivate extends AppCompatActivity {
                             );
                         }
 
-                        // Parse özeti
-                        Log.i(TAG, "parsed[" + idx + "] key=" + key
-                                + " species=" + safe(s.getSpecies())
-                                + " finder="  + safe(s.getFinderName())
-                                + " ts="      + s.getTimestamp());
-
-                        // Liste öğeleri
-                        keys.add(key);
-                        souls.add(s);
-
+                        String imageUrl = !isEmpty(s.getImageResId()) ? s.getImageResId() : s.getImageUrl();
                         String text = "Tür: " + safe(s.getSpecies())
                                 + "\nKayıt sahibi: " + safe(s.getFinderName())
                                 + "\nKonum: " + safe(s.getFoundLocation());
-                        items.add(new Content(s.getImageResId(), text, 0, 0, true));
+
+                        int sc = computeAttentionScore(s);
+                        long ts = s.getTimestamp();
+
+                        Row r = new Row();
+                        r.key = key;
+                        r.soul = s;
+                        r.imageUrl = imageUrl;
+                        r.score = sc;
+                        r.ts = ts;
+                        r.displayText = text;
+
+                        rows.add(r);
+                    }
+
+                    // Sıralama: score desc, ts desc
+                    rows.sort((a, b) -> {
+                        if (b.score != a.score) return Integer.compare(b.score, a.score);
+                        return Long.compare(b.ts, a.ts);
+                    });
+
+                    items.clear();
+                    souls.clear();
+                    keys.clear();
+
+                    for (Row r : rows) {
+                        keys.add(r.key);
+                        souls.add(r.soul);
+                        String badge = r.score >= 5 ? "★ " : (r.score >= 3 ? "• " : "");
+                        items.add(new Content(r.imageUrl, badge + r.displayText, 0, 0, true));
                     }
 
                     adapter.notifyDataSetChanged();
-                    Log.i(TAG, "RTDB loaded count=" + keys.size());
-                    Helpers.showToastSafe(this, "ExplorePrivate: " + keys.size() + " kayıt yüklendi");
+
+                    // ÇIKIŞ özeti
+                    Log.i(L, "fetchAllFromRTDB() → ÇIKIŞ count=" + keys.size()
+                            + " | " + previewKeys(keys)
+                            + " | total " + (System.currentTimeMillis() - t0) + " ms");
+                    Helpers.showToastSafe(this, "ExplorePrivate: " + keys.size() + " kayıt (önceliklendirilmiş)");
                 })
                 .addOnFailureListener(e -> {
-                    Log.i(TAG, "RTDB get() FAILED: " + e.getMessage(), e);
+                    Log.e(L, "RTDB get() FAILED: " + e.getMessage(), e);
                     Helpers.showToastSafe(this, "RTDB hata: " + e.getMessage());
                 });
     }
 
-
-    private void handleRole(String role) {
-        if (role == null || !isAllowed(role)) {
-            Toast.makeText(this, "Bu sayfaya erişim yetkiniz yok: " + role, Toast.LENGTH_LONG).show();
-            finish();
-            return;
-        }
-        userRole = normalizeRole(role);
-        Log.i(TAG, "role ok => " + userRole + " | source=RTDB(all)");
-
-
-        // İSTEK: CheckPendingCompanion ile kontrol ettiğin RTDB yolundaki TÜM kayıtlar
-        // => Konum istemeden doğrudan RTDB'den tamamını çekiyoruz.
-
-        try {
-            Log.e("HandleRole", "Fetching...");
-
-            fetchAllFromRTDB();
-        } catch (Exception e) {
-            Log.e("Error:",e.getMessage());
-        }
-
-        // İstersen aşağıdaki konum bazlı CF çağrısını menüden 'Yakınımdakiler' seçeneği olarak koruyabilirsin.
-        // fetchPendingViaCF(41.015137, 28.97953);
-    }
-
+    /* =========================== CF (optional) ============================ */
     private void fetchPendingViaCF(double lat, double lng) {
-        // fetchPendingViaCF(...) çağrıldığında en başa
+        Log.i(L, "fetchPendingViaCF() → GİRİŞ lat=" + lat + " lng=" + lng + " flag=" + FEATURE_PENDING_COMPANIONS);
         if (!FEATURE_PENDING_COMPANIONS) {
-            Log.i("ExplorePrivate", "PendingCompanions devre dışı (flag).");
-            // UI'yi boş liste ile güncellemek istiyorsan:
-            // adapter.submitList(Collections.emptyList());
+            Log.i(L, "fetchPendingViaCF() → ÇIKIŞ (flag=false)");
             return;
         }
 
+        long t0 = System.currentTimeMillis();
         new Thread(() -> {
             try {
-                JSONObject json = cf.listPendingCompanions(lat, lng, 50000, 100);
+                JSONObject json = cf.listPendingCompanions(lat, lng, 50_000, 100);
+                Log.d(L, "CF.listPendingCompanions() → ÇIKIŞ in " + (System.currentTimeMillis() - t0) + " ms");
                 runOnUiThread(() -> handlePendingResponse(json));
             } catch (Exception e) {
-                Log.e(TAG, "CF error", e);
+                Log.e(L, "CF error", e);
                 runOnUiThread(() ->
                         Toast.makeText(this, "Cloud Function hata: " + e.getMessage(), Toast.LENGTH_LONG).show());
             }
@@ -263,11 +335,16 @@ public class ExplorePrivate extends AppCompatActivity {
     }
 
     private void handlePendingResponse(@NonNull JSONObject json) {
+        Log.i(L, "handlePendingResponse() → GİRİŞ");
         boolean ok = json.optBoolean("success", json.optBoolean("ok", false));
         if (!ok) {
-            Helpers.showToastSafe(this, json.optString("error", "CF hata"));
+            String err = json.optString("error", "CF hata");
+            Log.w(L, "handlePendingResponse() not ok → " + err);
+            Helpers.showToastSafe(this, err);
             return;
         }
+
+        if (VERBOSE_JSON) logChunked("CF.response", json.toString());
 
         JSONArray arr = json.optJSONArray("items");
         int n = arr == null ? 0 : arr.length();
@@ -285,32 +362,38 @@ public class ExplorePrivate extends AppCompatActivity {
             keys.add(id);
 
             Soul s = Soul.fromJson(o);
-            if (s == null) s = new Soul(
-                    null,
-                    o.optString("species"),
-                    o.optString("breed"),
-                    o.optString("age"),
-                    o.optString("health"),
-                    o.optString("foundDate"),
-                    o.optString("foundLocation"),
-                    null,
-                    o.optString("imageResId", o.optString("imageUrl")),
-                    o.optString("finderName", o.optString("finder")),
-                    o.optLong("timestamp", 0)
-            );
+            if (s == null) {
+                s = new Soul(
+                        null,
+                        o.optString("species"),
+                        o.optString("breed"),
+                        o.optString("age"),
+                        o.optString("health"),
+                        o.optString("foundDate"),
+                        o.optString("foundLocation"),
+                        null,
+                        o.optString("imageResId", o.optString("imageUrl")),
+                        o.optString("finderName", o.optString("finder")),
+                        o.optLong("timestamp", 0)
+                );
+            }
             souls.add(s);
 
+            String imageUrl = !isEmpty(s.getImageResId()) ? s.getImageResId() : s.getImageUrl();
             String text = "Tür: " + safe(s.getSpecies())
                     + "\nKayıt sahibi: " + safe(s.getFinderName())
                     + "\nKonum: " + safe(s.getFoundLocation());
-            items.add(new Content(s.getImageResId(), text, 0, 0, true));
+            items.add(new Content(imageUrl, text, 0, 0, true));
         }
 
         adapter.notifyDataSetChanged();
+        Log.i(L, "handlePendingResponse() → ÇIKIŞ count=" + n + " | " + previewKeys(keys));
         Helpers.showToastSafe(this, "ExplorePrivate: " + n + " kayıt yüklendi");
     }
 
+    /* ======================= ITEM INTERACTIONS ======================== */
     private void attachItemTouchHandlers() {
+        Log.d(L, "attachItemTouchHandlers()");
         recyclerView.addOnItemTouchListener(new RecyclerView.SimpleOnItemTouchListener() {
             final GestureDetector detector = new GestureDetector(ExplorePrivate.this,
                     new GestureDetector.SimpleOnGestureListener() {
@@ -319,6 +402,7 @@ public class ExplorePrivate extends AppCompatActivity {
                             View child = recyclerView.findChildViewUnder(e.getX(), e.getY());
                             if (child != null) {
                                 int pos = recyclerView.getChildAdapterPosition(child);
+                                Log.d(L, "onLongPress pos=" + pos);
                                 if (pos >= 0 && pos < keys.size()) {
                                     showQuickActionsDialog(pos);
                                 }
@@ -331,6 +415,7 @@ public class ExplorePrivate extends AppCompatActivity {
                 View child = rv.findChildViewUnder(e.getX(), e.getY());
                 if (child != null && detector.onTouchEvent(e)) {
                     int pos = rv.getChildAdapterPosition(child);
+                    Log.d(L, "onSingleTap pos=" + pos);
                     if (pos >= 0 && pos < keys.size()) {
                         openEditor(pos);
                     }
@@ -344,22 +429,38 @@ public class ExplorePrivate extends AppCompatActivity {
     private void openEditor(int position) {
         if (position < 0 || position >= keys.size()) return;
 
-        Soul soul = souls.get(position);
+        Soul s = souls.get(position);
         String key = keys.get(position);
 
         Intent i = new Intent(this, com.kurmez.iyesi.umay.sahiplendirme.Companion.class);
         i.putExtra("requestKey", key);
         i.putExtra("node", "soul_inneed");
-        i.putExtra("species", soul.getSpecies());
-        i.putExtra("foundDate", soul.getFoundDate());
-        i.putExtra("foundLocation", soul.getFoundLocation());
-        i.putExtra("imageResId", soul.getImageResId());
+
+        i.putExtra("species", nz(s.getSpecies()));
+        i.putExtra("breed",   nz(s.getBreed()));
+        i.putExtra("foundDate", nz(s.getFoundDate()));
+        i.putExtra("foundPlace", nz(s.getFoundLocation()));
+        String imageUrl = !isEmpty(s.getImageResId()) ? s.getImageResId() : s.getImageUrl();
+        i.putExtra("photoUrl", nz(imageUrl));
+        i.putExtra("profileId", nz(s.getFinderName()));
+
+        Log.i(L, "openEditor() → GİRİŞ intentExtras: "
+                + "key=" + key
+                + " species=" + nz(s.getSpecies())
+                + " breed=" + nz(s.getBreed())
+                + " date=" + nz(s.getFoundDate())
+                + " place=" + nz(s.getFoundLocation())
+                + " photo=" + nz(imageUrl)
+                + " who=" + nz(s.getFinderName()));
+
         startActivity(i);
     }
 
     private void showQuickActionsDialog(int position) {
         if (position < 0 || position >= keys.size()) return;
         String key = keys.get(position);
+
+        Log.d(L, "showQuickActionsDialog() key=" + key);
 
         String[] roles = {"İye", "Körmös", "Ülgen", "Tengri"};
         new AlertDialog.Builder(this)
@@ -369,6 +470,7 @@ public class ExplorePrivate extends AppCompatActivity {
                         "Rolü değiştir…",
                         "Sil"
                 }, (d, which) -> {
+                    Log.d(L, "QuickAction which=" + which + " key=" + key);
                     switch (which) {
                         case 0:
                             updateStatusCompleted(key);
@@ -388,46 +490,93 @@ public class ExplorePrivate extends AppCompatActivity {
     }
 
     private void updateStatusCompleted(@NonNull String key) {
+        Log.i(L, "updateStatusCompleted() → GİRİŞ key=" + key);
         pendingRef.child(key).child("status").setValue("completed")
-                .addOnSuccessListener(v -> Toast.makeText(this, "Tamamlandı ✓", Toast.LENGTH_SHORT).show())
-                .addOnFailureListener(e -> Toast.makeText(this, "Hata: " + e.getMessage(), Toast.LENGTH_SHORT).show());
+                .addOnSuccessListener(v -> {
+                    Log.i(L, "updateStatusCompleted() → ÇIKIŞ OK key=" + key);
+                    Toast.makeText(this, "Tamamlandı ✓", Toast.LENGTH_SHORT).show();
+                })
+                .addOnFailureListener(e -> {
+                    Log.e(L, "updateStatusCompleted() → ÇIKIŞ FAIL key=" + key + " msg=" + e.getMessage(), e);
+                    Toast.makeText(this, "Hata: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                });
     }
 
     private void updateCurrentRole(@NonNull String key, @NonNull String newRole) {
+        Log.i(L, "updateCurrentRole() → GİRİŞ key=" + key + " newRole=" + newRole);
         pendingRef.child(key).child("currentRole").setValue(newRole)
-                .addOnSuccessListener(v -> Toast.makeText(this, "Rol güncellendi: " + newRole, Toast.LENGTH_SHORT).show())
-                .addOnFailureListener(e -> Toast.makeText(this, "Hata: " + e.getMessage(), Toast.LENGTH_SHORT).show());
+                .addOnSuccessListener(v -> {
+                    Log.i(L, "updateCurrentRole() → ÇIKIŞ OK");
+                    Toast.makeText(this, "Rol güncellendi: " + newRole, Toast.LENGTH_SHORT).show();
+                })
+                .addOnFailureListener(e -> {
+                    Log.e(L, "updateCurrentRole() → ÇIKIŞ FAIL msg=" + e.getMessage(), e);
+                    Toast.makeText(this, "Hata: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                });
     }
 
     private void deletePending(@NonNull String key) {
+        Log.w(L, "deletePending() → GİRİŞ key=" + key);
         new AlertDialog.Builder(this)
                 .setTitle("Silinsin mi?")
                 .setMessage("Bu kaydı kalıcı olarak silmek istiyor musunuz?")
                 .setPositiveButton("Sil", (d, w) ->
                         pendingRef.child(key).removeValue()
-                                .addOnSuccessListener(v -> Toast.makeText(this, "Silindi", Toast.LENGTH_SHORT).show())
-                                .addOnFailureListener(e -> Toast.makeText(this, "Hata: " + e.getMessage(), Toast.LENGTH_SHORT).show()))
+                                .addOnSuccessListener(v -> {
+                                    Log.w(L, "deletePending() → ÇIKIŞ OK key=" + key);
+                                    Toast.makeText(this, "Silindi", Toast.LENGTH_SHORT).show();
+                                })
+                                .addOnFailureListener(e -> {
+                                    Log.e(L, "deletePending() → ÇIKIŞ FAIL key=" + key + " msg=" + e.getMessage(), e);
+                                    Toast.makeText(this, "Hata: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                                }))
                 .setNegativeButton("Vazgeç", null)
                 .show();
     }
 
-    private boolean isAllowed(String roleRaw) {
-        if (roleRaw == null) return false;
-        for (String r : ALLOWED_ROLES) {
-            if (r.equalsIgnoreCase(roleRaw)) return true;
+    /* ============================ UTILITIES =========================== */
+    private static void logChunked(String prefix, String text) {
+        if (text == null) {
+            Log.d(L, prefix + " <null>");
+            return;
         }
-        return false;
+        for (int i = 0; i < text.length(); i += MAX_LOG_CHARS) {
+            Log.d(L, prefix + ": " + text.substring(i, Math.min(i + MAX_LOG_CHARS, text.length())));
+        }
     }
 
-    private String normalizeRole(String r) {
-        if (r == null) return "İye";
-        if (r.equalsIgnoreCase("Tengri")) return "Tengri";
-        if (r.equalsIgnoreCase("Ülgen") || r.equalsIgnoreCase("ULGEN") || r.equalsIgnoreCase("ÜLGEN") || r.equalsIgnoreCase("Ulgen")) return "Ülgen";
-        if (r.equalsIgnoreCase("Körmös") || r.equalsIgnoreCase("Körmes") || r.equalsIgnoreCase("Kormos") || r.equalsIgnoreCase("KÖRMÖS") || r.equalsIgnoreCase("KÖRMES") || r.equalsIgnoreCase("KORMOS")) return "Körmös";
-        return "İye";
+    private static String previewKeys(List<String> list) {
+        if (list == null || list.isEmpty()) return "[]";
+        int n = list.size();
+        String head = list.get(0);
+        String tail = list.get(n - 1);
+        return "[first=" + head + ", last=" + (n > 1 ? tail : head) + ", n=" + n + "]";
     }
 
-    private String safe(String s) {
-        return s == null ? "-" : s;
+    private void requestLastLocationMaybeFetch() {
+        Log.d(L, "requestLastLocationMaybeFetch()");
+        fused.getLastLocation().addOnSuccessListener(l -> {
+            double lat = (l != null) ? l.getLatitude() : 41.015137;
+            double lng = (l != null) ? l.getLongitude() : 28.97953;
+            Log.d(L, "lastLocation lat=" + lat + " lng=" + lng);
+            fetchPendingViaCF(lat, lng);
+        });
+    }
+
+    /* ================== PERMISSION RESULT HANDLING =================== */
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions,
+                                           @NonNull int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        Log.d(L, "onRequestPermissionsResult() req=" + requestCode);
+        if (requestCode == REQ_LOC) {
+            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                Log.d(L, "LOCATION GRANTED → requestLastLocationMaybeFetch()");
+                requestLastLocationMaybeFetch();
+            } else {
+                Log.w(L, "LOCATION DENIED");
+                fetchPendingViaCF(41.015137, 28.97953); // sadece flag açıksa çalışır
+            }
+        }
     }
 }

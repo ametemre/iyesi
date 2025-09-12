@@ -16,6 +16,10 @@ import androidx.annotation.RequiresPermission;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 
+import com.google.firebase.FirebaseApp;
+import com.google.firebase.appcheck.FirebaseAppCheck;
+import com.google.firebase.appcheck.debug.DebugAppCheckProviderFactory;
+import com.google.firebase.appcheck.playintegrity.PlayIntegrityAppCheckProviderFactory;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.firestore.FirebaseFirestore;
@@ -79,9 +83,30 @@ public class MainActivity extends AppCompatActivity {
                                             Log.d("Role:", idToken);
                                         }));
                 // App.app() Context döndürüyor; App'e cast edip çağırıyoruz
-                ((App) App.app()).sendRequestWithAppCheckAndAuth(payload);
+                ((AppCheckTokenProvider) AppCheckTokenProvider.app()).sendRequestWithAppCheckAndAuth(payload);
             } catch (Exception ignore) {}
         }
+        FirebaseApp.initializeApp(this);
+
+// App Check (DEBUG ise Debug provider, üretimde Play Integrity)
+        FirebaseAppCheck appCheck = FirebaseAppCheck.getInstance();
+        appCheck.installAppCheckProviderFactory(
+                BuildConfig.DEBUG
+                        ? DebugAppCheckProviderFactory.getInstance()
+                        : PlayIntegrityAppCheckProviderFactory.getInstance()
+        );
+
+// Anonim giriş
+        FirebaseAuth mAuth = FirebaseAuth.getInstance();
+        mAuth.signInAnonymously()
+                .addOnSuccessListener(res -> {
+                    FirebaseUser u = mAuth.getCurrentUser();
+                    u.getIdToken(/*forceRefresh=*/true)
+                            .addOnSuccessListener(tok -> {
+                                String idToken = tok.getToken();  // Bunu Functions’a Bearer olarak gönder
+                            });
+                })
+                .addOnFailureListener(e -> Log.w("AUTH", "Anon sign-in fail: " + e));
 
         Log.d("AUTH", user == null ? "Kullanıcı yok" : "Kullanıcı var: " + user.getUid());
 

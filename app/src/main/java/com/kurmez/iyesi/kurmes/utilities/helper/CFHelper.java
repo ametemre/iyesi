@@ -9,18 +9,18 @@ import android.util.Log;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
-
 import com.google.android.gms.tasks.Tasks;
 import com.google.firebase.appcheck.AppCheckToken;
+import com.google.firebase.appcheck.BuildConfig;
 import com.google.firebase.appcheck.FirebaseAppCheck;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.functions.FirebaseFunctions;
 import com.google.firebase.functions.HttpsCallableReference;
-import com.kurmez.iyesi.App;
-import com.kurmez.iyesi.kurmes.social.Profile;
+import com.kurmez.iyesi.AppCheckTokenProvider;
 import com.kurmez.iyesi.kayra.Classes.data.Soul;
+import com.kurmez.iyesi.kurmes.social.Profile;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -52,14 +52,12 @@ import okhttp3.Response;
  * - App Check token'ı (varsa) eklenir.
  * - userRole sınıf içinde tutulur (header’a yalnızca ASCII ise eklenir).
  * - HTTP (onRequest) ve Callable (onCall) uçları desteklenir.
+ *
+ * NOT: Bu sınıf UI bağımlılığı içermez. Activity/Toast/Context’e özel işler
+ *      bu sınıf DIŞINDA (ör. Founded.java) yapılmalıdır.
  */
 public class CFHelper {
-    // Örn: kaynak erişimi, SharedPreferences vs. — UI yok
-    public static void saveFlag(@Nullable Context ctx, String key, boolean v) {
-        Context app = ctx != null ? ctx.getApplicationContext() : App.app();
-        app.getSharedPreferences("cf", Context.MODE_PRIVATE)
-                .edit().putBoolean(key, v).apply();
-    }
+
     // ------------------------------------------------------------
     // Listener (UI geri bildirimleri için) — JENERİK
     // ------------------------------------------------------------
@@ -125,7 +123,6 @@ public class CFHelper {
                 .build();
         this.region = region;
         this.baseHttpUrl = "https://" + region + "-" + projectId + ".cloudfunctions.net";
-
     }
 
     // eski ctor’u geriye dönük koru (region=us-central1)
@@ -185,19 +182,6 @@ public class CFHelper {
         }
         return new Tokens(idTok, appCheckTok);
     }
-    // ekleyin / güncelleyin
-    public interface TokenCallback { void onReady(@NonNull String idToken, @NonNull String appCheckToken); void onError(@NonNull Exception e); }
-
-    public void getTokens(@NonNull TokenCallback cb) {
-        FirebaseUser u = FirebaseAuth.getInstance().getCurrentUser();
-        if (u == null) { cb.onError(new IllegalStateException("No user")); return; }
-        u.getIdToken(true).addOnSuccessListener(r -> {
-            String idToken = r.getToken();
-            FirebaseAppCheck.getInstance().getAppCheckToken(true)
-                    .addOnSuccessListener(t -> cb.onReady(idToken, t.getToken()))
-                    .addOnFailureListener(cb::onError);
-        }).addOnFailureListener(cb::onError);
-    }
 
     private Headers buildAuthHeaders(@NonNull Tokens t) {
         Headers.Builder hb = new Headers.Builder()
@@ -256,7 +240,11 @@ public class CFHelper {
                 .headers(buildAuthHeaders(t))
                 .get()
                 .build();
-
+        if (BuildConfig.DEBUG) {
+            boolean hasAC = req.header("X-Firebase-AppCheck") != null;
+            boolean hasAuth = req.header("Authorization") != null;
+            Log.d(TAG, "[POST] " + url + " | AppCheck=" + (hasAC?"yes":"no") + " Auth=" + (hasAuth?"yes":"no"));
+        }
         try (Response resp = http.newCall(req).execute()) {
             String body = resp.body() != null ? resp.body().string() : "";
             if (!resp.isSuccessful()) throw new HttpException(resp.code(), body);
@@ -337,9 +325,11 @@ public class CFHelper {
         }
         return null;
     }
+
     public interface RoleCallback {
         void onRoleFetched(@Nullable String role);
     }
+
     private @Nullable String extractRoleFromJson(@Nullable JSONObject src) {
         if (src == null) return null;
 
@@ -348,7 +338,7 @@ public class CFHelper {
         if (role != null && !role.trim().isEmpty()) return role.trim();
 
         // 2) roles[]
-        org.json.JSONArray rolesArr = src.optJSONArray("roles");
+        JSONArray rolesArr = src.optJSONArray("roles");
         if (rolesArr != null && rolesArr.length() > 0) {
             String v = rolesArr.optString(0, null);
             if (v != null && !v.trim().isEmpty()) return v.trim();
@@ -421,15 +411,13 @@ public class CFHelper {
         }).start();
     }
 
-
-
     // ---------- Messaging / Users ----------
     public interface UsersCallback {
         void onSuccess(@NonNull List<Profile> users);
         void onError(@NonNull Throwable error);
     }
 
-    /** /listAllUsersHttp (POST) → List<Profile> */
+    /** /listAllUsersHttp (GET) → List<Profile> */
     public void listAllUsers(@Nullable Integer limit,
                              @Nullable String pageToken,
                              @NonNull UsersCallback cb) {
@@ -449,7 +437,6 @@ public class CFHelper {
             @Override public void onError(Throwable error) { main.post(() -> cb.onError(error)); }
         });
     }
-
 
     private ArrayList<Profile> parseUsers(@NonNull JSONObject root) throws Exception {
         ArrayList<Profile> out = new ArrayList<>();
@@ -560,38 +547,13 @@ public class CFHelper {
 
     /** POST /submitSoulInNeed — 404’te callable fallback dener. */
     public void submitSoulInNeed(@NonNull JSONObject payload, @NonNull EndpointCallback cb) {
-        fetchTokens(/*forceRefresh=*/false, new TokensCallback() {
-            @Override public void onReady(@NonNull String idToken, @Nullable String appCheck) {
-                callSubmit(payload, idToken, appCheck, /*retryOn401=*/true, cb);
-            }
-            @Override public void onError(@NonNull Throwable e) { main.post(() -> cb.onError(e)); }
-        });
-    }
-
-    private void callSubmit(JSONObject payload, String idToken, @Nullable String appCheck,
-                            boolean retryOn401, @NonNull EndpointCallback cb) {
-
-        // endpointAsync'e header enjekte edilebiliyorsa bu parametreyi kullan:
-        Map<String, String> headers = new HashMap<>();
-        headers.put("Authorization", "Bearer " + idToken);
-        if (appCheck != null) headers.put("X-Firebase-AppCheck", appCheck);
-
-        endpointAsync("/submitSoulInNeed", headers, payload, /*post=*/true, new EndpointCallback() {
+        endpointAsync("/submitSoulInNeed", null, payload, /*post=*/true, new EndpointCallback() {
             @Override public void onSuccess(JSONObject resp) { main.post(() -> cb.onSuccess(resp)); }
 
             @Override public void onError(Throwable error) {
                 if (error instanceof HttpException) {
                     int code = ((HttpException) error).code;
-                    if (code == 401 && retryOn401) {
-                        // ID token'ı zorla yenile, tekrar dene
-                        fetchTokens(/*forceRefresh=*/true, new TokensCallback() {
-                            @Override public void onReady(@NonNull String newId, @Nullable String newApp) {
-                                callSubmit(payload, newId, newApp, /*retryOn401=*/false, cb);
-                            }
-                            @Override public void onError(@NonNull Throwable e2) { main.post(() -> cb.onError(e2)); }
-                        });
-                        return;
-                    } else if (code == 404) {
+                    if (code == 404) {
                         // Bölge/route uyuşmazlığı: callable fallback
                         try {
                             JSONObject r = callFunction("submitSoulInNeed", payload);
@@ -606,33 +568,6 @@ public class CFHelper {
             }
         });
     }
-
-    /** ID + AppCheck token toplayıcı (kısa). */
-    private void fetchTokens(boolean forceRefresh, @NonNull TokensCallback cb) {
-        FirebaseUser u = FirebaseAuth.getInstance().getCurrentUser();
-        if (u == null) { cb.onError(new IllegalStateException("No Firebase user")); return; }
-
-        u.getIdToken(forceRefresh).addOnCompleteListener(t1 -> {
-            if (!t1.isSuccessful() || t1.getResult() == null) {
-                cb.onError(t1.getException() != null ? t1.getException() : new RuntimeException("ID token failed"));
-                return;
-            }
-            String idToken = t1.getResult().getToken();
-
-            com.google.firebase.appcheck.FirebaseAppCheck.getInstance()
-                    .getAppCheckToken(/* forceRefresh */ forceRefresh)
-                    .addOnCompleteListener(t2 -> {
-                        String appToken = (t2.isSuccessful() && t2.getResult() != null) ? t2.getResult().getToken() : null;
-                        cb.onReady(idToken, appToken);
-                    });
-        });
-    }
-
-    interface TokensCallback {
-        void onReady(@NonNull String idToken, @Nullable String appCheck);
-        void onError(@NonNull Throwable e);
-    }
-
 
     // ---------- Marker uçları (örnek sarmalayıcılar) ----------
     public JSONObject markersNearby(double lat, double lng, int radiusM, int limit,
@@ -719,14 +654,16 @@ public class CFHelper {
         q.put("deviceId", deviceId);
 
         endpointAsync("/checkPendingCompanion", q, null, /*post=*/false, new EndpointCallback() {
-            @Override public void onSuccess(JSONObject resp) {
+            @Override
+            public void onSuccess(JSONObject resp) {
                 try {
                     boolean has = resp.optBoolean("has",
                             resp.optBoolean("hasPending", resp.has("companion")));
 
                     JSONObject comp = resp.optJSONObject("companion");
                     if (comp == null && (has || resp.length() > 0)) {
-                        comp = resp; has = true;
+                        comp = resp;
+                        has = true;
                     }
                     final JSONObject result = (has ? comp : null);
                     main.post(() -> cb.onResult(result));
@@ -734,39 +671,10 @@ public class CFHelper {
                     main.post(() -> cb.onError(parseErr));
                 }
             }
-
-            @Override public void onError(Throwable error) {
-                String msg = (error != null && error.getMessage() != null) ? error.getMessage() : "";
-                boolean looksLikeFalse =
-                        (error instanceof org.json.JSONException) ||
-                                msg.equalsIgnoreCase("false") ||
-                                msg.contains("Value false");
-
-                if (looksLikeFalse) {
-                    main.post(() -> cb.onResult(null));
-                    return;
-                }
-
-                if (error instanceof HttpException && ((HttpException) error).code == 404) {
-                    try {
-                        JSONObject data = new JSONObject().put("deviceId", deviceId);
-                        JSONObject r = callFunction("checkPendingCompanion", data);
-
-                        boolean has = r.optBoolean("has",
-                                r.optBoolean("hasPending", r.has("companion")));
-                        JSONObject comp = r.optJSONObject("companion");
-                        if (comp == null && (has || r.length() > 0)) {
-                            comp = r; has = true;
-                        }
-                        final JSONObject result = (has ? comp : null);
-                        main.post(() -> cb.onResult(result));
-                        return;
-                    } catch (Throwable callErr) {
-                        main.post(() -> cb.onError(callErr));
-                        return;
-                    }
-                }
-
+            @Override
+            public void onError(Throwable error) {
+                // Sadece logla ve çağırana ilet (UI/Activity tarafında ele alınacak)
+                Log.w(TAG, "checkPendingCompanion error: " + (error == null ? "-" : error.getMessage()));
                 main.post(() -> cb.onError(error));
             }
         });
@@ -783,6 +691,7 @@ public class CFHelper {
     // ------------------------------------------------------------
     // Hatalar
     // ------------------------------------------------------------
+    /** HTTP hatası için kendi exception’ımız; android.net.http.HttpException KULLANMIYORUZ. */
     public static class HttpException extends IOException {
         public final int code;
         public final String body;
@@ -855,5 +764,12 @@ public class CFHelper {
             }
             return map;
         }
+    }
+
+    // Örn: kaynak erişimi, SharedPreferences vs. — UI yok
+    public static void saveFlag(@Nullable Context ctx, String key, boolean v) {
+        Context app = ctx != null ? ctx.getApplicationContext() : AppCheckTokenProvider.app();
+        app.getSharedPreferences("cf", Context.MODE_PRIVATE)
+                .edit().putBoolean(key, v).apply();
     }
 }

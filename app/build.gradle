@@ -3,18 +3,25 @@ plugins {
     alias(libs.plugins.googleservices)
     alias(libs.plugins.kotlin.android)
 }
+
 android {
     namespace 'com.kurmez.iyesi'
     compileSdk 35
+
     defaultConfig {
         applicationId "com.kurmez.iyesi"
         minSdk 26
         //noinspection EditedTargetSdkVersion
         targetSdk 36
-        versionCode 8
+        versionCode 11
         versionName "Alfa"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+
+        // Cloud Functions URL config (örnek)
+        buildConfigField "String", "CF_URL_ENSURECLAIMS", "\"https://ensureclaims-...a.run.app\""
+        buildConfigField "String", "CF_URL_UID", "\"https://uid-...a.run.app\""
+        // ... diğerleri
     }
 
     buildTypes {
@@ -22,100 +29,97 @@ android {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
+        debug {
+            // debug özel ayarlar gerekirse buraya
+        }
     }
+
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
     }
-    ndkVersion '28.0.12674087 rc2'
-    buildFeatures {
-        viewBinding true
-        buildConfig = true
-    }
-    aaptOptions {
-        noCompress "tflite"
-    }
+
     kotlinOptions {
         jvmTarget = '17'
     }
-    defaultConfig {
-        buildConfigField "String", "CF_URL_ENSURECLAIMS", "\"https://ensureclaims-...a.run.app\""
-        buildConfigField "String", "CF_URL_UID", "\"https://uid-...a.run.app\""
-        // ... diğerleri
+
+    ndkVersion '28.0.12674087 rc2'
+
+    buildFeatures {
+        viewBinding true
+        buildConfig true
     }
-        //buildToolsVersion '34.0.0'
+
+    // .tflite dosyalarını sıkıştırma
+    aaptOptions {
+        noCompress "tflite"
+    }
+    // buildToolsVersion '34.0.0'
 }
+
 dependencies {
-    implementation project(':OpenCV_4.10.0')
+    // --- Google Play services / Maps & Location ---
     implementation 'com.google.android.gms:play-services-location:21.0.1'
-    implementation 'com.google.maps.android:android-maps-utils:3.8.2'
     implementation 'com.google.android.gms:play-services-maps:18.1.0'
-    implementation 'com.google.code.gson:gson:2.8.6'
+    implementation 'com.google.maps.android:android-maps-utils:3.8.2'
+
+    // --- OpenCV (modül) ---
+    implementation project(':OpenCV_4.10.0')
+
+    // --- ZXing / QR ---
     implementation 'com.google.zxing:core:3.5.3'
-    implementation(platform('com.google.firebase:firebase-bom:33.7.0'))
-    implementation 'com.google.firebase:firebase-firestore:25.1.1'
-    implementation("com.google.firebase:firebase-analytics")
-    implementation 'com.google.firebase:firebase-auth:23.1.0'
-    implementation 'com.google.firebase:firebase-auth:21.2.0'
-    implementation libs.firebase.functions
-    implementation libs.firebase.storage
-    implementation libs.firebase.auth
-    implementation "com.google.firebase:firebase-appcheck"
-    implementation "com.google.firebase:firebase-appcheck-playintegrity"
-    debugImplementation "com.google.firebase:firebase-appcheck-debug"
-    // core
-    implementation 'org.tensorflow:tensorflow-lite:2.15.0'  // Core TFLite
-    implementation 'org.tensorflow:tensorflow-lite-gpu:2.15.0'// GPU delegate
-    implementation 'org.tensorflow:tensorflow-lite-gpu-api:2.12.0'  // GPU API
+    implementation 'com.journeyapps:zxing-android-embedded:4.3.0'
+
+    // --- Glide ---
+    implementation 'com.github.bumptech.glide:glide:4.16.0'
+    annotationProcessor 'com.github.bumptech.glide:compiler:4.16.0'
+
+    // --- OkHttp ---
+    implementation "com.squareup.okhttp3:okhttp:4.10.0"
+
+    // --- TensorFlow Lite ekosistemi ---
+    implementation 'org.tensorflow:tensorflow-lite:2.15.0'                 // Core
+    implementation 'org.tensorflow:tensorflow-lite-gpu:2.15.0'             // GPU delegate
+    implementation 'org.tensorflow:tensorflow-lite-gpu-api:2.12.0'         // GPU API
     implementation 'org.tensorflow:tensorflow-lite-select-tf-ops:2.12.0'
     implementation "org.tensorflow:tensorflow-lite-support:0.4.3"
     implementation 'org.tensorflow:tensorflow-lite-task-audio:0.2.0'
     implementation 'org.tensorflow:tensorflow-lite-task-text:0.2.0'
-    implementation "org.conscrypt:conscrypt-android:2.5.2"
-    // TFLite “impl” ve Java API
     implementation "com.google.android.gms:play-services-tflite-impl:16.1.0"
-    // GPU delegate
     implementation "com.google.android.gms:play-services-tflite-gpu:16.2.0"
-    implementation 'com.google.firebase:firebase-functions-ktx:20.2.0'
     implementation "com.google.android.gms:play-services-tflite-support:16.1.0"
-    implementation libs.firebase.database
-    implementation libs.firebase.appcheck.debug
-    annotationProcessor 'com.github.bumptech.glide:compiler:4.16.0'
-    implementation 'com.github.bumptech.glide:glide:4.16.0'
 
-    implementation platform("com.google.firebase:firebase-bom:33.1.2")
-    implementation "com.squareup.okhttp3:okhttp:4.10.0"
+    // --- Conscrypt (opsiyonel TLS) ---
+    implementation "org.conscrypt:conscrypt-android:2.5.2"
 
-
-    implementation 'com.journeyapps:zxing-android-embedded:4.3.0'
-
-    implementation 'androidx.camera:camera-core:1.4.1'
-    implementation 'androidx.camera:camera-lifecycle:1.4.1'
-    implementation 'androidx.camera:camera-view:1.4.1'
-    implementation 'androidx.camera:camera-extensions:1.4.1'
-
+    // --- AndroidX (versiyon catalog üzerinden) ---
     implementation libs.appcompat
     implementation libs.material
     implementation libs.activity
     implementation libs.constraintlayout
 
+    // --- Test ---
     testImplementation libs.junit
     androidTestImplementation libs.ext.junit
     androidTestImplementation libs.espresso.core
 
-    // Firebase BOM (tek versiyonla hepsini yönetir)
-    implementation platform('com.google.firebase:firebase-bom:33.4.0')
+    // ===================== Firebase =====================
 
-    // App Check çekirdeği
+    // BOM'u TEK KEZ tanımla ve tüm Firebase kütüphanelerini versiyonsuz çek
+    implementation platform('com.google.firebase:firebase-bom:33.7.0')
+
+    // Temel servisler
+    implementation 'com.google.firebase:firebase-analytics'
+    implementation 'com.google.firebase:firebase-auth'
+    implementation 'com.google.firebase:firebase-firestore'
+    implementation 'com.google.firebase:firebase-functions'
+    implementation 'com.google.firebase:firebase-storage'
+    implementation 'com.google.firebase:firebase-database'
+
+    // App Check (Play Integrity üretim)
     implementation 'com.google.firebase:firebase-appcheck'
-
-    // Üretim sağlayıcısı (Play Integrity)
     implementation 'com.google.firebase:firebase-appcheck-playintegrity'
 
-    // Geliştirme için Debug provider (yalnızca debug build’larda)
+    // Debug build’larda App Check debug provider
     debugImplementation 'com.google.firebase:firebase-appcheck-debug'
-
-    // (Çağırıyorsan) Functions, Auth vs.
-    implementation 'com.google.firebase:firebase-auth'
-    implementation 'com.google.firebase:firebase-functions'
 }

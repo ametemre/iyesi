@@ -2,7 +2,6 @@ package com.kurmez.iyesi.kurmes.utilities;
 
 import android.app.Activity;
 import android.content.Context;
-import android.content.pm.PackageManager;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
@@ -23,7 +22,7 @@ import com.google.firebase.appcheck.AppCheckToken;
 import com.google.firebase.appcheck.FirebaseAppCheck;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
-import com.kurmez.iyesi.App;
+import com.kurmez.iyesi.AppCheckTokenProvider;
 import com.kurmez.iyesi.R;
 import com.kurmez.iyesi.kayra.TopActivity;
 import com.kurmez.iyesi.kurmes.social.Profile;
@@ -312,7 +311,7 @@ public class Helpers {
             if (ctx instanceof Activity) return ctx;
             Activity top = TopActivity.activity(); // bizim lifecycle tracker
             if (top != null && !top.isFinishing()) return top;
-            return App.app(); // son çare (Toast gibi işler için ok)
+            return AppCheckTokenProvider.app(); // son çare (Toast gibi işler için ok)
         }
 
         // Örnek: Toast
