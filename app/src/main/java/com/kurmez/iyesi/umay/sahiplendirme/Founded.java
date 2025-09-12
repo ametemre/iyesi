@@ -23,30 +23,6 @@ import android.widget.ArrayAdapter;
 import android.widget.AutoCompleteTextView;
 import android.widget.EditText;
 import android.widget.Toast;
-// Android
-import android.graphics.Bitmap;
-import android.provider.Settings;
-import android.util.Base64;
-import android.util.Log;
-
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-
-// JSON
-import org.json.JSONObject;
-
-// Firebase App Check
-import com.google.firebase.appcheck.FirebaseAppCheck;
-import com.google.firebase.appcheck.AppCheckTokenResult;
-
-// OkHttp
-import okhttp3.Call;
-import okhttp3.Callback;
-import okhttp3.MediaType;
-import okhttp3.OkHttpClient;
-import okhttp3.Request;
-import okhttp3.RequestBody;
-import okhttp3.Response;
 
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts.GetMultipleContents;
@@ -64,15 +40,17 @@ import com.google.android.gms.tasks.CancellationTokenSource;
 import com.google.firebase.appcheck.FirebaseAppCheck;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
+import com.google.firebase.storage.FirebaseStorage;
+import com.google.firebase.storage.StorageMetadata;
+import com.google.firebase.storage.StorageReference;
+import com.google.firebase.storage.UploadTask;
 import com.kurmez.iyesi.R;
 import com.kurmez.iyesi.kayra.Classes.data.Soul;
 import com.kurmez.iyesi.kurmes.utilities.adapters.ImageSliderAdapter;
-// >>> CFObligations importu
 import com.kurmez.iyesi.kurmes.utilities.helper.CFObligations;
-
-import org.json.JSONException;
-import org.json.JSONObject;
 import com.kurmez.iyesi.AppCheckTokenProvider;
+
+import org.json.JSONObject;
 
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
@@ -100,15 +78,14 @@ public class Founded extends AppCompatActivity {
     // Permission constants
     public static final String PERM_READ_EXTERNAL = Manifest.permission.READ_EXTERNAL_STORAGE;  // API<33
     public static final String PERM_READ_MEDIA_IMAGES = Manifest.permission.READ_MEDIA_IMAGES;  // API 33+
-    // Eski kullanımları güncelle:
-    private void logUiState(String where) { logUiState(where, false); }
+
     // Auth/State
     @Nullable private FirebaseAuth mAuth;
     @Nullable private FirebaseUser user;
     private FirebaseAuth.AuthStateListener authListener;
     private volatile boolean isAnonSigningIn = false;
 
-    // CF / backend (CFHelper yerine CFObligations)
+    // CF / backend
     private CFObligations cfObl;
 
     // Location
@@ -123,26 +100,6 @@ public class Founded extends AppCompatActivity {
     public static final int REQUEST_IMAGE_CAPTURE = 1034;
     private final List<Bitmap> photoList = new ArrayList<>();
     private ImageSliderAdapter sliderAdapter;
-// importlar arasında (kaldırılabilir)
-
-
-    // sınıfın içinde BU BLOKU TAMAMEN KALDIR:
-
-
-    // Activity Result API: çoklu foto seçimi
-    private final ActivityResultLauncher<String> pickMultiple =
-            registerForActivityResult(new GetMultipleContents(), uris -> {
-                Log.i(L, "pickMultiple() → GİRİŞ count=" + (uris == null ? 0 : uris.size()));
-                if (uris != null) {
-                    int ok = 0, fail = 0;
-                    for (Uri u : uris) {
-                        Bitmap b = decodeBitmapFromUri(u);
-                        if (b != null) { photoList.add(b); ok++; } else { fail++; }
-                    }
-                    notifySlider();
-                    Log.i(L, "pickMultiple() → ÇIKIŞ ok=" + ok + " fail=" + fail + " totalPhotos=" + photoList.size());
-                }
-            });
 
     // Tıklama akışlarında, izin sonrası devam ettirmek için
     private @Nullable Runnable pendingAfterLocation;
@@ -168,24 +125,17 @@ public class Founded extends AppCompatActivity {
         placeView    = findViewById(R.id.companion_found_place);
         photosSlider = findViewById(R.id.founded_photos_slider);
         saveBtn      = findViewById(R.id.save_companion_button);
-        Log.d("Save", "ButtonBefore");
+
         if (saveBtn != null) {
-            Log.d("Save", "Button");
             saveBtn.setEnabled(true);
             saveBtn.setClickable(true);
             saveBtn.bringToFront();
-            saveBtn.setOnClickListener(v -> {
-                Log.d("Save", "CLICK FIRED t=" + System.currentTimeMillis());
-                onRegisterCompanionClick(v);  // çağır
-            });
-
-            saveBtn.setOnLongClickListener(v -> {
-                Log.d("Long", "Clicked");
-                return true;
-            });
+            saveBtn.setOnClickListener(this::onRegisterCompanionClick);
+            saveBtn.setOnLongClickListener(v -> { Log.d(L, "saveBtn long click"); return true; });
         } else {
             Log.e(L, "[BOOT] saveBtn NOT FOUND in activity_founded layout!");
         }
+
         saveBtn.post(() -> Log.d(
                 "SaveState",
                 "enabled=" + saveBtn.isEnabled() +
@@ -193,12 +143,11 @@ public class Founded extends AppCompatActivity {
                         " visible=" + (saveBtn.getVisibility()==View.VISIBLE) +
                         " alpha=" + saveBtn.getAlpha()
         ));
-        Log.d("Save", "ButtonAfter");
+
         // Auth listener
         authListener = fa -> {
             user = fa.getCurrentUser();
             boolean ready = (user != null);
-            // BUTONU AUTH'A BAĞLAMA — sadece logla, tıklama her zaman açık kalsın
             Log.i(L, "Auth state → ready=" + ready);
             if (ready) { checkPendingOnStart(); }
         };
@@ -260,9 +209,8 @@ public class Founded extends AppCompatActivity {
     private void logUiState(String where, boolean userInitiated) {
         FirebaseUser cur = FirebaseAuth.getInstance().getCurrentUser();
         if (isAnonSigningIn || cur == null) {
-            if (userInitiated) { // sadece kullanıcı aksiyonunda uyar
+            if (userInitiated) {
                 Toast.makeText(this, "Bağlantı hazırlanıyor, lütfen tekrar deneyin…", Toast.LENGTH_SHORT).show();
-
             }
             Log.w(L, "[UI] not ready | isAnonSigningIn=" + isAnonSigningIn + " cur=" + (cur==null) + " @" + where);
             return;
@@ -376,6 +324,20 @@ public class Founded extends AppCompatActivity {
         }
     }
 
+    private final ActivityResultLauncher<String> pickMultiple =
+            registerForActivityResult(new GetMultipleContents(), uris -> {
+                Log.i(L, "pickMultiple() → GİRİŞ count=" + (uris == null ? 0 : uris.size()));
+                if (uris != null) {
+                    int ok = 0, fail = 0;
+                    for (Uri u : uris) {
+                        Bitmap b = decodeBitmapFromUri(u);
+                        if (b != null) { photoList.add(b); ok++; } else { fail++; }
+                    }
+                    notifySlider();
+                    Log.i(L, "pickMultiple() → ÇIKIŞ ok=" + ok + " fail=" + fail + " totalPhotos=" + photoList.size());
+                }
+            });
+
     @Override
     protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
         Log.d(L, "onActivityResult() req=" + requestCode + " result=" + resultCode);
@@ -415,68 +377,16 @@ public class Founded extends AppCompatActivity {
 
     @RequiresPermission(allOf = {Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION})
     public void onRegisterCompanionClick(View v) {
-        FirebaseAppCheck.getInstance()
-                .getAppCheckToken(false)
-                .addOnSuccessListener(token -> {
-                    String appCheck = token.getToken();
-                    OkHttpClient http = new OkHttpClient();
-
-                    // Foto zorunlu
-                    if (photoList == null || photoList.isEmpty()) {
-                        Toast.makeText(this, "Lütfen en az bir fotoğraf seçin.", Toast.LENGTH_SHORT).show();
-                        return;
-                    }
-                    String base64Jpeg = encodeBitmapSmart(photoList.get(0));
-
-                    JSONObject body = new JSONObject();
-                    try {
-                        body.put("species", "dog");
-                        body.put("foundDate", "2025-09-12T07:15:00Z");
-                        body.put("foundLocation", "Adana/Seyhan");
-                        body.put("lat", 36.99566);
-                        body.put("lng", 35.31287);
-                        body.put("deviceId", Settings.Secure.getString(getContentResolver(), Settings.Secure.ANDROID_ID));
-                        body.put("imageBase64", base64Jpeg);
-                    } catch (JSONException je) {
-                        Log.e("CF", "JSON build failed", je);
-                        Toast.makeText(this, "Veri hazırlanamadı.", Toast.LENGTH_SHORT).show();
-                        return;
-                    }
-
-                    Request req = new Request.Builder()
-                            .url("https://us-central1-<project-id>.cloudfunctions.net/submitSoulInNeed")
-                            .addHeader("Content-Type", "application/json")
-                            .addHeader("X-Firebase-AppCheck", appCheck)
-                            .post(RequestBody.create(body.toString(), MediaType.parse("application/json")))
-                            .build();
-
-                    // UI thread'de execute() kullanma — enqueue ile asenkron gönder
-                    http.newCall(req).enqueue(new Callback() {
-                        @Override public void onFailure(Call call, IOException e) {
-                            Log.e("CF", "request failed", e);
-                            runOnUiThread(() ->
-                                    Toast.makeText(Founded.this, "Ağ hatası: " + e.getMessage(), Toast.LENGTH_LONG).show()
-                            );
-                        }
-                        @Override public void onResponse(Call call, Response resp) throws IOException {
-                            String respBody = resp.body() != null ? resp.body().string() : "";
-                            int code = resp.code();
-                            resp.close();
-                            Log.d("CF", "code=" + code + " body=" + respBody);
-                            runOnUiThread(() -> {
-                                // burada UI güncelle
-                            });
-                        }
-                    });
-                })
-                .addOnFailureListener(e -> Log.e("AppCheck", "Token alınamadı", e));
-
-
         Log.w(L, "[CLICK] onRegisterCompanionClick → GİRİŞ");
         logUiState("beforeClick", /*userInitiated=*/true);
 
         if (isSubmitting) {
             Log.w(L, "[CLICK] ignored: isSubmitting=true");
+            return;
+        }
+
+        if (photoList == null || photoList.isEmpty()) {
+            Toast.makeText(this, "Lütfen en az bir fotoğraf seçin.", Toast.LENGTH_SHORT).show();
             return;
         }
 
@@ -487,7 +397,7 @@ public class Founded extends AppCompatActivity {
             return;
         }
 
-        // cur null olsa bile devam et; saveCompanionAsync() deviceId ile handle ediyor
+        // place alanı kontrolü
         String place = placeView.getText() == null ? "" : placeView.getText().toString().trim();
         boolean looksLikeCoords = place.matches("^\\s*-?\\d+(\\.\\d+)?\\s*,\\s*-?\\d+(\\.\\d+)?\\s*$");
         Log.d(L, "[CLICK] place=\"" + place + "\" looksLikeCoords=" + looksLikeCoords);
@@ -501,7 +411,6 @@ public class Founded extends AppCompatActivity {
         }
         Log.i(L, "[CLICK] onRegisterCompanionClick → ÇIKIŞ");
     }
-
 
     @RequiresPermission(allOf = {Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION})
     private void ensureLocationThen(@NonNull Runnable next) {
@@ -692,7 +601,7 @@ public class Founded extends AppCompatActivity {
         FirebaseUser cur = FirebaseAuth.getInstance().getCurrentUser();
         boolean authenticated = (cur != null);
         Log.i(L, "[SAVE] saveCompanionAsync → GİRİŞ auth=" + authenticated + " isAnon=" + (authenticated && cur.isAnonymous()));
-        logUiState("saveCompanionAsync/enter");
+        logUiState("saveCompanionAsync/enter",false);
 
         String id;
         if (authenticated) {
@@ -761,7 +670,7 @@ public class Founded extends AppCompatActivity {
         setSubmitting(true);
         long t0 = System.currentTimeMillis();
         Log.i(L, "[SUBMIT] performSubmitCompanion → GİRİŞ actorId=" + actorId);
-        logUiState("performSubmitCompanion/enter");
+        logUiState("performSubmitCompanion/enter",false);
 
         try {
             String species    = safeOrTodo(textOf(speciesInput));
@@ -817,9 +726,6 @@ public class Founded extends AppCompatActivity {
                 return;
             }
 
-            String imgB64 = encodeBitmapSmart(photoList.get(0));
-            Log.d(L, "[SUBMIT] image b64 size ≈ " + (imgB64.length()/1024) + " KB (base64)");
-
             long timestamp = System.currentTimeMillis();
 
             Soul soul = new Soul.Builder()
@@ -837,10 +743,9 @@ public class Founded extends AppCompatActivity {
                     .latLng(latNum, lngNum)
                     .build();
 
-            // JSON
+            // JSON (imageUrl sonradan eklenecek)
             payload = soul.toJson();
             FirebaseUser cur = FirebaseAuth.getInstance().getCurrentUser();
-            payload.put("imageBase64", imgB64);
             payload.put("actorKind",  (cur != null) ? "uid" : "device");
             payload.put("deviceId",   actorId);
             payload.put("requestKind","soul_inneed");
@@ -849,10 +754,10 @@ public class Founded extends AppCompatActivity {
             if (ap != null && ap.contains("/")) payload.put("adminPath", ap);
             if (lastAdminPath != null) payload.put("adminPath", lastAdminPath);
 
-            if (VERBOSE_JSON) logChunked("[SUBMIT] payload", payload.toString());
+            if (VERBOSE_JSON) logChunked("[SUBMIT] payload (pre-image)", payload.toString());
 
-            Log.i(L, "[SUBMIT] submitWithRetry() çağrılıyor…");
-            submitWithRetry(payload, false);
+            // FOTOĞRAFI ÖNCE STORAGE'A YÜKLE → URL ile submit
+            uploadPhotoThenSubmit(payload, photoList.get(0));
 
             Log.i(L, "[SUBMIT] performSubmitCompanion → ÇIKIŞ prepare dt=" + (System.currentTimeMillis() - t0) + " ms");
         } catch (Throwable t) {
@@ -862,12 +767,54 @@ public class Founded extends AppCompatActivity {
         }
     }
 
+    /** Fotoğrafı Firebase Storage'a yükler; başarılıysa imageUrl ekleyip submit eder.
+     *  Hata alırsa placeholder ile submit eder (retry edilen eski davranışla uyumlu). */
+    private void uploadPhotoThenSubmit(@NonNull JSONObject payload, @NonNull Bitmap bmp) {
+        try {
+            FirebaseUser cur = FirebaseAuth.getInstance().getCurrentUser();
+            String owner = (cur != null ? cur.getUid() : Settings.Secure.getString(getContentResolver(), Settings.Secure.ANDROID_ID));
+
+            byte[] jpeg = encodeJpegBytesSmart(bmp);
+            int kb = jpeg.length / 1024;
+            Log.d(L, "[UPLOAD] jpeg size=" + kb + "KB");
+
+            String filename = "souls/" + owner + "/" + System.currentTimeMillis() + "/image.jpg";
+            StorageReference ref = FirebaseStorage.getInstance().getReference().child(filename);
+
+            UploadTask task = ref.putBytes(jpeg, new StorageMetadata.Builder()
+                    .setContentType("image/jpeg").build());
+
+            task.addOnSuccessListener(snap ->
+                    ref.getDownloadUrl().addOnSuccessListener(uri -> {
+                        try {
+                            payload.put("imageUrl", uri.toString());
+                        } catch (Exception ignore) {}
+                        Log.i(L, "[UPLOAD] SUCCESS → " + uri);
+                        submitWithRetry(payload, false);
+                    }).addOnFailureListener(e -> {
+                        Log.w(L, "[UPLOAD] getDownloadUrl FAIL: " + e.getMessage());
+                        try { payload.put("imageUrl", "placeholder://holder"); } catch (Exception ignore) {}
+                        submitWithRetry(payload, true);
+                    })
+            ).addOnFailureListener(e -> {
+                Log.w(L, "[UPLOAD] putBytes FAIL: " + (e==null?"-":e.getMessage()));
+                try { payload.put("imageUrl", "placeholder://holder"); } catch (Exception ignore) {}
+                submitWithRetry(payload, true);
+            });
+
+        } catch (Throwable t) {
+            Log.w(L, "[UPLOAD] unexpected: " + t.getMessage());
+            try { payload.put("imageUrl", "placeholder://holder"); } catch (Exception ignore) {}
+            submitWithRetry(payload, true);
+        }
+    }
+
     private void submitWithRetry(@NonNull JSONObject payload, boolean retried) {
         this.payload = payload;
         this.retried = retried;
         long t0 = System.currentTimeMillis();
-        Log.i(L, "CF submitSoulInNeed START" + (retried ? " (retry)" : ""));
-        // CFObligations iç retry’ı açıyoruz (image-upload-failed için tek sefer)
+        Log.i(L, "CF submitSoulInNeed START" + (retried ? " (retry/placeholder)" : ""));
+        // CFObligations iç retry’ı açık: image hatasında tek sefer fallback zaten var
         cfObl.submitSoulInNeed(payload, /*retryEnabled*/ true, new CFObligations.SubmitListener() {
             @Override
             public void onSuccess(@NonNull JSONObject resp) {
@@ -996,12 +943,10 @@ public class Founded extends AppCompatActivity {
                 @Override public void onGeocode(@NonNull List<Address> results) {
                     String ap = extractAdminPath(results);
                     Log.d(L, "ensureAdminPathAsync() API33 onGeocode → " + ap);
-                    // <-- DÜZELTME: callback'i ana thread'e teslim et
                     runOnUiThread(() -> cb.onReady(ap));
                 }
                 @Override public void onError(@Nullable String errorMessage) {
                     Log.w(L, "Geocoder onError: " + errorMessage);
-                    // <-- DÜZELTME: hata yolunu da ana thread'e teslim et
                     runOnUiThread(() -> cb.onReady(null));
                 }
             });
@@ -1020,8 +965,6 @@ public class Founded extends AppCompatActivity {
         }
     }
 
-
-
     @Nullable
     private String extractAdminPath(@Nullable List<Address> res) {
         if (res == null || res.isEmpty()) return null;
@@ -1035,12 +978,6 @@ public class Founded extends AppCompatActivity {
     }
 
     /* ================================ UTILS ================================ */
-
-    private String encodeToBase64(Bitmap bmp, Bitmap.CompressFormat fmt, int quality) {
-        ByteArrayOutputStream baos = new ByteArrayOutputStream();
-        bmp.compress(fmt, quality, baos);
-        return Base64.encodeToString(baos.toByteArray(), Base64.NO_WRAP);
-    }
 
     private String textOf(EditText et) {
         return et.getText() == null ? "" : et.getText().toString().trim();
@@ -1125,6 +1062,29 @@ public class Founded extends AppCompatActivity {
         }
     }
 
+    /** Yüksek kalite/JPEG baytlarını döndürür (base64 değil). */
+    private byte[] encodeJpegBytesSmart(@NonNull Bitmap bmp) {
+        int ow = bmp.getWidth(), oh = bmp.getHeight();
+        Bitmap scaled = downscale(bmp, 1600);
+        int sw = scaled.getWidth(), sh = scaled.getHeight();
+        int quality = 85;
+        byte[] out;
+        do {
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            scaled.compress(Bitmap.CompressFormat.JPEG, quality, baos);
+            out = baos.toByteArray();
+            if (out.length > 1_500_000 && quality > 60) {
+                quality -= 5;
+            } else break;
+        } while (quality >= 60);
+        int kb = out.length / 1024;
+        Log.d(L, "encodeJpegBytesSmart orig=" + ow + "x" + oh
+                + " scaled=" + sw + "x" + sh
+                + " quality=" + quality + " size=" + kb + "KB");
+        return out;
+    }
+
+    /** Eski kullanım kalırsa diye: base64 gerekli olursa hala var. */
     private String encodeBitmapSmart(@NonNull Bitmap bmp) {
         int ow = bmp.getWidth(), oh = bmp.getHeight();
         Bitmap scaled = downscale(bmp, 1600);
@@ -1140,7 +1100,7 @@ public class Founded extends AppCompatActivity {
             } else break;
         } while (quality >= 60);
         int kb = out.length / 1024;
-        Log.d(L, "encodeBitmapSmart orig=" + ow + "x" + oh
+        Log.d(L, "encodeBitmapSmart base64 orig=" + ow + "x" + oh
                 + " scaled=" + sw + "x" + sh
                 + " quality=" + quality + " size=" + kb + "KB");
         return Base64.encodeToString(out, Base64.NO_WRAP);
@@ -1194,7 +1154,6 @@ public class Founded extends AppCompatActivity {
             mAuth.signInAnonymously()
                     .addOnSuccessListener(r -> {
                         user = mAuth.getCurrentUser();
-                        // ÖNEMLİ DÜZELTME: anonim giriş başarılıysa artık signingIn değiliz
                         isAnonSigningIn = false;
                         Log.i(L, "Anonymous sign-in OK uid=" + (user != null ? user.getUid() : "-"));
                     })

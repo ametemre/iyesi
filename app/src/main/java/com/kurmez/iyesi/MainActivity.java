@@ -18,7 +18,6 @@ import androidx.appcompat.app.AppCompatActivity;
 
 import com.google.firebase.FirebaseApp;
 import com.google.firebase.appcheck.FirebaseAppCheck;
-import com.google.firebase.appcheck.debug.DebugAppCheckProviderFactory;
 import com.google.firebase.appcheck.playintegrity.PlayIntegrityAppCheckProviderFactory;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
@@ -36,8 +35,13 @@ import java.util.HashMap;
 import com.google.firebase.functions.FirebaseFunctions;
 import com.kurmez.iyesi.kurmes.utilities.PrivateCom;
 import com.kurmez.iyesi.kurmes.utilities.helper.PermissionHelper;
-
+import android.app.Application;
+import com.google.firebase.appcheck.FirebaseAppCheck;
+import com.google.firebase.appcheck.debug.DebugAppCheckProviderFactory;
 import java.util.Map;
+import com.google.firebase.appcheck.FirebaseAppCheck;
+import com.google.firebase.appcheck.debug.DebugAppCheckProviderFactory;
+import com.google.firebase.appcheck.playintegrity.PlayIntegrityAppCheckProviderFactory;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -90,6 +94,15 @@ public class MainActivity extends AppCompatActivity {
 
 // App Check (DEBUG ise Debug provider, üretimde Play Integrity)
         FirebaseAppCheck appCheck = FirebaseAppCheck.getInstance();
+        if (BuildConfig.DEBUG) {
+            appCheck.installAppCheckProviderFactory(
+                    DebugAppCheckProviderFactory.getInstance()
+            );
+        } else {
+            appCheck.installAppCheckProviderFactory(
+                    PlayIntegrityAppCheckProviderFactory.getInstance()
+            );
+        }
         appCheck.installAppCheckProviderFactory(
                 BuildConfig.DEBUG
                         ? DebugAppCheckProviderFactory.getInstance()

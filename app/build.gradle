@@ -58,68 +58,71 @@ android {
 }
 
 dependencies {
-    // --- Google Play services / Maps & Location ---
-    implementation 'com.google.android.gms:play-services-location:21.0.1'
-    implementation 'com.google.android.gms:play-services-maps:18.1.0'
-    implementation 'com.google.maps.android:android-maps-utils:3.8.2'
+    implementation libs.firebase.appcheck.playintegrity
+    dependencies {
+        // --- Google Play services / Maps & Location ---
+        implementation 'com.google.android.gms:play-services-location:21.0.1'
+        implementation 'com.google.android.gms:play-services-maps:18.1.0'
+        implementation 'com.google.maps.android:android-maps-utils:3.8.2'
 
-    // --- OpenCV (modül) ---
-    implementation project(':OpenCV_4.10.0')
+        // --- OpenCV (modül) ---
+        implementation project(':OpenCV_4.10.0')
 
-    // --- ZXing / QR ---
-    implementation 'com.google.zxing:core:3.5.3'
-    implementation 'com.journeyapps:zxing-android-embedded:4.3.0'
+        // --- ZXing / QR ---
+        implementation 'com.google.zxing:core:3.5.3'
+        implementation 'com.journeyapps:zxing-android-embedded:4.3.0'
 
-    // --- Glide ---
-    implementation 'com.github.bumptech.glide:glide:4.16.0'
-    annotationProcessor 'com.github.bumptech.glide:compiler:4.16.0'
+        // --- Glide ---
+        implementation 'com.github.bumptech.glide:glide:4.16.0'
+        annotationProcessor 'com.github.bumptech.glide:compiler:4.16.0'
 
-    // --- OkHttp ---
-    implementation "com.squareup.okhttp3:okhttp:4.10.0"
+        // --- OkHttp ---
+        implementation "com.squareup.okhttp3:okhttp:4.10.0"
 
-    // --- TensorFlow Lite ekosistemi ---
-    implementation 'org.tensorflow:tensorflow-lite:2.15.0'                 // Core
-    implementation 'org.tensorflow:tensorflow-lite-gpu:2.15.0'             // GPU delegate
-    implementation 'org.tensorflow:tensorflow-lite-gpu-api:2.12.0'         // GPU API
-    implementation 'org.tensorflow:tensorflow-lite-select-tf-ops:2.12.0'
-    implementation "org.tensorflow:tensorflow-lite-support:0.4.3"
-    implementation 'org.tensorflow:tensorflow-lite-task-audio:0.2.0'
-    implementation 'org.tensorflow:tensorflow-lite-task-text:0.2.0'
-    implementation "com.google.android.gms:play-services-tflite-impl:16.1.0"
-    implementation "com.google.android.gms:play-services-tflite-gpu:16.2.0"
-    implementation "com.google.android.gms:play-services-tflite-support:16.1.0"
+        // --- TensorFlow Lite ekosistemi ---  (sürümleri mümkünse hizala)
+        implementation 'org.tensorflow:tensorflow-lite:2.15.0'
+        implementation 'org.tensorflow:tensorflow-lite-gpu:2.15.0'
+        implementation 'org.tensorflow:tensorflow-lite-gpu-api:2.12.0'
+        implementation 'org.tensorflow:tensorflow-lite-select-tf-ops:2.12.0'
+        implementation "org.tensorflow:tensorflow-lite-support:0.4.3"
+        implementation 'org.tensorflow:tensorflow-lite-task-audio:0.2.0'
+        implementation 'org.tensorflow:tensorflow-lite-task-text:0.2.0'
+        implementation "com.google.android.gms:play-services-tflite-impl:16.1.0"
+        implementation "com.google.android.gms:play-services-tflite-gpu:16.2.0"
+        implementation "com.google.android.gms:play-services-tflite-support:16.1.0"
 
-    // --- Conscrypt (opsiyonel TLS) ---
-    implementation "org.conscrypt:conscrypt-android:2.5.2"
+        // --- Conscrypt (opsiyonel TLS) ---
+        implementation "org.conscrypt:conscrypt-android:2.5.2"
 
-    // --- AndroidX (versiyon catalog üzerinden) ---
-    implementation libs.appcompat
-    implementation libs.material
-    implementation libs.activity
-    implementation libs.constraintlayout
+        // --- AndroidX ---
+        implementation libs.appcompat
+        implementation libs.material
+        implementation libs.activity
+        implementation libs.constraintlayout
 
-    // --- Test ---
-    testImplementation libs.junit
-    androidTestImplementation libs.ext.junit
-    androidTestImplementation libs.espresso.core
+        // --- Test ---
+        testImplementation libs.junit
+        androidTestImplementation libs.ext.junit
+        androidTestImplementation libs.espresso.core
 
-    // ===================== Firebase =====================
+        // ===================== Firebase =====================
+        // BoM: TEK satır
+        implementation platform('com.google.firebase:firebase-bom:33.7.0')
 
-    // BOM'u TEK KEZ tanımla ve tüm Firebase kütüphanelerini versiyonsuz çek
-    implementation platform('com.google.firebase:firebase-bom:33.7.0')
+        // Temel servisler (sürüm belirtmeden)
+        implementation 'com.google.firebase:firebase-analytics'
+        implementation 'com.google.firebase:firebase-auth'
+        implementation 'com.google.firebase:firebase-firestore'
+        implementation 'com.google.firebase:firebase-functions'
+        implementation 'com.google.firebase:firebase-storage'
+        implementation 'com.google.firebase:firebase-database'
 
-    // Temel servisler
-    implementation 'com.google.firebase:firebase-analytics'
-    implementation 'com.google.firebase:firebase-auth'
-    implementation 'com.google.firebase:firebase-firestore'
-    implementation 'com.google.firebase:firebase-functions'
-    implementation 'com.google.firebase:firebase-storage'
-    implementation 'com.google.firebase:firebase-database'
+        // App Check – çekirdek
+        implementation 'com.google.firebase:firebase-appcheck'
 
-    // App Check (Play Integrity üretim)
-    implementation 'com.google.firebase:firebase-appcheck'
-    implementation 'com.google.firebase:firebase-appcheck-playintegrity'
+        // App Check – provider’lar (varyant bazlı)
+        debugImplementation   'com.google.firebase:firebase-appcheck-debug'
+        releaseImplementation 'com.google.firebase:firebase-appcheck-playintegrity'
+    }
 
-    // Debug build’larda App Check debug provider
-    debugImplementation 'com.google.firebase:firebase-appcheck-debug'
 }
