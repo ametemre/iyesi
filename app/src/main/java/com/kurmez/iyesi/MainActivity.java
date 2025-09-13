@@ -18,7 +18,7 @@ import androidx.appcompat.app.AppCompatActivity;
 
 import com.google.firebase.FirebaseApp;
 import com.google.firebase.appcheck.FirebaseAppCheck;
-import com.google.firebase.appcheck.playintegrity.PlayIntegrityAppCheckProviderFactory;
+
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.firestore.FirebaseFirestore;
@@ -35,13 +35,9 @@ import java.util.HashMap;
 import com.google.firebase.functions.FirebaseFunctions;
 import com.kurmez.iyesi.kurmes.utilities.PrivateCom;
 import com.kurmez.iyesi.kurmes.utilities.helper.PermissionHelper;
-import android.app.Application;
-import com.google.firebase.appcheck.FirebaseAppCheck;
-import com.google.firebase.appcheck.debug.DebugAppCheckProviderFactory;
+
 import java.util.Map;
-import com.google.firebase.appcheck.FirebaseAppCheck;
-import com.google.firebase.appcheck.debug.DebugAppCheckProviderFactory;
-import com.google.firebase.appcheck.playintegrity.PlayIntegrityAppCheckProviderFactory;
+
 
 public class MainActivity extends AppCompatActivity {
 
@@ -58,6 +54,7 @@ public class MainActivity extends AppCompatActivity {
     private PrivateCom privateCom;
     private String response = null;
     private PermissionHelper permissionHelper;
+    private String idToken;
     // callback’i dışarıda tanımladık:
     private final PermissionHelper.Callback permissionCallback = new PermissionHelper.Callback() {
         @Override public void onGranted() {
@@ -72,7 +69,8 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-        FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
+        FirebaseAuth mAuth = FirebaseAuth.getInstance();
+        FirebaseUser user = mAuth.getCurrentUser();
         if (user != null) {
             try {
                 org.json.JSONObject payload = new org.json.JSONObject()
@@ -83,34 +81,27 @@ public class MainActivity extends AppCompatActivity {
                         .addOnSuccessListener(__ ->
                                 user.getIdToken(true) // force refresh
                                         .addOnSuccessListener(tokenResult -> {
-                                            String idToken = tokenResult.getToken();
+                                            idToken = tokenResult.getToken();
                                             Log.d("Role:", idToken);
                                         }));
                 // App.app() Context döndürüyor; App'e cast edip çağırıyoruz
                 ((AppCheckTokenProvider) AppCheckTokenProvider.app()).sendRequestWithAppCheckAndAuth(payload);
-            } catch (Exception ignore) {}
+            } catch (Exception ignore) {
+                // Anonim giriş
+                mAuth.signInAnonymously()
+                        .addOnSuccessListener(res -> {
+                            FirebaseUser u = mAuth.getCurrentUser();
+                            u.getIdToken(/*forceRefresh=*/true)
+                                    .addOnSuccessListener(tok -> {
+                                        idToken = tok.getToken();  // Bunu Functions’a Bearer olarak gönder
+                                    });
+                        })
+                        .addOnFailureListener(e -> Log.w("AUTH", "Anon sign-in fail: " + e));
+                        Log.d("Role:", idToken);
+            }
         }
-        FirebaseApp.initializeApp(this);
-
-// App Check (DEBUG ise Debug provider, üretimde Play Integrity)
-        FirebaseAppCheck appCheck = FirebaseAppCheck.getInstance();
-        if (BuildConfig.DEBUG) {
-            appCheck.installAppCheckProviderFactory(
-                    DebugAppCheckProviderFactory.getInstance()
-            );
-        } else {
-            appCheck.installAppCheckProviderFactory(
-                    PlayIntegrityAppCheckProviderFactory.getInstance()
-            );
-        }
-        appCheck.installAppCheckProviderFactory(
-                BuildConfig.DEBUG
-                        ? DebugAppCheckProviderFactory.getInstance()
-                        : PlayIntegrityAppCheckProviderFactory.getInstance()
-        );
 
 // Anonim giriş
-        FirebaseAuth mAuth = FirebaseAuth.getInstance();
         mAuth.signInAnonymously()
                 .addOnSuccessListener(res -> {
                     FirebaseUser u = mAuth.getCurrentUser();

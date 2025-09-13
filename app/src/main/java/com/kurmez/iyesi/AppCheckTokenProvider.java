@@ -1,8 +1,15 @@
 package com.kurmez.iyesi;
 
+import android.app.Activity;
 import android.app.Application;
+import android.content.ActivityNotFoundException;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.PackageInfo;
+import android.content.pm.PackageManager;
+import android.net.Uri;
+import android.os.Handler;
+import android.os.Looper;
 import android.util.Log;
 
 import androidx.annotation.NonNull;
@@ -11,21 +18,17 @@ import androidx.annotation.Nullable;
 import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.common.GoogleApiAvailability;
 import com.google.android.gms.security.ProviderInstaller;
-
 import com.google.android.gms.tasks.Task;
 import com.google.android.gms.tasks.Tasks;
-
 import com.google.firebase.FirebaseApp;
+import com.google.firebase.appcheck.AppCheckProviderFactory;
 import com.google.firebase.appcheck.AppCheckToken;
 import com.google.firebase.appcheck.FirebaseAppCheck;
-import com.google.firebase.appcheck.debug.DebugAppCheckProviderFactory;
 import com.google.firebase.appcheck.playintegrity.PlayIntegrityAppCheckProviderFactory;
-
 import com.google.firebase.auth.AuthResult;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.auth.GetTokenResult;
-
 import com.kurmez.iyesi.kayra.TopActivity;
 
 import org.json.JSONObject;
@@ -54,20 +57,25 @@ import okhttp3.Response;
 public class AppCheckTokenProvider extends Application {
 
     private static final String TAG = "AppCheckTP";
-    private static AppCheckTokenProvider sInstance;
+    private static volatile AppCheckTokenProvider sInstance;
 
-    // Varsayılan CF URL (tek parametreli overload için)
+    // Tercihen Gradle'dan yönet: build.gradle (app) -> buildConfigField
+    // defaultConfig { buildConfigField "String", "CF_URL_APP_SEND", "\"https://us-central1-iyesi-e8d4f.cloudfunctions.net/appSend\"" }
     private static final String DEFAULT_CF_URL =
-            "https://us-central1-iyesi-e8d4f.cloudfunctions.net/appSend";
+            safeDefault(BuildConfig.CF_URL_APP_SEND, "https://us-central1-iyesi-e8d4f.cloudfunctions.net/appSend");
 
     // -----------------------------
     // AppCheck token cache
     // -----------------------------
     private static volatile @Nullable String sAppCheckCached;
-    private static volatile long sAppCheckExpMs; // epoch ms
+    private static volatile long sAppCheckExpMs; // epoch ms (yaklaşık)
 
     public interface AppCheckCb { void onReady(@Nullable String token); }
     public interface IdTokCb   { void onReady(@Nullable String idToken); }
+
+    private static String safeDefault(@Nullable String v, @NonNull String def) {
+        return (v == null || v.isEmpty()) ? def : v;
+    }
 
     /**
      * App Check token'ını getirir. Cache uygunsa cache'den döner; değilse SDK'dan çeker.
@@ -84,7 +92,7 @@ public class AppCheckTokenProvider extends Application {
                 .addOnSuccessListener((AppCheckToken t) -> {
                     if (t != null && t.getToken() != null) {
                         sAppCheckCached = t.getToken();
-                        // Yaklaşık 55 dk cache (SDK public expire süresi vermiyor)
+                        // AppCheckToken şu an expiry vermiyor → 55 dk tahmini cache
                         sAppCheckExpMs = System.currentTimeMillis() + 55 * 60_000L;
                         cb.onReady(sAppCheckCached);
                     } else {
@@ -93,7 +101,12 @@ public class AppCheckTokenProvider extends Application {
                     }
                 })
                 .addOnFailureListener(e -> {
-                    Log.w(TAG, "getAppCheckToken(force=" + force + ") failed: " + e.getMessage());
+                    String msg = (e != null && e.getMessage() != null) ? e.getMessage() : "";
+                    Log.w(TAG, "getAppCheckToken(force=" + force + ") failed: " + msg);
+                    // Integrity -2 → resmi Play Store yok / eski → otomatik yönlendir
+                    if (looksLikeIntegrityMinusTwo(msg)) {
+                        handleIntegrityMinusTwo();
+                    }
                     cb.onReady(null);
                 });
     }
@@ -104,34 +117,46 @@ public class AppCheckTokenProvider extends Application {
     private static final Interceptor APPCHECK_INTERCEPTOR = chain -> {
         Request orig = chain.request();
 
-        // 1) Önce cache'den dene (kısa bekleme)
+        // 1) Cache → kısa bekleme (bloklama OkHttp worker thread'inde; main thread değil)
         final CountDownLatch latch = new CountDownLatch(1);
         final String[] holder = new String[1];
         getAppCheckTokenCached(false, t -> { holder[0] = t; latch.countDown(); });
-        try { latch.await(1500, TimeUnit.MILLISECONDS); } catch (InterruptedException ignored) {}
+        try { latch.await(1200, TimeUnit.MILLISECONDS); } catch (InterruptedException ignored) {}
 
-        // 1.a) İlk atışta token yoksa → force refresh dene (kısa bekleme)
+        // 1.a) Token yoksa → bir defa force refresh dene
         if (holder[0] == null) {
             final CountDownLatch latchF = new CountDownLatch(1);
             getAppCheckTokenCached(true, t -> { holder[0] = t; latchF.countDown(); });
-            try { latchF.await(2000, TimeUnit.MILLISECONDS); } catch (InterruptedException ignored) {}
+            try { latchF.await(1800, TimeUnit.MILLISECONDS); } catch (InterruptedException ignored) {}
         }
 
-        Request.Builder b1 = orig.newBuilder();
-        if (holder[0] != null) b1.header("X-Firebase-AppCheck", holder[0]);
-        Response rsp = chain.proceed(b1.build());
+        if (holder[0] == null) {
+            // Enforcement açıksa boş atış yapma
+            throw new IOException("App Check token yok; isteği iptal ediyorum (enforced).");
+        }
 
-        // 2) 401/403 ise → tek sefer daha force-refresh ile yeniden dene
+        Request withHdr = orig.newBuilder()
+                .header("X-Firebase-AppCheck", holder[0])
+                .build();
+
+        Response rsp = chain.proceed(withHdr);
+
+        // 2) 401/403 → tek sefer daha force-refresh ile yeniden dene
         if (rsp.code() == 401 || rsp.code() == 403) {
             rsp.close();
             final CountDownLatch latch2 = new CountDownLatch(1);
             final String[] fresh = new String[1];
             getAppCheckTokenCached(true, t -> { fresh[0] = t; latch2.countDown(); });
-            try { latch2.await(2000, TimeUnit.MILLISECONDS); } catch (InterruptedException ignored) {}
+            try { latch2.await(1800, TimeUnit.MILLISECONDS); } catch (InterruptedException ignored) {}
 
-            Request.Builder b2 = orig.newBuilder();
-            if (fresh[0] != null) b2.header("X-Firebase-AppCheck", fresh[0]);
-            return chain.proceed(b2.build());
+            if (fresh[0] == null) {
+                throw new IOException("App Check refresh başarısız; 401/403 sonrası abort.");
+            }
+
+            Request retry = orig.newBuilder()
+                    .header("X-Firebase-AppCheck", fresh[0])
+                    .build();
+            return chain.proceed(retry);
         }
 
         return rsp;
@@ -143,29 +168,44 @@ public class AppCheckTokenProvider extends Application {
                 .addInterceptor(APPCHECK_INTERCEPTOR)
                 .connectTimeout(30, TimeUnit.SECONDS)
                 .readTimeout(30, TimeUnit.SECONDS)
+                .writeTimeout(30, TimeUnit.SECONDS)
                 .build();
     }
 
     // -----------------------------
-    // ID Token yardımcıları (opsiyonel)
+    // ID Token yardımcıları (App Check hazır olmadan Auth'a girme)
     // -----------------------------
-
-    /**
-     * Kullanıcı yoksa anonim giriş yapar ve ID token döndürür; varsa direkt ID token döndürür.
-     * Başarısız olursa null döner.
-     */
     public static void getIdTokenEnsuringAnon(@NonNull IdTokCb cb) {
+        // 1) App Check token (önce cache, yoksa force)
+        getAppCheckTokenCached(false, t1 -> {
+            if (t1 == null) {
+                getAppCheckTokenCached(true, t2 -> {
+                    if (t2 == null) {
+                        Log.e(TAG, "App Check token alınamadı; anon sign-in denemeyeceğim.");
+                        cb.onReady(null);
+                    } else {
+                        proceedSignIn(cb);
+                    }
+                });
+            } else {
+                proceedSignIn(cb);
+            }
+        });
+    }
+
+    private static void proceedSignIn(@NonNull IdTokCb cb) {
         FirebaseAuth auth = FirebaseAuth.getInstance();
         FirebaseUser u = auth.getCurrentUser();
 
         Task<AuthResult> ensureAnon = (u != null)
-                ? Tasks.forResult(null)
+                ? Tasks.forResult((AuthResult) null)
                 : auth.signInAnonymously();
 
         ensureAnon
                 .onSuccessTask(v -> {
                     FirebaseUser cur = FirebaseAuth.getInstance().getCurrentUser();
                     if (cur == null) return Tasks.forException(new IllegalStateException("No user after anon sign-in"));
+                    // true → tazele; release’te ilk çağrılarda 401 riskini düşürür
                     return cur.getIdToken(true);
                 })
                 .addOnSuccessListener((GetTokenResult r) -> cb.onReady(r.getToken()))
@@ -176,7 +216,7 @@ public class AppCheckTokenProvider extends Application {
     }
 
     // -----------------------------
-    // TLS Provider (isteğe bağlı ama faydalı)
+    // TLS Provider (opsiyonel ama faydalı)
     // -----------------------------
     private void safeInstallProviderIfNeeded(Context ctx) {
         GoogleApiAvailability api = GoogleApiAvailability.getInstance();
@@ -207,22 +247,35 @@ public class AppCheckTokenProvider extends Application {
         FirebaseApp.initializeApp(this);
 
         // App Check provider'ı tam olarak 1 kez kur
-        FirebaseAppCheck appCheck = FirebaseAppCheck.getInstance();
-        appCheck.installAppCheckProviderFactory(
-                BuildConfig.DEBUG
-                        ? DebugAppCheckProviderFactory.getInstance()
-                        : PlayIntegrityAppCheckProviderFactory.getInstance()
-        );
+        configureAppCheckProvider();
 
-        // TLS provider kurulumu (opsiyonel ama SSL hatalarını azaltır)
+        // TLS provider kurulumu (opsiyonel)
         safeInstallProviderIfNeeded(this);
 
-        // App Check warm-up (cache → yoksa üret)
+        // Cihaz önkoşulları (Play Store & GMS) – activity hazır olunca kontrol et
+        postEnsurePlayPrerequisites();
+
+        // App Check warm-up (cache → yoksa üret) + log
         FirebaseAppCheck.getInstance()
                 .getAppCheckToken(false)
-                .addOnFailureListener(e -> FirebaseAppCheck.getInstance().getAppCheckToken(true));
+                .addOnSuccessListener(t -> Log.d(TAG, "warm-up AppCheck OK"))
+                .addOnFailureListener(e -> {
+                    String msg = (e != null && e.getMessage() != null) ? e.getMessage() : "";
+                    Log.w(TAG, "warm-up fail; forcing refresh: " + msg);
+                    if (looksLikeIntegrityMinusTwo(msg)) {
+                        handleIntegrityMinusTwo();
+                    }
+                    FirebaseAppCheck.getInstance().getAppCheckToken(true)
+                            .addOnSuccessListener(t2 -> Log.d(TAG, "warm-up force OK"))
+                            .addOnFailureListener(err -> {
+                                Log.e(TAG, "warm-up force fail", err);
+                                if (err != null && looksLikeIntegrityMinusTwo(String.valueOf(err.getMessage()))) {
+                                    handleIntegrityMinusTwo();
+                                }
+                            });
+                });
 
-        // ID token warm-up: oturum varsa refresh et; yoksa burada otomatik anon açmıyoruz (akışına bırak)
+        // ID token warm-up: oturum varsa refresh et; yoksa burada otomatik anon açmıyoruz
         FirebaseAuth auth = FirebaseAuth.getInstance();
         FirebaseAuth.AuthStateListener st = new FirebaseAuth.AuthStateListener() {
             @Override public void onAuthStateChanged(@NonNull FirebaseAuth fa) {
@@ -242,6 +295,26 @@ public class AppCheckTokenProvider extends Application {
         }
     }
 
+    private void configureAppCheckProvider() {
+        FirebaseAppCheck appCheck = FirebaseAppCheck.getInstance();
+
+        if (BuildConfig.DEBUG) {
+            // Debug varyantında Debug Provider; reflection ile yükle ki release AAB'da sınıf bulunamasa da crash olmasın
+            try {
+                Class<?> clazz = Class.forName("com.google.firebase.appcheck.debug.DebugAppCheckProviderFactory");
+                Object factory = clazz.getMethod("getInstance").invoke(null);
+                appCheck.installAppCheckProviderFactory((AppCheckProviderFactory) factory);
+            } catch (Throwable e) {
+                Log.w(TAG, "Debug AppCheck provider unavailable", e);
+            }
+        } else {
+            // Release varyantında Play Integrity
+            appCheck.installAppCheckProviderFactory(
+                    PlayIntegrityAppCheckProviderFactory.getInstance()
+            );
+        }
+    }
+
     public static Context app() { return sInstance; }
 
     // -----------------------------
@@ -257,7 +330,7 @@ public class AppCheckTokenProvider extends Application {
     public void sendRequestWithAppCheckAndAuth(@NonNull String url, @NonNull JSONObject payload) {
         OkHttpClient ok = clientWithAppCheck();
 
-        // 1) ID token (gerekirse anonim)
+        // 1) ID token (gerekirse anonim) — App Check token hazır olmadan Auth'a girmeyeceğiz
         getIdTokenEnsuringAnon(idToken -> {
             if (idToken == null) {
                 Log.e(TAG, "ID token alınamadı; isteği gönderemem.");
@@ -288,5 +361,95 @@ public class AppCheckTokenProvider extends Application {
                 }
             });
         });
+    }
+
+    // =====================================================================
+    //                        Play Store / GMS yardımcıları
+    // =====================================================================
+
+    /** Açılışta, Activity hazır olduğunda Play/GMS önkoşullarını kontrol et. */
+    private void postEnsurePlayPrerequisites() {
+        new Handler(Looper.getMainLooper()).postDelayed(() -> {
+            Activity a = TopActivity.current();
+            if (a != null) ensurePlayPrerequisites(a);
+        }, 800); // kısa gecikme: ilk activity attach olsun
+    }
+
+    /** Integrity -2 yakalandığında otomatik Play Store detay sayfasını aç. */
+    private static void handleIntegrityMinusTwo() {
+        new Handler(Looper.getMainLooper()).post(() -> {
+            Activity a = TopActivity.current();
+            if (a != null) {
+                openPlayDetails(a, "com.android.vending");
+            } else {
+                Log.w(TAG, "No foreground activity to open Play Store.");
+            }
+        });
+    }
+
+    /** Resmi Play Store / GMS hazır mı? Değilse çözüm ekranlarına yönlendir. */
+    private static void ensurePlayPrerequisites(@NonNull Activity activity) {
+        boolean ok = true;
+
+        // 1) Google Play services
+        GoogleApiAvailability api = GoogleApiAvailability.getInstance();
+        int gms = api.isGooglePlayServicesAvailable(activity);
+        if (gms != ConnectionResult.SUCCESS) {
+            ok = false;
+            try {
+                if (api.isUserResolvableError(gms)) {
+                    api.getErrorDialog(activity, gms, 1001).show();
+                } else {
+                    openPlayDetails(activity, "com.google.android.gms");
+                }
+            } catch (Throwable t) {
+                openPlayDetails(activity, "com.google.android.gms");
+            }
+        }
+
+        // 2) Play Store var mı ve çok eski mi?
+        if (!isInstalled(activity.getPackageManager(), "com.android.vending")) {
+            ok = false;
+            openPlayDetails(activity, "com.android.vending");
+        } else {
+            try {
+                PackageInfo pi = activity.getPackageManager().getPackageInfo("com.android.vending", 0);
+                long minVersionCode = 83200000L; // örnek eşik (~v38+). İstersen yükselt.
+                if (pi.getLongVersionCode() < minVersionCode) {
+                    ok = false;
+                    openPlayDetails(activity, "com.android.vending");
+                }
+            } catch (Exception ignore) { /* no-op */ }
+        }
+
+        Log.d(TAG, "ensurePlayPrerequisites -> " + ok);
+    }
+
+    private static boolean isInstalled(PackageManager pm, String pkg) {
+        try { pm.getPackageInfo(pkg, 0); return true; }
+        catch (PackageManager.NameNotFoundException e) { return false; }
+    }
+
+    private static void openPlayDetails(@NonNull Activity activity, @NonNull String pkg) {
+        try {
+            Intent i = new Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=" + pkg));
+            i.setPackage("com.android.vending");
+            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            activity.startActivity(i);
+        } catch (ActivityNotFoundException e) {
+            Intent web = new Intent(Intent.ACTION_VIEW,
+                    Uri.parse("https://play.google.com/store/apps/details?id=" + pkg));
+            web.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            activity.startActivity(web);
+        }
+    }
+
+    private static boolean looksLikeIntegrityMinusTwo(@NonNull String message) {
+        // Firebase/AppCheck/PlayCore farklı metinlerle -2'yi raporlayabiliyor
+        String m = message.toLowerCase();
+        return m.contains("integrity api error (-2)")
+                || m.contains("play store app is either not installed")
+                || m.contains("unknown calling package") // bazı cihazlarda benzer kök neden
+                || m.contains("phenotype.api is not available"); // play services özelliği eksikliği
     }
 }

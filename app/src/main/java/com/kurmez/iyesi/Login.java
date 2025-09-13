@@ -29,7 +29,6 @@ public class Login extends AppCompatActivity {
         setContentView(R.layout.activity_login);
 
         // (Provider Application’da kuruldu; burada sadece instance erişimi)
-        FirebaseAppCheck.getInstance();
 
         mAuth = FirebaseAuth.getInstance();
         usernameField = findViewById(R.id.username_login);
@@ -58,19 +57,24 @@ public class Login extends AppCompatActivity {
         submitButton.setEnabled(false);
 
         // 1) App Check token’ını (yenilemeden) ılıkça iste
-        FirebaseAppCheck.getInstance().getAppCheckToken(false)
-                .addOnSuccessListener(token -> {
-                    Log.d(TAG, "AppCheck token hazır (len=" + (token != null ? token.getToken().length() : 0) + ")");
-                    // 2) Token hazır → Auth girişine başla
+        // değişiklik: getToken(false) + bir kez fallback getToken(true)
+        FirebaseAppCheck.getInstance().getToken(false)
+                .addOnSuccessListener(t -> {
+                    Log.d(TAG, "AppCheck token len=" + (t != null ? t.getToken().length() : 0));
                     doSignIn(email, password);
                 })
                 .addOnFailureListener(e -> {
-                    Log.w(TAG, "AppCheck token alınamadı", e);
-                    // Enforce açıksa giriş başarısız olacaktır; kullanıcıya net mesaj ver
-                    Helpers.showToastSafe(Login.this,
-                            "App integrity doğrulaması başarısız. Lütfen tekrar deneyin.");
-                    submitButton.setEnabled(true);
+                    Log.w(TAG, "getToken(false) FAILED: " + e.getClass().getName() + " / " + e.getMessage(), e);
+                    // bir kez daha deneriz (force refresh)
+                    FirebaseAppCheck.getInstance().getToken(true)
+                            .addOnSuccessListener(t -> { Log.d(TAG, "AppCheck token (force) OK"); doSignIn(email, password); })
+                            .addOnFailureListener(e2 -> {
+                                Log.e(TAG, "getToken(true) FAILED: " + e2.getMessage(), e2);
+                                Helpers.showToastSafe(Login.this, "App integrity doğrulaması başarısız. Tekrar deneyin.");
+                                submitButton.setEnabled(true);
+                            });
                 });
+
     }
 
     private void doSignIn(String email, String password) {

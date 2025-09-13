@@ -44,6 +44,8 @@ public class Explore extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_explore);
+// Application.onCreate() ya da ilk Activity onCreate()
+        FirebaseAuth.getInstance().useAppLanguage(); // cihaz dilini gönderir
 
         // 1) Auth kontrolü
         auth = FirebaseAuth.getInstance();

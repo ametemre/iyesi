@@ -34,9 +34,11 @@ import org.json.JSONObject;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Consumer;
 
 import okhttp3.Call;
 import okhttp3.Callback;
+import okhttp3.HttpUrl;
 import okhttp3.MediaType;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
@@ -343,6 +345,33 @@ public class Helpers {
             if (a == null || a.isFinishing()) return;
             a.startActivity(new android.content.Intent(android.provider.Settings.ACTION_SETTINGS));
         }
+    }
+    // Senkron JSON GET
+    JSONObject getJson(HttpUrl url, OkHttpClient client) throws IOException, JSONException {
+        Request req = new Request.Builder().url(url).get().build();
+        try (Response resp = client.newCall(req).execute()) {
+            if (!resp.isSuccessful()) {
+                String err = resp.body() != null ? resp.body().string() : null;
+                throw new IOException("HTTP " + resp.code() + " " + err);
+            }
+            String body = resp.body() != null ? resp.body().string() : "{}";
+            return new JSONObject(body);
+        }
+    }
+
+    // Asenkron POST (App Check + Auth header’lı)
+    void postJsonAsync(Request req, OkHttpClient client, Consumer<JSONObject> ok, Consumer<Throwable> fail) {
+        client.newCall(req).enqueue(new Callback() {
+            @Override public void onResponse(Call call, Response resp) {
+                try (Response r = resp) {
+                    String body = r.body() != null ? r.body().string() : "{}";
+                    ok.accept(new JSONObject(body));
+                } catch (Throwable t) {
+                    fail.accept(t);
+                }
+            }
+            @Override public void onFailure(Call call, IOException e) { fail.accept(e); }
+        });
     }
 
 }

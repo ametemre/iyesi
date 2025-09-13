@@ -42,7 +42,12 @@ public final class FirebaseHeadersInterceptor implements Interceptor {
         if (deviceId != null) rb.header("X-Device-Id", deviceId);
 
         Response resp = chain.proceed(rb.build());
-
+        if (!resp.isSuccessful()) {
+            String err = null;
+            if (resp.body() != null) {
+                err = resp.peekBody(1024 * 1024).string(); // tercih: peekBody tüketmez
+            }
+        }
         // 401 ise: bir defa idToken'ı zorla yenileyip replay et
         if (resp.code() == 401) {
             resp.close();

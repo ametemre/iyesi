@@ -21,6 +21,7 @@ firebaseFunctions = "21.2.1"
 firebaseDatabase = "22.0.0"
 firebaseAppcheckDebug = "19.0.0"
 firebaseAppcheckPlayintegrity = "19.0.0"
+litertGpuApi = "1.4.0"
 
 [libraries]
 firebase-analytics = { module = "com.google.firebase:firebase-analytics" }
@@ -44,6 +45,7 @@ firebase-functions = { group = "com.google.firebase", name = "firebase-functions
 firebase-database = { group = "com.google.firebase", name = "firebase-database", version.ref = "firebaseDatabase" }
 firebase-appcheck-debug = { group = "com.google.firebase", name = "firebase-appcheck-debug", version.ref = "firebaseAppcheckDebug" }
 firebase-appcheck-playintegrity = { group = "com.google.firebase", name = "firebase-appcheck-playintegrity", version.ref = "firebaseAppcheckPlayintegrity" }
+litert-gpu-api = { group = "com.google.ai.edge.litert", name = "litert-gpu-api", version.ref = "litertGpuApi" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

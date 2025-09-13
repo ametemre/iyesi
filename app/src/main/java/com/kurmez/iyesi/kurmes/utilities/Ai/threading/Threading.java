@@ -11,9 +11,8 @@ import android.opengl.EGLSurface;
 import android.opengl.GLES20;
 import android.opengl.GLES31;
 import android.util.Log;
-
+import org.tensorflow.lite.gpu.GpuDelegateFactory;
 import org.tensorflow.lite.Delegate;
-import org.tensorflow.lite.Interpreter;
 import org.tensorflow.lite.gpu.CompatibilityList;
 import org.tensorflow.lite.gpu.GpuDelegate;
 import org.tensorflow.lite.nnapi.NnApiDelegate;
@@ -25,11 +24,14 @@ import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
-import java.util.concurrent.TimeUnit;
 
 /**
  * Advanced hardware resource management for TFLite with automatic
  * precision adjustment and hardware-aware delegation.
+ *
+ * Upstream TF Lite 2.15 ile uyumlu sürüm.
+ * - GpuDelegateFactory KULLANMIYOR.
+ * - getBestOptionsForThisDevice() yerine manuel GpuDelegate.Options oluşturuyor.
  */
 public final class Threading {
     private static final String TAG = "Threading";
@@ -214,6 +216,7 @@ public final class Threading {
         ACTIVE_DELEGATES.put(key, delegate);
         return delegate;
     }
+
     public static Delegate createOptimalDelegate(Context context) {
         // First try NNAPI
         NnApiDelegate nnDelegate = tryCreateNnApiDelegate(context);
@@ -227,6 +230,7 @@ public final class Threading {
         Log.w(TAG, "No hardware delegate available");
         return null;
     }
+
     private static NnApiDelegate tryCreateNnApiDelegate(Context context) {
         try {
             NnApiDelegate.Options options = new NnApiDelegate.Options();
@@ -245,6 +249,7 @@ public final class Threading {
             return null;
         }
     }
+
     private static GpuDelegate tryCreateGpuDelegate(Context context) {
         try {
             CompatibilityList compatList = new CompatibilityList();
@@ -253,10 +258,15 @@ public final class Threading {
                 return null;
             }
 
-            GpuDelegate.Options options = compatList.getBestOptionsForThisDevice();
-            options.setPrecisionLossAllowed(shouldUseFp16(context));
+            // NOT: getBestOptionsForThisDevice() bazı sürümlerde Factory’ye referans verir.
+            // Bu nedenle seçenekleri MANUEL oluşturuyoruz.
+            GpuDelegate.Options options = new GpuDelegate.Options();
 
-            // Set cache directory using reflection
+            // Basit heuristikler
+            final boolean useFp16 = shouldUseFp16(context);
+            options.setPrecisionLossAllowed(useFp16);
+
+            // (Opsiyonel) Delegate serileştirme dizini — public API yok; gerekirse reflection
             try {
                 File cacheDir = new File(context.getCacheDir(), "tflite_gpu_cache");
                 if (!cacheDir.exists()) cacheDir.mkdirs();
@@ -272,13 +282,14 @@ public final class Threading {
             }
 
             GpuDelegate delegate = new GpuDelegate(options);
-            Log.i(TAG, "Created GPU delegate (FP16: " + options.isPrecisionLossAllowed() + ")");
+            Log.i(TAG, "Created GPU delegate (FP16 used: " + useFp16 + ")");
             return delegate;
         } catch (Exception e) {
             Log.w(TAG, "GPU delegate creation failed", e);
             return null;
         }
     }
+
     public static synchronized void releaseDelegate(String key) {
         Delegate delegate = ACTIVE_DELEGATES.remove(key);
         if (delegate != null) {
@@ -290,6 +301,7 @@ public final class Threading {
             Log.i(TAG, "Released delegate: " + key);
         }
     }
+
     public static synchronized void releaseAllDelegates() {
         for (Delegate delegate : ACTIVE_DELEGATES.values()) {
             if (delegate instanceof GpuDelegate) {
@@ -306,5 +318,7 @@ public final class Threading {
     public static void runComputation(Runnable task) {
         computationExecutor.execute(task);
     }
-    public static void runIo(Runnable task) {ioExecutor.execute(task);}
+    public static void runIo(Runnable task) {
+        ioExecutor.execute(task);
+    }
 }
