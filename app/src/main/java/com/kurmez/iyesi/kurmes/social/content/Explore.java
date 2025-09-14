@@ -33,6 +33,8 @@ import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class Explore extends AppCompatActivity {
 
@@ -343,6 +345,17 @@ public class Explore extends AppCompatActivity {
         String msg = ioEx.getMessage();
         Log.e(TAG, "HTTP error: " + msg);
         String human = "Ağ hatası";
+        int code = -1;
+        if (msg != null) {
+            Matcher m = Pattern.compile("CF HTTP (\\d+)").matcher(msg);
+            if (m.find()) {
+                try { code = Integer.parseInt(m.group(1)); } catch (NumberFormatException ignored) {}
+            }
+        }
+        if (code == 404) {
+            showToast("Resource not found");
+            return;
+        }
 
         try {
             if (msg != null && msg.contains("{") && msg.contains("}")) {
