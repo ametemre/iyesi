@@ -28,7 +28,6 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.io.IOException;
-import java.net.URLEncoder;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -212,16 +211,16 @@ public class Explore extends AppCompatActivity {
                     whereClause += ",needsCare:eq:true";
                 }
 
-                String url = BuildConfig.CF_BASE_URL + "/listSoulsByFields?col=Souls&where=" +
-                        URLEncoder.encode(whereClause, "UTF-8") + "&limit=20";
-
+                JSONObject body = new JSONObject();
+                body.put("where", whereClause);
+                body.put("limit", 20);
                 if (pageToken != null && !pageToken.isEmpty()) {
-                    url += "&pageToken=" + URLEncoder.encode(pageToken, "UTF-8");
+                    body.put("pageToken", pageToken);
                 }
 
-                Log.d(TAG, "fetchSouls GET " + url);
-
-                JSONObject resJson = cf.getJson(url);
+                String url = joinUrl(BuildConfig.CF_BASE_URL, BuildConfig.CF_PATH_SOULS_SEARCH);
+                Log.d(TAG, "fetchSouls POST " + url + " body=" + body);
+                JSONObject resJson = cf.postJson(url, body);
                 Log.d(TAG, "fetchSouls response = " + resJson);
                 handleResponse(resJson);
 
