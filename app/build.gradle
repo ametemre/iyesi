@@ -21,6 +21,7 @@ android {
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
 
         // Cloud Functions URL config
+        buildConfigField "String", "CF_BASE_URL",      "\"https://us-central1-iyesi-e8d4f.cloudfunctions.net\""
         buildConfigField "String", "CF_URL_ENSURECLAIMS", "\"https://ensureclaims-...a.run.app\""
         buildConfigField "String", "CF_URL_UID",           "\"https://uid-...a.run.app\""
         buildConfigField "String", "CF_URL_APP_SEND",      "\"https://us-central1-iyesi-e8d4f.cloudfunctions.net/appSend\""

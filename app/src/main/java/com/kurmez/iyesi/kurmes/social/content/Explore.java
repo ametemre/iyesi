@@ -1,5 +1,6 @@
 package com.kurmez.iyesi.kurmes.social.content;
 
+import android.content.Intent;
 import android.graphics.Typeface;
 import android.os.Bundle;
 import android.os.Handler;
@@ -10,6 +11,7 @@ import android.view.Gravity;
 import android.view.ViewGroup;
 import android.widget.LinearLayout;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -18,6 +20,8 @@ import androidx.recyclerview.widget.DividerItemDecoration;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseUser;
 import com.kurmez.iyesi.BuildConfig;
 import com.kurmez.iyesi.kurmes.net.CFClient;
 
@@ -131,7 +135,20 @@ public class Explore extends AppCompatActivity {
                 ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
         setContentView(root);
 
-        // Veriyi çek
+        // Kullanıcı oturumu kontrol et
+        FirebaseAuth auth = FirebaseAuth.getInstance();
+        FirebaseUser user = auth.getCurrentUser();
+        if (user == null) {
+            auth.signInAnonymously()
+                    .addOnSuccessListener(r -> fetchSouls())
+                    .addOnFailureListener(e -> {
+                        startActivity(new Intent(this, com.kurmez.iyesi.Login.class));
+                        finish();
+                    });
+        } else {
+            // Veriyi çek
+            fetchSouls();
+        }
         fetchSouls();
     }
 
@@ -156,11 +173,17 @@ public class Explore extends AppCompatActivity {
 
             } catch (Exception e) {
                 Log.e(TAG, "fetchSouls failed", e);
+                final String err = e.getMessage();
                 main.post(() -> {
                     adapter.replaceAll(new ArrayList<>());
+                    if (err != null && (err.contains("401") || err.contains("403"))) {
+                        Toast.makeText(this, "Tekrar giriş yapmanız gerekiyor", Toast.LENGTH_LONG).show();
+                    }
+
                     // Basit hata başlığı
                     if (recycler.getChildCount() == 0) {
                         TextView t = new TextView(this);
+                        t.setText("Yüklenemedi: " + err);
                         t.setText("Yüklenemedi: " + e.getMessage());
                         t.setPadding(28, 28, 28, 28);
                         t.setTextSize(14f);
@@ -174,7 +197,7 @@ public class Explore extends AppCompatActivity {
 
     /** JSON parse (örnek sözleşme bekleniyor). Kendi backend çıktına göre düzenle. */
     @NonNull
-    private ArrayList<SoulItem> parseSouls(@NonNull JSONObject json) throws JSONException {
+    private ArrayList<SoulItem> parseSouls(@NonNull JSONObject json) throws JSONException, IOException {
         ArrayList<SoulItem> out = new ArrayList<>();
         // Örnek şema:
         // { "ok": true, "items": [ { "title": "...", "date": 1694102400000, "adminPath": "TR/ADANA", ... }, ... ] }
