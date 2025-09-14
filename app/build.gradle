@@ -15,12 +15,22 @@ android {
         minSdk 26
         //noinspection EditedTargetSdkVersion
         targetSdk 36
-        versionCode 12
+        versionCode 13
         versionName "Alfa"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
 
         // Cloud Functions URL config
+        // Cloud Functions taban alanı (region + proje)
+        //buildConfigField "String", "CF_BASE_URL", "\"https://us-central1-iyesi-e8d4f.cloudfunctions.net\""
+        // Souls arama fonksiyonunun yolu: v2 onRequest fonksiyon adın neyse onu yaz
+        // ÖRNEK: "/soulsSearch" ya da "/souls/search" değil!
+        buildConfigField "String", "CF_PATH_SOULS_SEARCH", "\"/soulsSearch\""
+        // Eğer Hosting rewrite kullanıyorsan yukarıdaki iki satırı şöyle değiştir:
+        // buildConfigField "String", "CF_BASE_URL", "\"https://<senin-projen>.web.app\""
+        // buildConfigField "String", "CF_PATH_SOULS_SEARCH", "\"/souls/search\""
+
+        ///buildConfigField "String", "CF_URL_SOULS_SEARCH", "\"https://us-central1-iyesi-e8d4f.cloudfunctions.net/souls/search\""
         buildConfigField "String", "CF_BASE_URL",      "\"https://us-central1-iyesi-e8d4f.cloudfunctions.net\""
         buildConfigField "String", "CF_URL_ENSURECLAIMS", "\"https://ensureclaims-...a.run.app\""
         buildConfigField "String", "CF_URL_UID",           "\"https://uid-...a.run.app\""
@@ -75,7 +85,8 @@ dependencies {
     // App Check – çekirdek + provider’lar (varyant bazlı)
     implementation       'com.google.firebase:firebase-appcheck'
     implementation libs.firebase.appcheck.playintegrity
-    implementation libs.litert.gpu.api// opsiyonel ama netlik için ekli
+    implementation libs.litert.gpu.api
+    implementation libs.swiperefreshlayout// opsiyonel ama netlik için ekli
     debugImplementation  'com.google.firebase:firebase-appcheck-debug'
     releaseImplementation 'com.google.firebase:firebase-appcheck-playintegrity'
 

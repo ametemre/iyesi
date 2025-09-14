@@ -1,238 +1,447 @@
 package com.kurmez.iyesi.kurmes.social.content;
 
-import android.content.Intent;
-import android.graphics.Typeface;
+import android.content.Context;
 import android.os.Bundle;
-import android.os.Handler;
-import android.os.Looper;
-import android.text.TextUtils;
 import android.util.Log;
 import android.view.Gravity;
+import android.view.View;
 import android.view.ViewGroup;
-import android.widget.LinearLayout;
+import android.widget.CheckBox;
+import android.widget.FrameLayout;
+import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.annotation.MainThread;
 import androidx.annotation.NonNull;
-import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.recyclerview.widget.DividerItemDecoration;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
-import com.google.firebase.auth.FirebaseAuth;
-import com.google.firebase.auth.FirebaseUser;
 import com.kurmez.iyesi.BuildConfig;
-import com.kurmez.iyesi.kurmes.net.CFClient;
+import com.kurmez.iyesi.kayra.Classes.data.Soul;
+import com.kurmez.iyesi.kurmes.utilities.helper.net.CFClient;
 
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.io.IOException;
-import java.text.SimpleDateFormat;
+import java.net.URLEncoder;
 import java.util.ArrayList;
-import java.util.Date;
-import java.util.Locale;
+import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-/**
- * Explore — server'dan (Cloud Functions/Run) Souls listesini çeker ve gösterir.
- * 401/APP_CHECK_MISSING vb. hataları önlemek için:
- *  - CFClient.withAutoAuth(...) kullanır (interceptor AppCheck + Auth ekler).
- *  - Token parametrelerini NULL geçer.
- */
 public class Explore extends AppCompatActivity {
 
     private static final String TAG = "Explore";
-    private final ExecutorService io = Executors.newSingleThreadExecutor();
-    private final Handler main = new Handler(Looper.getMainLooper());
 
+    // ---- UI ----
+    private SwipeRefreshLayout swipeRefresh;
     private RecyclerView recycler;
     private SoulsAdapter adapter;
+    private ProgressBar progress;
+    private TextView emptyView;
+    private CheckBox cbNeedsCare;
 
-    // Basit veri modeli
-    static class SoulItem {
-        final String title;
-        final String date;
-        final String location;
-        SoulItem(String title, String date, String location) {
-            this.title = title;
-            this.date = date;
-            this.location = location;
-        }
+    // ---- Data / State ----
+    private final List<Soul> data = new ArrayList<>();
+    private String nextPageToken = null;
+    private boolean loading = false;
+    private boolean reachedEnd = false;
+
+    // ---- Infra ----
+    private ExecutorService io;
+    private CFClient cf; // OkHttp tabanlı istemci
+
+    // ---- URL yardımcıları ----
+    private static String trimRightSlash(String s) {
+        if (s == null) return "";
+        return s.endsWith("/") ? s.substring(0, s.length() - 1) : s;
     }
-
-    // Basit adapter (programatik satır tasarımı)
-    static class SoulsAdapter extends RecyclerView.Adapter<SoulsAdapter.VH> {
-        final ArrayList<SoulItem> data = new ArrayList<>();
-        static class VH extends RecyclerView.ViewHolder {
-            final TextView title;
-            final TextView subtitle;
-            VH(@NonNull LinearLayout root, TextView title, TextView subtitle) {
-                super(root);
-                this.title = title;
-                this.subtitle = subtitle;
-            }
-        }
-        @NonNull @Override public VH onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
-            LinearLayout row = new LinearLayout(parent.getContext());
-            row.setOrientation(LinearLayout.VERTICAL);
-            row.setPadding(28, 24, 28, 24);
-            TextView t = new TextView(parent.getContext());
-            t.setTextSize(16f);
-            t.setTypeface(Typeface.DEFAULT_BOLD);
-            t.setEllipsize(TextUtils.TruncateAt.END);
-            t.setSingleLine(true);
-            TextView s = new TextView(parent.getContext());
-            s.setTextSize(13f);
-            s.setEllipsize(TextUtils.TruncateAt.END);
-            s.setMaxLines(2);
-            row.addView(t, new LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-            row.addView(s, new LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-            return new VH(row, t, s);
-        }
-        @Override public void onBindViewHolder(@NonNull VH h, int i) {
-            SoulItem it = data.get(i);
-            h.title.setText(it.title);
-            h.subtitle.setText(it.date + "  •  " + it.location);
-        }
-        @Override public int getItemCount() { return data.size(); }
-        void replaceAll(ArrayList<SoulItem> list) {
-            data.clear();
-            data.addAll(list);
-            notifyDataSetChanged();
-        }
+    private static String trimLeftSlash(String s) {
+        if (s == null) return "";
+        return s.startsWith("/") ? s.substring(1) : s;
+    }
+    private static String joinUrl(String base, String path) {
+        String b = trimRightSlash(base);
+        String p = trimLeftSlash(path);
+        return b + "/" + p;
     }
 
     @Override
-    protected void onCreate(@Nullable Bundle savedInstanceState) {
+    protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        io = Executors.newFixedThreadPool(2);
 
-        // Programatik basit ekran
-        LinearLayout root = new LinearLayout(this);
-        root.setOrientation(LinearLayout.VERTICAL);
-        root.setLayoutParams(new LinearLayout.LayoutParams(
+        // ---- Kök layoutu programatik kuruyoruz ----
+        FrameLayout root = new FrameLayout(this);
+
+        swipeRefresh = new SwipeRefreshLayout(this);
+        root.addView(swipeRefresh, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-        TextView header = new TextView(this);
-        header.setText("Explore");
-        header.setTextSize(18f);
-        header.setTypeface(Typeface.DEFAULT_BOLD);
-        header.setGravity(Gravity.CENTER_HORIZONTAL);
-        header.setPadding(0, 24, 0, 12);
+
+        FrameLayout content = new FrameLayout(this);
+        swipeRefresh.addView(content, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+
         recycler = new RecyclerView(this);
         recycler.setLayoutManager(new LinearLayoutManager(this));
-        recycler.addItemDecoration(new DividerItemDecoration(this, DividerItemDecoration.VERTICAL));
-        adapter = new SoulsAdapter();
+        adapter = new SoulsAdapter(data);
         recycler.setAdapter(adapter);
-        root.addView(header, new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-        root.addView(recycler, new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+
+        emptyView = new TextView(this);
+        emptyView.setText("Kayıt bulunamadı.");
+        emptyView.setVisibility(View.GONE);
+        emptyView.setGravity(Gravity.CENTER);
+
+        progress = new ProgressBar(this, null, android.R.attr.progressBarStyleLarge);
+        FrameLayout.LayoutParams lpProg = new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        lpProg.gravity = Gravity.CENTER;
+
+        cbNeedsCare = new CheckBox(this);
+        cbNeedsCare.setText("Bakım ihtiyacı olanlar (needsCare)");
+        cbNeedsCare.setChecked(false);
+        FrameLayout.LayoutParams lpCb = new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        lpCb.topMargin = dp(this, 8);
+        lpCb.leftMargin = dp(this, 12);
+        lpCb.rightMargin = dp(this, 12);
+
+        FrameLayout.LayoutParams lpList = new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
+        lpList.topMargin = dp(this, 48);
+
+        content.addView(recycler, lpList);
+        content.addView(emptyView, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        content.addView(cbNeedsCare, lpCb);
+        root.addView(progress, lpProg);
+
         setContentView(root);
 
-        // Kullanıcı oturumu kontrol et
-        FirebaseAuth auth = FirebaseAuth.getInstance();
-        FirebaseUser user = auth.getCurrentUser();
-        if (user == null) {
-            auth.signInAnonymously()
-                    .addOnSuccessListener(r -> fetchSouls())
-                    .addOnFailureListener(e -> {
-                        startActivity(new Intent(this, com.kurmez.iyesi.Login.class));
-                        finish();
-                    });
-        } else {
-            // Veriyi çek
-            fetchSouls();
-        }
-        fetchSouls();
-    }
+        // Swipe refresh
+        swipeRefresh.setOnRefreshListener(() -> refresh(true));
+        // Filtre değişince yeniden yükle
+        cbNeedsCare.setOnCheckedChangeListener((buttonView, isChecked) -> refresh(true));
 
-    /** Server'dan listeyi çeker. */
-    private void fetchSouls() {
-        // 401/APP_CHECK_MISSING'i önleyen client
-        final CFClient cf = CFClient.withAutoAuth(BuildConfig.CF_BASE_URL);
+        // Sonsuz kaydırma
+        recycler.addOnScrollListener(new RecyclerView.OnScrollListener() {
+            @Override public void onScrolled(@NonNull RecyclerView rv, int dx, int dy) {
+                if (dy <= 0) return;
+                if (loading || reachedEnd) return;
 
-        io.execute(() -> {
-            try {
-                // Örnek where: adminPathPrefix=TR  (kendi ihtiyacına göre düzenle)
-                String where = "adminPathPrefix:TR";
-                int limit = 50;
-                String q = "where=" + urlEncode(where) + "&limit=" + limit + "&col=Souls";
-                String path = "/listSoulsByFields?" + q;
+                LinearLayoutManager lm = (LinearLayoutManager) rv.getLayoutManager();
+                if (lm == null) return;
 
-                // Token parametreleri NULL → interceptor ekler
-                JSONObject json = cf.getJson(path, /*idToken*/ null, /*appCheck*/ null);
+                int visible = lm.getChildCount();
+                int total = lm.getItemCount();
+                int first = lm.findFirstVisibleItemPosition();
 
-                ArrayList<SoulItem> list = parseSouls(json);
-                main.post(() -> adapter.replaceAll(list));
-
-            } catch (Exception e) {
-                Log.e(TAG, "fetchSouls failed", e);
-                final String err = e.getMessage();
-                main.post(() -> {
-                    adapter.replaceAll(new ArrayList<>());
-                    if (err != null && (err.contains("401") || err.contains("403"))) {
-                        Toast.makeText(this, "Tekrar giriş yapmanız gerekiyor", Toast.LENGTH_LONG).show();
-                    }
-
-                    // Basit hata başlığı
-                    if (recycler.getChildCount() == 0) {
-                        TextView t = new TextView(this);
-                        t.setText("Yüklenemedi: " + err);
-                        t.setText("Yüklenemedi: " + e.getMessage());
-                        t.setPadding(28, 28, 28, 28);
-                        t.setTextSize(14f);
-                        t.setGravity(Gravity.CENTER);
-                        ((ViewGroup) recycler.getParent()).addView(t);
-                    }
-                });
+                if (first + visible >= total - 4) {
+                    fetchSouls(false);
+                }
             }
         });
     }
 
-    /** JSON parse (örnek sözleşme bekleniyor). Kendi backend çıktına göre düzenle. */
-    @NonNull
-    private ArrayList<SoulItem> parseSouls(@NonNull JSONObject json) throws JSONException, IOException {
-        ArrayList<SoulItem> out = new ArrayList<>();
-        // Örnek şema:
-        // { "ok": true, "items": [ { "title": "...", "date": 1694102400000, "adminPath": "TR/ADANA", ... }, ... ] }
-        boolean ok = json.optBoolean("ok", false);
-        if (!ok) {
-            // bazen {ok:false, err:"APPCHECK_MISSING"} vs. gelebilir
-            String err = json.optString("err");
-            throw new IOException("Server error: " + (TextUtils.isEmpty(err) ? json.toString() : err));
-        }
-        JSONArray arr = json.optJSONArray("items");
-        if (arr == null) return out;
+    @Override
+    protected void onResume() {
+        super.onResume();
 
+        // CFClient (interceptor'lar CFClient içinde zaten setli)
+        this.cf = new CFClient();
+
+        Log.i(TAG, "CF base=" + BuildConfig.CF_BASE_URL + " path=" + BuildConfig.CF_PATH_SOULS_SEARCH);
+
+        // İlk yükleme
+        refresh(false);
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        if (io != null) io.shutdownNow();
+        if (recycler != null) recycler.setAdapter(null);
+    }
+
+    // ---- Helpers ----
+
+    private void refresh(boolean fromUser) {
+        if (fromUser) showToast("Yenileniyor…");
+        nextPageToken = null;
+        reachedEnd = false;
+        data.clear();
+        adapter.notifyDataSetChanged();
+        fetchSouls(true);
+    }
+
+    private void setLoading(boolean state) {
+        loading = state;
+        runOnUiThread(() -> {
+            progress.setVisibility(state && data.isEmpty() ? View.VISIBLE : View.GONE);
+            if (!state) swipeRefresh.setRefreshing(false);
+        });
+    }
+
+    private static int dp(Context c, int d) {
+        float den = c.getResources().getDisplayMetrics().density;
+        return Math.round(d * den);
+    }
+
+    /** Sunucudan souls çeker. */
+// ... [previous code remains the same]
+
+    /** Sunucudan souls çeker. */
+    private void fetchSouls(boolean isFirstPage) {
+        if (loading) return;
+        setLoading(true);
+
+        final boolean needsCare = cbNeedsCare != null && cbNeedsCare.isChecked();
+        final String pageToken = nextPageToken;
+
+        io.execute(() -> {
+            try {
+                // Build query parameters
+                String whereClause = "health:eq:critical";
+                if (needsCare) {
+                    whereClause += ",needsCare:eq:true";
+                }
+
+                String url = BuildConfig.CF_BASE_URL + "/listSoulsByFields?col=Souls&where=" +
+                        URLEncoder.encode(whereClause, "UTF-8") + "&limit=20";
+
+                if (pageToken != null && !pageToken.isEmpty()) {
+                    url += "&pageToken=" + URLEncoder.encode(pageToken, "UTF-8");
+                }
+
+                Log.d(TAG, "fetchSouls GET " + url);
+
+                JSONObject resJson = cf.getJson(url);
+                Log.d(TAG, "fetchSouls response = " + resJson);
+                handleResponse(resJson);
+
+            } catch (IOException ioEx) {
+                Log.e(TAG, "fetchSouls failed IO: " + ioEx.getMessage(), ioEx);
+                showHttpErrorToast(ioEx);
+            } catch (JSONException jx) {
+                Log.e(TAG, "fetchSouls JSON parse error: " + jx.getMessage(), jx);
+                showToast("Veri çözümlenirken hata oluştu.");
+            } catch (Throwable t) {
+                Log.e(TAG, "fetchSouls unexpected: " + t.getMessage(), t);
+                showToast("Beklenmeyen bir hata oluştu.");
+            } finally {
+                setLoading(false);
+                renderEmptyState();
+            }
+        });
+    }
+
+// ... [rest of the code remains the same]
+
+    @MainThread
+    private void renderEmptyState() {
+        runOnUiThread(() -> {
+            boolean empty = data.isEmpty();
+            emptyView.setVisibility(empty ? View.VISIBLE : View.GONE);
+            recycler.setVisibility(empty ? View.GONE : View.VISIBLE);
+        });
+    }
+
+    private void handleResponse(JSONObject res) throws JSONException {
+        if (res == null) {
+            showToast("Boş yanıt alındı.");
+            return;
+        }
+
+        boolean success = res.optBoolean("success", true);
+        if (!success) {
+            String error = res.optString("error", "unknown");
+            String field = res.optString("field", "");
+            Log.e(TAG, "API error: " + error + (field.isEmpty() ? "" : (" field=" + field)));
+            if (Objects.equals(error, "invalid-field") && !field.isEmpty()) {
+                showToast("Geçersiz alan: " + field + " — şemayı kontrol edin.");
+            } else {
+                showToast("Sunucu hatası: " + error);
+            }
+            return;
+        }
+
+        JSONArray arr = res.optJSONArray("items");
+        String npt = res.optString("nextPageToken", null);
+
+        if (arr == null || arr.length() == 0) {
+            nextPageToken = null;
+            reachedEnd = true;
+            runOnUiThread(() -> adapter.notifyDataSetChanged());
+            return;
+        }
+
+        List<Soul> fresh = new ArrayList<>(arr.length());
         for (int i = 0; i < arr.length(); i++) {
-            JSONObject it = arr.optJSONObject(i);
-            if (it == null) continue;
+            JSONObject o = arr.optJSONObject(i);
+            if (o == null) continue;
 
-            String title = it.optString("title", it.optString("breed", "mixed"));
-            String loc = it.optString("adminPath", "");
-            long ts = it.optLong("date", it.optLong("createdAt", 0L));
-            String dateStr = (ts > 0) ? formatDate(ts) : "";
-
-            out.add(new SoulItem(title, dateStr, loc));
+            Soul s = tryParseSoul(o);
+            if (s != null) fresh.add(s);
         }
-        return out;
+
+        nextPageToken = (npt == null || npt.isEmpty()) ? null : npt;
+        reachedEnd = (nextPageToken == null);
+
+        runOnUiThread(() -> {
+            int start = data.size();
+            data.addAll(fresh);
+            adapter.notifyItemRangeInserted(start, fresh.size());
+        });
     }
 
-    private static String urlEncode(@NonNull String s) {
+    private Soul tryParseSoul(JSONObject o) {
         try {
-            return java.net.URLEncoder.encode(s, java.nio.charset.StandardCharsets.UTF_8.name());
-        } catch (Exception e) {
+            try { return Soul.fromJson(o); } catch (Throwable ignore) {}
+
+            Soul s = new Soul();
+            if (has(o, "id")) setField(s, "id", o.optString("id", null));
+            if (has(o, "name")) setField(s, "name", o.optString("name", null));
+            if (has(o, "species")) setField(s, "species", o.optString("species", null));
+            if (has(o, "imageUrl")) setField(s, "imageUrl", o.optString("imageUrl", null));
+            if (has(o, "needsCare")) setBooleanField(s, "needsCare", o.optBoolean("needsCare", false));
+            // Health bilgisini de al
+            if (has(o, "health")) setField(s, "health", o.optString("health", null));
             return s;
+
+        } catch (Throwable t) {
+            Log.w(TAG, "Soul parse skipped: " + t.getMessage());
+            return null;
         }
     }
 
-    private static String formatDate(long epochMs) {
-        return new SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(new Date(epochMs));
+    private boolean has(JSONObject o, String k) {
+        return o.has(k) && !o.isNull(k);
+    }
+
+    private void setField(Soul s, String field, String val) {
+        try {
+            java.lang.reflect.Field f = Soul.class.getDeclaredField(field);
+            f.setAccessible(true);
+            f.set(s, val);
+        } catch (Throwable ignored) {}
+    }
+
+    private void setBooleanField(Soul s, String field, boolean val) {
+        try {
+            java.lang.reflect.Field f = Soul.class.getDeclaredField(field);
+            f.setAccessible(true);
+            f.setBoolean(s, val);
+        } catch (Throwable ignored) {}
+    }
+
+    private void showHttpErrorToast(IOException ioEx) {
+        String msg = ioEx.getMessage();
+        Log.e(TAG, "HTTP error: " + msg);
+        String human = "Ağ hatası";
+
+        try {
+            if (msg != null && msg.contains("{") && msg.contains("}")) {
+                int i = msg.indexOf('{');
+                int j = msg.lastIndexOf('}');
+                if (i >= 0 && j > i) {
+                    String jsonStr = msg.substring(i, j + 1);
+                    JSONObject err = new JSONObject(jsonStr);
+                    String error = err.optString("error", "");
+                    String field = err.optString("field", "");
+                    if ("invalid-field".equals(error)) {
+                        human = "Geçersiz alan: " + (field.isEmpty() ? "(bilinmiyor)" : field);
+                    } else if (!error.isEmpty()) {
+                        human = "Sunucu hatası: " + error;
+                    }
+                }
+            }
+        } catch (Throwable ignored) { }
+
+        showToast(human);
+    }
+
+    private void showToast(String s) {
+        runOnUiThread(() -> Toast.makeText(this, s, Toast.LENGTH_SHORT).show());
+    }
+
+    // ---------------- RecyclerView Adapter (basit) ----------------
+
+    private static class SoulsAdapter extends RecyclerView.Adapter<SoulVH> {
+        private final List<Soul> items;
+        SoulsAdapter(List<Soul> items) { this.items = items; }
+
+        @NonNull
+        @Override
+        public SoulVH onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
+            Context ctx = parent.getContext();
+            FrameLayout row = new FrameLayout(ctx);
+
+            TextView tv = new TextView(ctx);
+            tv.setId(View.generateViewId());
+            tv.setPadding(dp(ctx, 12), dp(ctx, 10), dp(ctx, 12), dp(ctx, 10));
+
+            row.addView(tv, new FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT
+            ));
+            return new SoulVH(row, tv);
+        }
+
+        @Override
+        public void onBindViewHolder(@NonNull SoulVH holder, int position) {
+            Soul s = items.get(position);
+            String title = safe(getField(s, "name"), "(İsimsiz)");
+            String species = safe(getField(s, "species"), "");
+            boolean needsCare = getBooleanField(s, "needsCare");
+            String health = safe(getField(s, "health"), "");
+            String line = title
+                    + (species.isEmpty() ? "" : " · " + species)
+                    + (needsCare ? " · ❤️ needsCare" : "")
+                    + (health.equals("critical") ? " · ⚠️ Critical" : "");
+            holder.text.setText(line);
+        }
+
+        @Override
+        public int getItemCount() { return items.size(); }
+
+        private static String safe(String v, String def) { return v == null ? def : v; }
+
+        private static String getField(Soul s, String field) {
+            try {
+                java.lang.reflect.Field f = Soul.class.getDeclaredField(field);
+                f.setAccessible(true);
+                Object v = f.get(s);
+                return v == null ? null : String.valueOf(v);
+            } catch (Throwable ignored) { }
+            return null;
+        }
+
+        private static boolean getBooleanField(Soul s, String field) {
+            try {
+                java.lang.reflect.Field f = Soul.class.getDeclaredField(field);
+                f.setAccessible(true);
+                return f.getBoolean(s);
+            } catch (Throwable ignored) { }
+            return false;
+        }
+
+        private static int dp(Context c, int d) {
+            float den = c.getResources().getDisplayMetrics().density;
+            return Math.round(d * den);
+        }
+    }
+
+    private static class SoulVH extends RecyclerView.ViewHolder {
+        final TextView text;
+        SoulVH(@NonNull View itemView, @NonNull TextView text) {
+            super(itemView);
+            this.text = text;
+        }
     }
 }

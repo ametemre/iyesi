@@ -2,10 +2,6 @@ package com.kurmez.iyesi.umay;
 
 import static com.kurmez.iyesi.kayra.Classes.data.Soul.parseSouls;
 
-import com.kurmez.iyesi.kurmes.net.CFClient;
-
-import com.kurmez.iyesi.kurmes.net.FirebaseAuthenticator;
-import com.kurmez.iyesi.kurmes.net.FirebaseHeadersInterceptor;
 import com.kurmez.iyesi.kurmes.utilities.helper.CFHelper;
 import com.kurmez.iyesi.kayra.Classes.data.Soul; // tek ve doğru Soul
 import androidx.annotation.NonNull;
@@ -38,6 +34,9 @@ import com.kurmez.iyesi.kurmes.social.content.ExplorePrivate;
 import com.kurmez.iyesi.kurmes.social.message.Messaging;
 import com.kurmez.iyesi.kurmes.utilities.Helpers;
 import com.kurmez.iyesi.kurmes.utilities.adapters.CompanionAdapter;
+import com.kurmez.iyesi.kurmes.utilities.helper.net.CFClient;
+import com.kurmez.iyesi.kurmes.utilities.helper.net.FirebaseAuthenticator;
+import com.kurmez.iyesi.kurmes.utilities.helper.net.FirebaseHeadersInterceptor;
 
 import java.util.ArrayList;
 import java.util.concurrent.TimeUnit;
