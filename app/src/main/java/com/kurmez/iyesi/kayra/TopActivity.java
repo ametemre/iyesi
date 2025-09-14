@@ -2,8 +2,13 @@ package com.kurmez.iyesi.kayra;
 
 import android.app.Activity;
 import android.app.Application;
+import android.content.ActivityNotFoundException;
 import android.content.Context;
+import android.content.Intent;
+import android.net.Uri;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -15,6 +20,8 @@ import java.lang.ref.WeakReference;
  * - En son RESUMED olan Activity'yi WeakReference ile takip eder.
  * - Uygulama ön planda mı bilgisini (startedCount) tutar.
  * - UI için uygun Context (Activity varsa o, yoksa Application) döndürür.
+ * - current() aliaseklendi (diğer sınıflar rahatça erişsin).
+ * - startActivitySafely / openUrl yardımcıları eklendi.
  */
 public final class TopActivity implements Application.ActivityLifecycleCallbacks {
 
@@ -45,6 +52,11 @@ public final class TopActivity implements Application.ActivityLifecycleCallbacks
         return top.get();
     }
 
+    /** Alias: Son aktif (RESUMED) Activity; yoksa null. */
+    @Nullable public static Activity current() {
+        return activity();
+    }
+
     /** Uygulama ön planda mı? */
     public static boolean isForeground() {
         return startedCount > 0;
@@ -70,14 +82,47 @@ public final class TopActivity implements Application.ActivityLifecycleCallbacks
         if (a != null) {
             a.runOnUiThread(r);
         } else {
-            new android.os.Handler(android.os.Looper.getMainLooper()).post(r);
+            new Handler(Looper.getMainLooper()).post(r);
         }
+    }
+
+    // ---- Convenience ----
+
+    /**
+     * Güvenli startActivity: Bir Activity mevcutsa ondan, yoksa Application context ile NEW_TASK.
+     * true => başlatıldı, false => başlatılamadı.
+     */
+    public static boolean startActivitySafely(@NonNull Intent intent) {
+        try {
+            Context ctx = uiContext();
+            if (!(ctx instanceof Activity)) {
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            }
+            ctx.startActivity(intent);
+            return true;
+        } catch (ActivityNotFoundException ignored) {
+            return false;
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    /** Hızlı URL açma yardımcıcısı. */
+    public static boolean openUrl(@NonNull String url) {
+        Intent i = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+        return startActivitySafely(i);
     }
 
     // ---- Lifecycle ----
     @Override public void onActivityCreated(@NonNull Activity a, @Nullable Bundle b) { /* no-op */ }
-    @Override public void onActivityStarted(@NonNull Activity a) { startedCount++; }
-    @Override public void onActivityResumed(@NonNull Activity a) { top = new WeakReference<>(a); }
+
+    @Override public void onActivityStarted(@NonNull Activity a) {
+        startedCount++;
+    }
+
+    @Override public void onActivityResumed(@NonNull Activity a) {
+        top = new WeakReference<>(a);
+    }
 
     @Override public void onActivityPaused(@NonNull Activity a) {
         Activity cur = top.get();

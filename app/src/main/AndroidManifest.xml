@@ -40,6 +40,16 @@
         android:required="false" />
 
     <queries>
+        <package android:name="com.android.vending"/>
+        <package android:name="com.google.android.gms"/>
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="market"/>
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="https"/>
+        </intent>
         <intent>
             <action android:name="android.media.action.IMAGE_CAPTURE" />
         </intent>

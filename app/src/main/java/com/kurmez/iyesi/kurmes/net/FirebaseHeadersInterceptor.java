@@ -22,43 +22,48 @@ public final class FirebaseHeadersInterceptor implements Interceptor {
 
     private volatile String cachedAppCheck;
     private volatile long cachedAppCheckAt = 0L;
+    @Override
+    public Response intercept(Chain chain) throws IOException {
+        Request original = chain.request();
 
-    @Override public Response intercept(Chain chain) throws IOException {
+        // 1) Kullanıcı ve tokenları al
         FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
-        if (user == null) throw new IOException("No user");
+        if (user == null) {
+            // anonim login vs. burada yapıyorsan yap; yoksa 401 dönebilir
+            throw new IOException("No FirebaseUser");
+        }
 
-        String idToken = ensureIdToken(user, /*force*/ false);
-        String appCheck = ensureAppCheck(/*force*/ false); // debug'da null olabilir
+        // <-- BURAYA: senin metodun çağrısı -->
+        String idToken = ensureIdToken(user, /*force=*/false);     // senin verdiğin metod
+        String appCheck = ensureAppCheck(/*force=*/false);         // mevcutsa senin AppCheck metodu
 
-        Request.Builder rb = chain.request().newBuilder()
+        // 2) Header’ları isteğe ekle
+        Request.Builder rb = original.newBuilder()
                 .header("Authorization", "Bearer " + idToken);
 
         if (appCheck != null && !appCheck.isEmpty()) {
             rb.header("X-Firebase-AppCheck", appCheck);
         }
 
-        // İsteğe bağlı cihaz kimliği (kullanıyorsan)
-        String deviceId = getDeviceId();
-        if (deviceId != null) rb.header("X-Device-Id", deviceId);
+        Response rsp = chain.proceed(rb.build());
 
-        Response resp = chain.proceed(rb.build());
-        if (!resp.isSuccessful()) {
-            String err = null;
-            if (resp.body() != null) {
-                err = resp.peekBody(1024 * 1024).string(); // tercih: peekBody tüketmez
+        // 3) 401/403 gelirse 1 kez force refresh + retry (opsiyonel ama önerilir)
+        if (rsp.code() == 401 || rsp.code() == 403) {
+            rsp.close(); // eski response'u kapat
+            String freshId = ensureIdToken(user, /*force=*/true);
+            String freshApp = ensureAppCheck(/*force=*/true);
+
+            Request.Builder retry = original.newBuilder()
+                    .header("Authorization", "Bearer " + freshId);
+            if (freshApp != null && !freshApp.isEmpty()) {
+                retry.header("X-Firebase-AppCheck", freshApp);
             }
+            return chain.proceed(retry.build());
         }
-        // 401 ise: bir defa idToken'ı zorla yenileyip replay et
-        if (resp.code() == 401) {
-            resp.close();
-            idToken = ensureIdToken(user, /*force*/ true);
-            Request retry = chain.request().newBuilder()
-                    .header("Authorization", "Bearer " + idToken)
-                    .build();
-            return chain.proceed(retry);
-        }
-        return resp;
+
+        return rsp;
     }
+
 
     private String ensureIdToken(FirebaseUser user, boolean force) throws IOException {
         long now = System.currentTimeMillis();
