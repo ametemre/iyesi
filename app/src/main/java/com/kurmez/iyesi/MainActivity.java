@@ -4,11 +4,14 @@ import android.Manifest;
 import android.annotation.SuppressLint;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.ApplicationInfo;
+import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.provider.Settings;
+import android.util.Base64;
 import android.util.Log;
 import android.widget.EditText;
 import android.widget.ImageButton;
@@ -17,9 +20,18 @@ import android.widget.Toast;
 import androidx.annotation.RequiresPermission;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.content.ContextCompat;
 
+import com.google.android.gms.common.ConnectionResult;
+import com.google.android.gms.common.GoogleApiAvailability;
 import com.google.android.gms.tasks.Task;
 import com.google.android.gms.tasks.Tasks;
+
+import com.google.android.play.core.integrity.IntegrityManager;
+import com.google.android.play.core.integrity.IntegrityManagerFactory;
+import com.google.android.play.core.integrity.IntegrityServiceException;
+import com.google.android.play.core.integrity.IntegrityTokenRequest;
+import com.google.android.play.core.integrity.model.IntegrityErrorCode;
 
 import com.google.firebase.FirebaseApp;
 import com.google.firebase.appcheck.AppCheckToken;
@@ -37,7 +49,8 @@ import com.google.zxing.BarcodeFormat;
 import com.google.zxing.WriterException;
 import com.journeyapps.barcodescanner.BarcodeEncoder;
 
-import com.kurmez.iyesi.kayra.appCheck.GmsIntegrityPreflight;
+// import com.kurmez.iyesi.kayra.appCheck.GmsIntegrityPreflight;
+
 import com.kurmez.iyesi.kurmes.Kurmes;
 import com.kurmez.iyesi.kurmes.ui.SoulsManagerActivity;
 import com.kurmez.iyesi.kurmes.utilities.Helpers;
@@ -46,23 +59,24 @@ import com.kurmez.iyesi.kurmes.utilities.helper.PermissionHelper;
 import com.kurmez.iyesi.umay.Welcome;
 
 import java.io.IOException;
+import java.security.SecureRandom;
 import java.util.HashMap;
 import java.util.Map;
 
 /**
  * MainActivity
- * - GMS/Installer preflight (yalnızca log; UI uyarısı AppCheck başarısızsa)
- * - Firebase App Check warm-up (token zorunlu)
+ * - Preflight (GMS + Play Store + tek atış Play Integrity). Başarısızsa kullanıcıyı yönlendir.
+ * - Firebase App Check warm-up
  * - Auth (mevcut kullanıcı → refresh; yoksa anon giriş)
- * - QR/BT akışı (10 tık ile tarayıcı; uzun basınca cihaz QR)
- * - Kayıt/rol durumuna göre yönlendirme
- * - health_check callable opsiyonel (deploy edilmemişse akışı bozmaz)
+ * - QR/BT akışı
+ * - health_check callable opsiyonel
  */
 public class MainActivity extends AppCompatActivity {
 
     private static final String TAG = "MainActivity";
     private static final int MAX_CLICKS = 10;
     private static final int SCAN_QR_REQUEST_CODE = 1001;
+    private static final long CLOUD_PROJECT_NUMBER = 238523750447L; // Play Integrity
 
     private FirebaseFunctions functions;
     private FirebaseFirestore db;
@@ -81,6 +95,9 @@ public class MainActivity extends AppCompatActivity {
     private PrivateCom privateCom;
     private String response = null;
 
+    private volatile boolean hasAppCheckToken = false;
+    private volatile boolean hasAuthIdToken  = false;
+
     private final PermissionHelper.Callback permissionCallback = new PermissionHelper.Callback() {
         @Override public void onGranted() { Log.d(TAG, "Permissions granted"); }
         @Override public void onDenied()  { Log.w(TAG, "Some permissions denied"); }
@@ -95,23 +112,131 @@ public class MainActivity extends AppCompatActivity {
         // Firebase init (idempotent)
         try { FirebaseApp.initializeApp(this); } catch (Throwable ignore) { }
 
-        // --- PermissionHelper: registerForActivityResult STARTED olmadan önce ---
+        // PermissionHelper
         permissionHelper = new PermissionHelper();
         permissionHelper.setActivity(this);
         permissionHelper.setCallback(permissionCallback);
         permissionHelper.initialize();
 
-        // --- Preflight: SADECE LOG (UI uyarısı göstermiyoruz) ---
-        GmsIntegrityPreflight.Result pf = GmsIntegrityPreflight.run(this);
-        Log.i("AppCheckPF",
-                "installer=" + safeInstaller(getPackageName()) +
-                        " gms=" + pf.ok + " reason=" + pf.reason +
-                        " uid=" + android.os.Process.myUid());
+        // Preflight
+        preflightIntegrityOrPrompt();
+    }
 
-        // --- App Check warm-up (başarısızsa uyar ve çık) ---
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        handler.removeCallbacksAndMessages(null);
+    }
+
+    // =============================================================================================
+    // Preflight
+    // =============================================================================================
+
+    private void preflightIntegrityOrPrompt() {
+        if (!isGmsOk(this)) {
+            Log.e(TAG, "GMS not available. Opening Play Services page.");
+            showPlayEnvAdvice("Google Play Hizmetleri uygun değil");
+            return; // dialog butonları üzerinden finish
+        }
+
+        if (!isPlayStoreOk(this)) {
+            Log.e(TAG, "Play Store missing/disabled. Opening Play Store page.");
+            showPlayEnvAdvice("Google Play Store kurulu değil / devre dışı");
+            return; // dialog butonları üzerinden finish
+        }
+
+        requestIntegrityPreflight(this, new IntegrityPreflightCallback() {
+            @Override public void onOk() {
+                Log.i(TAG, "Integrity preflight OK. Proceeding to App Check warm-up...");
+                warmUpAppCheckThenInitUiAndAuth();
+            }
+
+            @Override public void onFail(Throwable err, Integer code) {
+                String reason;
+                if (err instanceof IntegrityServiceException) {
+                    int c = ((IntegrityServiceException) err).getErrorCode();
+                    reason = "IntegrityServiceException: " + c;
+                    Log.e(TAG, "Integrity preflight failed. code=" + c, err);
+
+                    if (c == IntegrityErrorCode.PLAY_STORE_NOT_FOUND) {
+                        showPlayEnvAdvice("Play Store bulunamadı / resmi sürüm değil (kod -2)");
+                    } else if (c == IntegrityErrorCode.NONCE_IS_NOT_BASE64) {
+                        showPlayEnvAdvice("Nonce formatı hatalı: web-safe base64 (no wrap, no padding) kullanın.");
+                    } else {
+                        showPlayEnvAdvice("Play Integrity başarısız: kod=" + c);
+                    }
+                } else {
+                    reason = err == null ? "unknown" : err.getMessage();
+                    Log.e(TAG, "Integrity preflight failed: " + reason, err);
+                    showPlayEnvAdvice("Play Integrity başarısız: " + reason);
+                }
+            }
+        });
+    }
+
+    private static boolean isGmsOk(Context ctx) {
+        int gms = GoogleApiAvailability.getInstance().isGooglePlayServicesAvailable(ctx);
+        return gms == ConnectionResult.SUCCESS;
+    }
+
+    private static boolean isPlayStoreOk(Context ctx) {
+        try {
+            PackageManager pm = ctx.getPackageManager();
+            ApplicationInfo ai = pm.getApplicationInfo("com.android.vending", 0);
+            boolean enabled = ai != null && ai.enabled;
+            pm.getPackageInfo("com.android.vending", 0);
+            return enabled;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /** Tek atış Play Integrity preflight (nonce: base64 web-safe, no-wrap, no-padding). */
+    private void requestIntegrityPreflight(Context ctx, IntegrityPreflightCallback cb) {
+        try {
+            IntegrityManager mgr = IntegrityManagerFactory.create(ctx);
+            String nonce = generateWebSafeBase64Nonce(32); // 32 bytes → 16–500 aralığında
+            IntegrityTokenRequest req = IntegrityTokenRequest.builder()
+                    .setNonce(nonce)
+                    .setCloudProjectNumber(CLOUD_PROJECT_NUMBER)
+                    .build();
+            mgr.requestIntegrityToken(req)
+                    .addOnSuccessListener(token -> cb.onOk())
+                    .addOnFailureListener(err -> {
+                        Integer code = (err instanceof IntegrityServiceException)
+                                ? ((IntegrityServiceException) err).getErrorCode()
+                                : null;
+                        cb.onFail(err, code);
+                    });
+        } catch (Throwable t) {
+            cb.onFail(t, null);
+        }
+    }
+
+    private interface IntegrityPreflightCallback {
+        void onOk();
+        void onFail(Throwable err, Integer code);
+    }
+
+    /** Web-safe Base64 (URL_SAFE | NO_WRAP | NO_PADDING). */
+    private static String generateWebSafeBase64Nonce(int numBytes) {
+        byte[] seed = new byte[numBytes];
+        new SecureRandom().nextBytes(seed);
+        // URL-safe, no wrap, no padding → Play Integrity'nin istediği format.
+        return Base64.encodeToString(seed,
+                Base64.URL_SAFE | Base64.NO_WRAP | Base64.NO_PADDING);
+    }
+
+    // =============================================================================================
+    // App Check + Auth + UI
+    // =============================================================================================
+
+    private void warmUpAppCheckThenInitUiAndAuth() {
         warmUpAppCheck()
                 .addOnSuccessListener(appCheckToken -> {
-                    Log.d(TAG, "AppCheck warm-up OK. exp=" + appCheckToken.getExpireTimeMillis());
+                    hasAppCheckToken = (appCheckToken != null && appCheckToken.getToken() != null);
+                    Log.d(TAG, "AppCheck warm-up OK? " + hasAppCheckToken +
+                            " exp=" + (appCheckToken != null ? appCheckToken.getExpireTimeMillis() : -1));
 
                     // Auth
                     mAuth = FirebaseAuth.getInstance();
@@ -123,36 +248,36 @@ public class MainActivity extends AppCompatActivity {
                                         user.getIdToken(true)
                                                 .addOnSuccessListener(tokenResult -> {
                                                     idToken = tokenResult.getToken();
-                                                    Log.d(TAG, "ID Token (refresh) var mı? " + (idToken != null));
-                                                    sendStartupHealthCheck(); // opsiyonel
+                                                    hasAuthIdToken = (idToken != null && !idToken.isEmpty());
+                                                    Log.d(TAG, "Auth ID token ready? " + hasAuthIdToken);
+                                                    maybeStartHealthCheck();
                                                 })
-                                                .addOnFailureListener(e ->
-                                                        Log.e(TAG, "getIdToken(refresh) failed: " + e)))
-                                .addOnFailureListener(e ->
-                                        Log.e(TAG, "user.reload failed: " + e));
+                                                .addOnFailureListener(e -> Log.e(TAG, "getIdToken(refresh) failed", e)))
+                                .addOnFailureListener(e -> Log.e(TAG, "user.reload failed", e));
                     } else {
                         mAuth.signInAnonymously()
                                 .addOnSuccessListener(res -> {
                                     FirebaseUser u = mAuth.getCurrentUser();
                                     if (u == null) {
                                         Log.e(TAG, "Anon sign-in success but user == null");
-                                        fatalNoTokenAndExit("Anon sign-in user null");
+                                        showPlayEnvAdvice("Anon sign-in user null");
                                         return;
                                     }
                                     u.getIdToken(true)
                                             .addOnSuccessListener(token -> {
                                                 idToken = token.getToken();
-                                                Log.d(TAG, "ID Token (anon) var mı? " + (idToken != null));
-                                                sendStartupHealthCheck(); // opsiyonel
+                                                hasAuthIdToken = (idToken != null && !idToken.isEmpty());
+                                                Log.d(TAG, "Auth ID token (anon) ready? " + hasAuthIdToken);
+                                                maybeStartHealthCheck();
                                             })
                                             .addOnFailureListener(e -> {
-                                                Log.e(TAG, "Anon getIdToken failed: " + e);
-                                                fatalNoTokenAndExit("ID token alınamadı (anon).");
+                                                Log.e(TAG, "Anon getIdToken failed", e);
+                                                showPlayEnvAdvice("ID token alınamadı (anon).");
                                             });
                                 })
                                 .addOnFailureListener(e -> {
-                                    Log.e(TAG, "Anon sign-in fail: " + e);
-                                    fatalNoTokenAndExit("Anon giriş başarısız.");
+                                    Log.e(TAG, "Anon sign-in fail", e);
+                                    showPlayEnvAdvice("Anon giriş başarısız.");
                                 });
                     }
 
@@ -191,37 +316,9 @@ public class MainActivity extends AppCompatActivity {
                     Log.d("AUTH", user == null ? "Kullanıcı yok" : ("Kullanıcı var: " + user.getUid()));
                 })
                 .addOnFailureListener(e -> {
-                    Log.e(TAG, "AppCheck warm-up FAILED: " + e);
-                    // YALNIZCA AppCheck başarısızsa kullanıcıyı yönlendir
+                    Log.e(TAG, "AppCheck warm-up FAILED", e);
                     showPlayEnvAdvice("AppCheck warm-up başarısız: " + (e.getMessage() == null ? "unknown" : e.getMessage()));
-                    fatalNoTokenAndExit("AppCheck token alınamadı.");
                 });
-    }
-
-    @Override
-    protected void onDestroy() {
-        super.onDestroy();
-        handler.removeCallbacksAndMessages(null);
-    }
-
-    // -------- Helpers --------
-
-    private String safeInstaller(String pkg) {
-        try { return getPackageManager().getInstallerPackageName(pkg); }
-        catch (Throwable t) { return "unknown"; }
-    }
-
-    private void showPlayEnvAdvice(String reason) {
-        new AlertDialog.Builder(this)
-                .setTitle("Güncelleme Önerisi")
-                .setMessage(
-                        "Google Play ortamında eksik/uyumsuzluk algılandı.\nNeden: " + reason +
-                                "\n\nLütfen Google Play Hizmetleri ve Play Store’u güncelleyin."
-                )
-                .setPositiveButton("Play Hizmetleri", (d, w) -> openPlayServices(this))
-                .setNegativeButton("Play Store", (d, w) -> openPlayStore(this))
-                .setNeutralButton("Bu Uygulama (Store)", (d, w) -> openThisAppInPlayStore(this))
-                .show();
     }
 
     public static Task<AppCheckToken> warmUpAppCheck() {
@@ -231,29 +328,29 @@ public class MainActivity extends AppCompatActivity {
                         : ac.getAppCheckToken(true));
     }
 
-    /**
-     * Opsiyonel health_check. CF’de "healthCheck" callable henüz yoksa akışı bozmaz.
-     */
+    private void maybeStartHealthCheck() {
+        Log.d(TAG, "maybeStartHealthCheck hasAppCheckToken=" + hasAppCheckToken +
+                " hasAuthIdToken=" + hasAuthIdToken);
+        if (!hasAppCheckToken || !hasAuthIdToken) return;
+        sendStartupHealthCheck();
+    }
+
     private void sendStartupHealthCheck() {
         if (functions == null) functions = FirebaseFunctions.getInstance();
-
-        if (idToken == null || idToken.isEmpty()) {
-            // Uygulama kuralın: token yoksa çalışmasın.
-            fatalNoTokenAndExit("ID token yok (health_check atlanıyor).");
-            return;
-        }
 
         Map<String, Object> payload = new HashMap<>();
         payload.put("kind", "health_check");
         payload.put("ts", System.currentTimeMillis());
         payload.put("note", "startup_warmup");
 
+        Log.d(TAG, "Calling healthCheck with hasAppCheckToken=" + hasAppCheckToken +
+                ", hasAuthIdToken=" + hasAuthIdToken + ", idTokenNull=" + (idToken == null));
+
         functions.getHttpsCallable("healthCheck")
                 .call(payload)
                 .addOnSuccessListener((HttpsCallableResult r) ->
                         Log.i(TAG, "health_check callable OK: " + r.getData()))
                 .addOnFailureListener(e -> {
-                    // NOT_FOUND: callable deploy edilmemiş → sadece bilgilendir
                     String msg = e.getMessage() == null ? "" : e.getMessage();
                     if (msg.contains("NOT_FOUND")) {
                         Log.w(TAG, "health_check callable NOT_FOUND (deploy edilmemiş olabilir) — akış devam.");
@@ -263,11 +360,29 @@ public class MainActivity extends AppCompatActivity {
                 });
     }
 
-    private void fatalNoTokenAndExit(String msg) {
-        Log.e(TAG, "FATAL: " + msg);
-        Toast.makeText(this, msg, Toast.LENGTH_LONG).show();
-        openThisAppInPlayStore(this); // kullanıcıya seçenek sun
-        finish();
+    // =============================================================================================
+    // Ortam & Market yardımcıları (dialog leak korumalı)
+    // =============================================================================================
+
+    private void safeFinishWithDelay() {
+        handler.postDelayed(() -> {
+            if (!isFinishing() && !isDestroyed()) finish();
+        }, 300);
+    }
+
+    private void openPlayServicesAndFinish() {
+        try { openPlayServices(this); } catch (Throwable ignore) { }
+        safeFinishWithDelay();
+    }
+
+    private void openPlayStoreAndFinish() {
+        try { openPlayStore(this); } catch (Throwable ignore) { }
+        safeFinishWithDelay();
+    }
+
+    private void openThisAppInPlayStoreAndFinish() {
+        try { openThisAppInPlayStore(this); } catch (Throwable ignore) { }
+        safeFinishWithDelay();
     }
 
     public static void openPlayServices(Context ctx) {
@@ -307,7 +422,25 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    // -------- QR / Registration / Navigation --------
+    private void showPlayEnvAdvice(String reason) {
+        if (isFinishing() || isDestroyed()) return;
+        new AlertDialog.Builder(this)
+                .setTitle("Güncelleme / Düzeltme Gerekli")
+                .setMessage(
+                        "Google Play ortamında eksik/uyumsuzluk algılandı.\n" +
+                                "Neden: " + reason +
+                                "\n\nLütfen Google Play Hizmetleri ve Play Store’u güncelleyin veya etkinleştirin."
+                )
+                .setPositiveButton("Play Hizmetleri", (d, w) -> openPlayServicesAndFinish())
+                .setNegativeButton("Play Store", (d, w) -> openPlayStoreAndFinish())
+                .setNeutralButton("Bu Uygulama (Store)", (d, w) -> openThisAppInPlayStoreAndFinish())
+                .setOnDismissListener(d -> safeFinishWithDelay())
+                .show();
+    }
+
+    // =============================================================================================
+    // QR / Registration / Navigation
+    // =============================================================================================
 
     private void openQRScannerForRegistration() {
         Intent intent = new Intent(this, QRScannerActivity.class);
@@ -412,14 +545,16 @@ public class MainActivity extends AppCompatActivity {
 
         ImageButton qrImageButton = new ImageButton(this);
         qrImageButton.setImageBitmap(qrBitmap);
-        qrImageButton.setBackgroundColor(getResources().getColor(android.R.color.transparent));
+        qrImageButton.setBackgroundColor(ContextCompat.getColor(this, android.R.color.transparent));
 
         builder.setView(qrImageButton);
         builder.setNegativeButton("Close", (dialog, which) -> dialog.dismiss());
         builder.show();
     }
 
-    // -------- Navigation helpers --------
+    // =============================================================================================
+    // Navigation helpers
+    // =============================================================================================
 
     private void navigateToWelcome() {
         startActivity(new Intent(this, Welcome.class));
