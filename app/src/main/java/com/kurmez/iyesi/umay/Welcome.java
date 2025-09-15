@@ -188,40 +188,7 @@ public class Welcome extends AppCompatActivity {
                     Toast.makeText(Welcome.this, "Veri alınamadı: " + t.getMessage(), Toast.LENGTH_LONG).show();
                 }
             });
-
-
-
         }, e -> android.util.Log.e("TOK", "token fail", e));
-
-
-/*
-        cf = new CFHelper(
-                    this,
-                    "PROJECT_ID",        // örn: iyesi-a651a
-                    "us-central1",       // bölge
-                    new CFHelper.Listener<Soul>() {
-                        @Override
-                        public void onPriorityPets(@NonNull List<Soul> pets) {
-                            // TODO: UI’ni güncelle
-                        }
-                        @Override
-                        public void onCallFailed(@NonNull String apiName, @NonNull Throwable error) {
-                            // TODO: hata göster
-                        }
-                        @Override
-                        public void onRoleRefreshed(@Nullable String role) {
-                            // opsiyonel
-                        }
-                    }
-            );
-            // opsiyonel ama önerilir: cihaz kimliğini header’a ekleyin
-            //cf.setDeviceId(deviceIdString);
-
-            // Rolü arka planda ve token’lar hazır olunca çek
-            // cf.refreshRoleWhenReady();
-
-            // Liste verilerini çek
-            cf.fetchPriorityPets();*/
     }
     private void setupUIListeners() {
         imgWelcome.setOnClickListener(v -> {

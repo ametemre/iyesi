@@ -1,6 +1,10 @@
 package com.kurmez.iyesi.kurmes.social.content;
 
+import static com.kurmez.iyesi.kayra.Classes.data.Soul.parseSouls;
+
 import android.content.Context;
+import android.graphics.Typeface;
+import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.Gravity;
@@ -8,77 +12,84 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.CheckBox;
 import android.widget.FrameLayout;
+import android.widget.ImageView;
+import android.widget.ListView;
+import android.widget.PopupMenu;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import androidx.annotation.MainThread;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.recyclerview.widget.LinearLayoutManager;
-import androidx.recyclerview.widget.RecyclerView;
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
 import com.kurmez.iyesi.BuildConfig;
 import com.kurmez.iyesi.kayra.Classes.data.Soul;
+import com.kurmez.iyesi.kurmes.utilities.adapters.CompanionAdapter;
 import com.kurmez.iyesi.kurmes.utilities.helper.net.CFClient;
 
-import org.json.JSONArray;
-import org.json.JSONException;
 import org.json.JSONObject;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Objects;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
+/**
+ * Explore — ExplorePrivate görünümündeki gibi üstte kullanıcı kartı + yol satırı,
+ * altta Welcome/CompanionAdapter kart listesi.
+ * Veri: GET /listSoulsByFields, health="critical" (sabit) + needsCare (opsiyonel).
+ */
 public class Explore extends AppCompatActivity {
 
     private static final String TAG = "Explore";
 
-    // ---- UI ----
-    private SwipeRefreshLayout swipeRefresh;
-    private RecyclerView recycler;
-    private SoulsAdapter adapter;
-    private ProgressBar progress;
-    private TextView emptyView;
+    // ---------- Header (user card) ----------
+    private FrameLayout headerCard;
+    private ImageView ivAvatar;
+    private TextView tvUserName;
+    private ImageView btnOverflow;
+
+    // ---------- Path row ----------
+    private FrameLayout pathRow;
+    private TextView tvPath;
+    private ImageView ivChevron;
+
+    // ---------- Filter ----------
     private CheckBox cbNeedsCare;
 
-    // ---- Data / State ----
-    private final List<Soul> data = new ArrayList<>();
-    private String nextPageToken = null;
-    private boolean loading = false;
-    private boolean reachedEnd = false;
+    // ---------- List ----------
+    private SwipeRefreshLayout swipeRefresh;
+    private ListView listView;
+    private ProgressBar progress;
+    private TextView emptyView;
 
-    // ---- Infra ----
+    // ---------- Data ----------
+    private final List<Soul> companions = new ArrayList<>();
+    private CompanionAdapter adapter;
+
+    // ---------- Infra ----------
+    private CFClient cf;
     private ExecutorService io;
-    private CFClient cf; // OkHttp tabanlı istemci
 
-    // ---- URL yardımcıları ----
-    private static String trimRightSlash(String s) {
-        if (s == null) return "";
-        return s.endsWith("/") ? s.substring(0, s.length() - 1) : s;
-    }
-    private static String trimLeftSlash(String s) {
-        if (s == null) return "";
-        return s.startsWith("/") ? s.substring(1) : s;
-    }
-    private static String joinUrl(String base, String path) {
-        String b = trimRightSlash(base);
-        String p = trimLeftSlash(path);
-        return b + "/" + p;
-    }
+    // Layout constants
+    private static final int HEADER_TOP = 8;       // dp
+    private static final int HEADER_RADIUS = 16;   // dp
+    private static final int AVATAR_SIZE = 40;     // dp
+    private static final int HEADER_H = 64;        // ~dp (padding + avatar yüksekliği)
+    private static final int PATH_TOP_MARGIN = 68; // dp (header altı)
+    private static final int PATH_ROW_H = 36;      // ~dp
+    private static final int CB_TOP_MARGIN = 108;  // dp (header+path altı)
+    private static final int LIST_TOP_MARGIN = 156;// dp (header+path+checkbox altı)
 
+    // =============================================================================================
+    // Lifecycle
+    // =============================================================================================
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         io = Executors.newFixedThreadPool(2);
 
-        // ---- Kök layoutu programatik kuruyoruz ----
         FrameLayout root = new FrameLayout(this);
 
         swipeRefresh = new SwipeRefreshLayout(this);
@@ -89,77 +100,138 @@ public class Explore extends AppCompatActivity {
         swipeRefresh.addView(content, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
-        recycler = new RecyclerView(this);
-        recycler.setLayoutManager(new LinearLayoutManager(this));
-        adapter = new SoulsAdapter(data);
-        recycler.setAdapter(adapter);
+        // -------- User Header (ExplorePrivate stili) --------
+        headerCard = new FrameLayout(this);
+        headerCard.setBackground(roundedBg(0xFFFFFFFF, HEADER_RADIUS));
+        headerCard.setPadding(dp(this, 12), dp(this, 12), dp(this, 12), dp(this, 12));
+        headerCard.setElevation(dp(this, 2));
 
+        FrameLayout.LayoutParams lpHeader = new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        lpHeader.topMargin = dp(this, HEADER_TOP);
+        lpHeader.leftMargin = dp(this, 12);
+        lpHeader.rightMargin = dp(this, 12);
+        content.addView(headerCard, lpHeader);
+
+        ivAvatar = new ImageView(this);
+        ivAvatar.setId(View.generateViewId());
+        ivAvatar.setImageResource(android.R.drawable.sym_def_app_icon); // placeholder
+        FrameLayout.LayoutParams lpAvatar = new FrameLayout.LayoutParams(
+                dp(this, AVATAR_SIZE), dp(this, AVATAR_SIZE));
+        lpAvatar.gravity = Gravity.START | Gravity.CENTER_VERTICAL;
+        headerCard.addView(ivAvatar, lpAvatar);
+
+        tvUserName = new TextView(this);
+        tvUserName.setText("KullanıcıAdı");
+        tvUserName.setTextSize(18);
+        tvUserName.setTypeface(Typeface.DEFAULT_BOLD);
+        FrameLayout.LayoutParams lpName = new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        lpName.leftMargin = dp(this, AVATAR_SIZE + 12);
+        lpName.gravity = Gravity.CENTER_VERTICAL | Gravity.START;
+        headerCard.addView(tvUserName, lpName);
+
+        btnOverflow = new ImageView(this);
+        btnOverflow.setImageResource(android.R.drawable.ic_menu_more);
+        FrameLayout.LayoutParams lpOv = new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        lpOv.gravity = Gravity.END | Gravity.CENTER_VERTICAL;
+        headerCard.addView(btnOverflow, lpOv);
+
+        btnOverflow.setOnClickListener(v -> {
+            PopupMenu pm = new PopupMenu(this, btnOverflow);
+            pm.getMenu().add("Profil");
+            pm.getMenu().add("Ayarlar");
+            pm.getMenu().add("Çıkış");
+            pm.setOnMenuItemClickListener(mi -> {
+                showToast(mi.getTitle().toString());
+                return true;
+            });
+            pm.show();
+        });
+
+        // -------- Path Row ("Yol seçilmedi") --------
+        pathRow = new FrameLayout(this);
+        FrameLayout.LayoutParams lpPath = new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        lpPath.topMargin = dp(this, PATH_TOP_MARGIN); // header altına yerleştir
+        lpPath.leftMargin = dp(this, 12);
+        lpPath.rightMargin = dp(this, 12);
+        content.addView(pathRow, lpPath);
+
+        tvPath = new TextView(this);
+        tvPath.setText("Yol seçilmedi");
+        tvPath.setTextSize(14);
+        tvPath.setPadding(0, dp(this, 8), 0, dp(this, 8));
+        FrameLayout.LayoutParams lpPathText = new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        lpPathText.gravity = Gravity.START | Gravity.CENTER_VERTICAL;
+        pathRow.addView(tvPath, lpPathText);
+
+        ivChevron = new ImageView(this);
+        ivChevron.setImageResource(android.R.drawable.arrow_down_float);
+        FrameLayout.LayoutParams lpCh = new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        lpCh.gravity = Gravity.END | Gravity.CENTER_VERTICAL;
+        pathRow.addView(ivChevron, lpCh);
+
+        View.OnClickListener choosePath = v -> showToast("Yol seçimi açılacak");
+        tvPath.setOnClickListener(choosePath);
+        ivChevron.setOnClickListener(choosePath);
+
+        // -------- needsCare filtresi (header + path altına) --------
+        cbNeedsCare = new CheckBox(this);
+        cbNeedsCare.setText("Sadece bakım ihtiyacı olanlar (needsCare)");
+        cbNeedsCare.setChecked(false);
+        FrameLayout.LayoutParams lpCb = new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        lpCb.topMargin = dp(this, CB_TOP_MARGIN);
+        lpCb.leftMargin = dp(this, 12);
+        lpCb.rightMargin = dp(this, 12);
+        content.addView(cbNeedsCare, lpCb);
+
+        // -------- ListView + CompanionAdapter (Welcome görünümü) --------
+        listView = new ListView(this);
+        adapter = new CompanionAdapter(this, companions);
+        listView.setAdapter(adapter);
+
+        FrameLayout.LayoutParams lpList = new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
+        lpList.topMargin = dp(this, LIST_TOP_MARGIN);
+        content.addView(listView, lpList);
+
+        // Boş görünüm
         emptyView = new TextView(this);
         emptyView.setText("Kayıt bulunamadı.");
-        emptyView.setVisibility(View.GONE);
         emptyView.setGravity(Gravity.CENTER);
+        emptyView.setVisibility(View.GONE);
+        content.addView(emptyView, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
+        // Progress
         progress = new ProgressBar(this, null, android.R.attr.progressBarStyleLarge);
         FrameLayout.LayoutParams lpProg = new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         lpProg.gravity = Gravity.CENTER;
-
-        cbNeedsCare = new CheckBox(this);
-        cbNeedsCare.setText("Bakım ihtiyacı olanlar (needsCare)");
-        cbNeedsCare.setChecked(false);
-        FrameLayout.LayoutParams lpCb = new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        lpCb.topMargin = dp(this, 8);
-        lpCb.leftMargin = dp(this, 12);
-        lpCb.rightMargin = dp(this, 12);
-
-        FrameLayout.LayoutParams lpList = new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
-        lpList.topMargin = dp(this, 48);
-
-        content.addView(recycler, lpList);
-        content.addView(emptyView, new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-        content.addView(cbNeedsCare, lpCb);
         root.addView(progress, lpProg);
 
         setContentView(root);
 
-        // Swipe refresh
-        swipeRefresh.setOnRefreshListener(() -> refresh(true));
-        // Filtre değişince yeniden yükle
-        cbNeedsCare.setOnCheckedChangeListener((buttonView, isChecked) -> refresh(true));
-
-        // Sonsuz kaydırma
-        recycler.addOnScrollListener(new RecyclerView.OnScrollListener() {
-            @Override public void onScrolled(@NonNull RecyclerView rv, int dx, int dy) {
-                if (dy <= 0) return;
-                if (loading || reachedEnd) return;
-
-                LinearLayoutManager lm = (LinearLayoutManager) rv.getLayoutManager();
-                if (lm == null) return;
-
-                int visible = lm.getChildCount();
-                int total = lm.getItemCount();
-                int first = lm.findFirstVisibleItemPosition();
-
-                if (first + visible >= total - 4) {
-                    fetchSouls(false);
-                }
-            }
-        });
+        // Etkileşimler
+        //swipeRefresh.setOnRefreshListener(() -> refresh(true));
+        cbNeedsCare.setOnCheckedChangeListener((b, c) -> refresh(true));
     }
 
     @Override
     protected void onResume() {
         super.onResume();
+        // Base URL tam kök olmalı: https://us-central1-<proj>.cloudfunctions.net
+        this.cf = new CFClient(BuildConfig.CF_BASE_URL);
+        Log.i(TAG, "CF base=" + BuildConfig.CF_BASE_URL + " (GET listSoulsByFields, health=critical)");
 
-        // CFClient (interceptor'lar CFClient içinde zaten setli)
-        this.cf = new CFClient();
+        // İstersen gerçek kullanıcıyı burada bağla
+        bindUser("KullanıcıAdı", null);
 
-        Log.i(TAG, "CF base=" + BuildConfig.CF_BASE_URL + " path=" + BuildConfig.CF_PATH_SOULS_SEARCH);
-
-        // İlk yükleme
         refresh(false);
     }
 
@@ -167,26 +239,89 @@ public class Explore extends AppCompatActivity {
     protected void onDestroy() {
         super.onDestroy();
         if (io != null) io.shutdownNow();
-        if (recycler != null) recycler.setAdapter(null);
+        if (listView != null) listView.setAdapter(null);
     }
 
-    // ---- Helpers ----
-
+    // =============================================================================================
+    // Data flow
+    // =============================================================================================
     private void refresh(boolean fromUser) {
         if (fromUser) showToast("Yenileniyor…");
-        nextPageToken = null;
-        reachedEnd = false;
-        data.clear();
+        companions.clear();
         adapter.notifyDataSetChanged();
-        fetchSouls(true);
+        fetchSouls();
+    }
+
+    /** Tek kanal: GET /listSoulsByFields — health="critical" sabit, needsCare opsiyonel. */
+    private void fetchSouls() {
+        setLoading(true);
+
+        final boolean needsCare = cbNeedsCare != null && cbNeedsCare.isChecked();
+        final CFClient.WhereBuilder wb = new CFClient.WhereBuilder().eq("health", "critical");
+        if (needsCare) wb.eq("needsCare", "true");
+
+        ensureIo();
+        io.execute(() -> cf.listSoulsByFields(wb, 20, new CFClient.JsonCallback() {
+            @Override public void onSuccess(@NonNull JSONObject json) {
+                try {
+                    List<Soul> parsed = parseSouls(json);
+                    if (parsed == null) parsed = java.util.Collections.emptyList();
+
+                    final List<Soul> finalParsed = parsed;
+                    runOnUiThread(() -> {
+                        companions.clear();
+                        companions.addAll(finalParsed);
+                        adapter.notifyDataSetChanged();
+                        setLoading(false);
+                        renderEmptyState();
+                    });
+                } catch (Throwable e) {
+                    Log.e(TAG, "parse error", e);
+                    showToast("Veri çözümlenirken hata.");
+                    setLoading(false);
+                    renderEmptyState();
+                }
+            }
+
+            @Override public void onError(@NonNull Throwable t) {
+                Log.e(TAG, "listSoulsByFields", t);
+                showToast("Veri alınamadı: " + t.getMessage());
+                setLoading(false);
+                renderEmptyState();
+            }
+        }));
+    }
+
+    // =============================================================================================
+    // UI helpers
+    // =============================================================================================
+    private void bindUser(String name, android.graphics.Bitmap avatarBmp) {
+        if (name != null && !name.isEmpty()) tvUserName.setText(name);
+        if (avatarBmp != null) ivAvatar.setImageBitmap(avatarBmp);
+        // Avatarı daire yapmak istersen:
+        // ivAvatar.setBackground(roundedBg(0xFFECECEC, AVATAR_SIZE));
+        // ivAvatar.setClipToOutline(true);
     }
 
     private void setLoading(boolean state) {
-        loading = state;
         runOnUiThread(() -> {
-            progress.setVisibility(state && data.isEmpty() ? View.VISIBLE : View.GONE);
-            if (!state) swipeRefresh.setRefreshing(false);
+            if (state && companions.isEmpty()) {
+                progress.setVisibility(View.VISIBLE);
+            } else {
+                progress.setVisibility(View.GONE);
+                swipeRefresh.setRefreshing(false);
+            }
         });
+    }
+
+    private void renderEmptyState() {
+        boolean empty = companions.isEmpty();
+        emptyView.setVisibility(empty ? View.VISIBLE : View.GONE);
+        listView.setVisibility(empty ? View.GONE : View.VISIBLE);
+    }
+
+    private void showToast(String s) {
+        runOnUiThread(() -> Toast.makeText(this, s, Toast.LENGTH_SHORT).show());
     }
 
     private static int dp(Context c, int d) {
@@ -194,266 +329,15 @@ public class Explore extends AppCompatActivity {
         return Math.round(d * den);
     }
 
-    /** Sunucudan souls çeker. */
-// ... [previous code remains the same]
-
-    /** Sunucudan souls çeker. */
-    private void fetchSouls(boolean isFirstPage) {
-        if (loading) return;
-        setLoading(true);
-
-        final boolean needsCare = cbNeedsCare != null && cbNeedsCare.isChecked();
-        final String pageToken = nextPageToken;
-
-        io.execute(() -> {
-            try {
-                // Build query parameters
-                String whereClause = "health:eq:critical";
-                if (needsCare) {
-                    whereClause += ",needsCare:eq:true";
-                }
-
-                JSONObject body = new JSONObject();
-                body.put("where", whereClause);
-                body.put("limit", 20);
-                if (pageToken != null && !pageToken.isEmpty()) {
-                    body.put("pageToken", pageToken);
-                }
-
-                String url = joinUrl(BuildConfig.CF_BASE_URL, BuildConfig.CF_PATH_SOULS_SEARCH);
-                Log.d(TAG, "fetchSouls POST " + url + " body=" + body);
-                JSONObject resJson = cf.postJson(url, body);
-                Log.d(TAG, "fetchSouls response = " + resJson);
-                handleResponse(resJson);
-
-            } catch (IOException ioEx) {
-                Log.e(TAG, "fetchSouls failed IO: " + ioEx.getMessage(), ioEx);
-                showHttpErrorToast(ioEx);
-            } catch (JSONException jx) {
-                Log.e(TAG, "fetchSouls JSON parse error: " + jx.getMessage(), jx);
-                showToast("Veri çözümlenirken hata oluştu.");
-            } catch (Throwable t) {
-                Log.e(TAG, "fetchSouls unexpected: " + t.getMessage(), t);
-                showToast("Beklenmeyen bir hata oluştu.");
-            } finally {
-                setLoading(false);
-                renderEmptyState();
-            }
-        });
+    private GradientDrawable roundedBg(int color, float radiusDp) {
+        GradientDrawable d = new GradientDrawable();
+        d.setColor(color);
+        float r = dp(this, (int) radiusDp);
+        d.setCornerRadii(new float[]{r, r, r, r, r, r, r, r});
+        return d;
     }
 
-// ... [rest of the code remains the same]
-
-    @MainThread
-    private void renderEmptyState() {
-        runOnUiThread(() -> {
-            boolean empty = data.isEmpty();
-            emptyView.setVisibility(empty ? View.VISIBLE : View.GONE);
-            recycler.setVisibility(empty ? View.GONE : View.VISIBLE);
-        });
-    }
-
-    private void handleResponse(JSONObject res) throws JSONException {
-        if (res == null) {
-            showToast("Boş yanıt alındı.");
-            return;
-        }
-
-        boolean success = res.optBoolean("success", true);
-        if (!success) {
-            String error = res.optString("error", "unknown");
-            String field = res.optString("field", "");
-            Log.e(TAG, "API error: " + error + (field.isEmpty() ? "" : (" field=" + field)));
-            if (Objects.equals(error, "invalid-field") && !field.isEmpty()) {
-                showToast("Geçersiz alan: " + field + " — şemayı kontrol edin.");
-            } else {
-                showToast("Sunucu hatası: " + error);
-            }
-            return;
-        }
-
-        JSONArray arr = res.optJSONArray("items");
-        String npt = res.optString("nextPageToken", null);
-
-        if (arr == null || arr.length() == 0) {
-            nextPageToken = null;
-            reachedEnd = true;
-            runOnUiThread(() -> adapter.notifyDataSetChanged());
-            return;
-        }
-
-        List<Soul> fresh = new ArrayList<>(arr.length());
-        for (int i = 0; i < arr.length(); i++) {
-            JSONObject o = arr.optJSONObject(i);
-            if (o == null) continue;
-
-            Soul s = tryParseSoul(o);
-            if (s != null) fresh.add(s);
-        }
-
-        nextPageToken = (npt == null || npt.isEmpty()) ? null : npt;
-        reachedEnd = (nextPageToken == null);
-
-        runOnUiThread(() -> {
-            int start = data.size();
-            data.addAll(fresh);
-            adapter.notifyItemRangeInserted(start, fresh.size());
-        });
-    }
-
-    private Soul tryParseSoul(JSONObject o) {
-        try {
-            try { return Soul.fromJson(o); } catch (Throwable ignore) {}
-
-            Soul s = new Soul();
-            if (has(o, "id")) setField(s, "id", o.optString("id", null));
-            if (has(o, "name")) setField(s, "name", o.optString("name", null));
-            if (has(o, "species")) setField(s, "species", o.optString("species", null));
-            if (has(o, "imageUrl")) setField(s, "imageUrl", o.optString("imageUrl", null));
-            if (has(o, "needsCare")) setBooleanField(s, "needsCare", o.optBoolean("needsCare", false));
-            // Health bilgisini de al
-            if (has(o, "health")) setField(s, "health", o.optString("health", null));
-            return s;
-
-        } catch (Throwable t) {
-            Log.w(TAG, "Soul parse skipped: " + t.getMessage());
-            return null;
-        }
-    }
-
-    private boolean has(JSONObject o, String k) {
-        return o.has(k) && !o.isNull(k);
-    }
-
-    private void setField(Soul s, String field, String val) {
-        try {
-            java.lang.reflect.Field f = Soul.class.getDeclaredField(field);
-            f.setAccessible(true);
-            f.set(s, val);
-        } catch (Throwable ignored) {}
-    }
-
-    private void setBooleanField(Soul s, String field, boolean val) {
-        try {
-            java.lang.reflect.Field f = Soul.class.getDeclaredField(field);
-            f.setAccessible(true);
-            f.setBoolean(s, val);
-        } catch (Throwable ignored) {}
-    }
-
-    private void showHttpErrorToast(IOException ioEx) {
-        String msg = ioEx.getMessage();
-        Log.e(TAG, "HTTP error: " + msg);
-        String human = "Ağ hatası";
-        int code = -1;
-        if (msg != null) {
-            Matcher m = Pattern.compile("CF HTTP (\\d+)").matcher(msg);
-            if (m.find()) {
-                try { code = Integer.parseInt(m.group(1)); } catch (NumberFormatException ignored) {}
-            }
-        }
-        if (code == 404) {
-            showToast("Resource not found");
-            return;
-        }
-
-        try {
-            if (msg != null && msg.contains("{") && msg.contains("}")) {
-                int i = msg.indexOf('{');
-                int j = msg.lastIndexOf('}');
-                if (i >= 0 && j > i) {
-                    String jsonStr = msg.substring(i, j + 1);
-                    JSONObject err = new JSONObject(jsonStr);
-                    String error = err.optString("error", "");
-                    String field = err.optString("field", "");
-                    if ("invalid-field".equals(error)) {
-                        human = "Geçersiz alan: " + (field.isEmpty() ? "(bilinmiyor)" : field);
-                    } else if (!error.isEmpty()) {
-                        human = "Sunucu hatası: " + error;
-                    }
-                }
-            }
-        } catch (Throwable ignored) { }
-
-        showToast(human);
-    }
-
-    private void showToast(String s) {
-        runOnUiThread(() -> Toast.makeText(this, s, Toast.LENGTH_SHORT).show());
-    }
-
-    // ---------------- RecyclerView Adapter (basit) ----------------
-
-    private static class SoulsAdapter extends RecyclerView.Adapter<SoulVH> {
-        private final List<Soul> items;
-        SoulsAdapter(List<Soul> items) { this.items = items; }
-
-        @NonNull
-        @Override
-        public SoulVH onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
-            Context ctx = parent.getContext();
-            FrameLayout row = new FrameLayout(ctx);
-
-            TextView tv = new TextView(ctx);
-            tv.setId(View.generateViewId());
-            tv.setPadding(dp(ctx, 12), dp(ctx, 10), dp(ctx, 12), dp(ctx, 10));
-
-            row.addView(tv, new FrameLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.WRAP_CONTENT
-            ));
-            return new SoulVH(row, tv);
-        }
-
-        @Override
-        public void onBindViewHolder(@NonNull SoulVH holder, int position) {
-            Soul s = items.get(position);
-            String title = safe(getField(s, "name"), "(İsimsiz)");
-            String species = safe(getField(s, "species"), "");
-            boolean needsCare = getBooleanField(s, "needsCare");
-            String health = safe(getField(s, "health"), "");
-            String line = title
-                    + (species.isEmpty() ? "" : " · " + species)
-                    + (needsCare ? " · ❤️ needsCare" : "")
-                    + (health.equals("critical") ? " · ⚠️ Critical" : "");
-            holder.text.setText(line);
-        }
-
-        @Override
-        public int getItemCount() { return items.size(); }
-
-        private static String safe(String v, String def) { return v == null ? def : v; }
-
-        private static String getField(Soul s, String field) {
-            try {
-                java.lang.reflect.Field f = Soul.class.getDeclaredField(field);
-                f.setAccessible(true);
-                Object v = f.get(s);
-                return v == null ? null : String.valueOf(v);
-            } catch (Throwable ignored) { }
-            return null;
-        }
-
-        private static boolean getBooleanField(Soul s, String field) {
-            try {
-                java.lang.reflect.Field f = Soul.class.getDeclaredField(field);
-                f.setAccessible(true);
-                return f.getBoolean(s);
-            } catch (Throwable ignored) { }
-            return false;
-        }
-
-        private static int dp(Context c, int d) {
-            float den = c.getResources().getDisplayMetrics().density;
-            return Math.round(d * den);
-        }
-    }
-
-    private static class SoulVH extends RecyclerView.ViewHolder {
-        final TextView text;
-        SoulVH(@NonNull View itemView, @NonNull TextView text) {
-            super(itemView);
-            this.text = text;
-        }
+    private void ensureIo() {
+        if (io == null || io.isShutdown()) io = Executors.newFixedThreadPool(2);
     }
 }

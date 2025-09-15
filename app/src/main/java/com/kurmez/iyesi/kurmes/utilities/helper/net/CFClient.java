@@ -370,13 +370,6 @@ public class CFClient {
         }
     }
 
-    private static String urlEncode(String s) {
-        try {
-            return java.net.URLEncoder.encode(s, StandardCharsets.UTF_8.name());
-        } catch (Exception e) {
-            return s;
-        }
-    }
 
     // ----------------------------- WhereBuilder (opsiyonel) -----------------------------
     // Welcome.java gibi sınıflardaki basit filtreleme kullanımını derletecek minimal sürüm.
@@ -414,7 +407,7 @@ public class CFClient {
             final long t0 = System.currentTimeMillis();
             try {
                 final String whereStr = where.build();
-                String q = "where=" + urlEncode(whereStr) + "&limit=" + limit + "&col=Souls";
+                final String q = whereStr + "&limit=" + limit + "&col=Souls";
                 final String url = "/listSoulsByFields?" + q;
 
                 Log.d(TAG, "WB=" + whereStr);
