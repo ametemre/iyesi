@@ -11,6 +11,7 @@ import android.view.View;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.RequiresPermission;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
@@ -30,6 +31,7 @@ import com.kurmez.iyesi.kurmes.social.Profile;
 import com.kurmez.iyesi.kurmes.utilities.Helpers;
 import com.kurmez.iyesi.kurmes.utilities.adapters.ContentAdapter;
 import com.kurmez.iyesi.kurmes.utilities.helper.CFHelper;
+import com.kurmez.iyesi.umay.sahiplendirme.Companion;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -131,7 +133,13 @@ public class ExplorePrivate extends AppCompatActivity {
         }
 
         attachItemTouchHandlers();
-        resolveRoleAndFetch();
+        try {
+            Helpers helper = new Helpers();
+            helper.resolveRoleAndFetch(this,this);
+            fetchAllFromRTDB();
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
 
         Log.i(L, "onCreate() → ÇIKIŞ (" + (System.currentTimeMillis() - t0) + " ms)");
     }
@@ -162,55 +170,8 @@ public class ExplorePrivate extends AppCompatActivity {
     private String safe(String s)            { return s == null ? "-" : s; }
 
     /* ======================= ROLE / ACCESS FLOW ======================= */
-    private void resolveRoleAndFetch() {
-        Log.i(L, "resolveRoleAndFetch() → GİRİŞ");
-        new Thread(() -> cf.refreshRole(role -> {
-            Log.d(L, "refreshRole() → ÇIKIŞ role=" + role);
-            if (role != null) {
-                runOnUiThread(() -> handleRole(role));
-            } else {
-                Log.w(L, "Role bulunamadı → finish()");
-                runOnUiThread(() -> {
-                    Toast.makeText(this, "Rol bulunamadı", Toast.LENGTH_SHORT).show();
-                    finish();
-                });
-            }
-        })).start();
-    }
 
-    private void handleRole(String role) {
-        long t0 = System.currentTimeMillis();
-        Log.i(L, "handleRole() → GİRİŞ roleRaw=" + role);
 
-        if (role == null || !isAllowed(role)) {
-            Log.w(L, "Erişim reddedildi: " + role);
-            Toast.makeText(this, "Bu sayfaya erişim yetkiniz yok: " + role, Toast.LENGTH_LONG).show();
-            finish();
-            return;
-        }
-        userRole = normalizeRole(role);
-        Log.d(L, "role normalized=" + userRole + " → fetchAllFromRTDB()");
-        fetchAllFromRTDB();
-
-        Log.i(L, "handleRole() → ÇIKIŞ (" + (System.currentTimeMillis() - t0) + " ms)");
-    }
-
-    private boolean isAllowed(String roleRaw) {
-        if (roleRaw == null) return false;
-        for (String r : ALLOWED_ROLES) {
-            if (r.equalsIgnoreCase(roleRaw)) return true;
-        }
-        return false;
-    }
-
-    private String normalizeRole(String r) {
-        if (r == null) return "İye";
-        if (r.equalsIgnoreCase("Tengri")) return "Tengri";
-        if (r.equalsIgnoreCase("Ülgen") || r.equalsIgnoreCase("Ulgen")) return "Ülgen";
-        if (r.equalsIgnoreCase("Körmös") || r.equalsIgnoreCase("Körmes") || r.equalsIgnoreCase("Kormos")) return "Körmös";
-        if (r.equalsIgnoreCase("Ağaç") || r.equalsIgnoreCase("Agac")) return "Ağaç";
-        return "İye";
-    }
 
     /* ============================ RTDB FETCH ========================== */
     /**
@@ -553,6 +514,7 @@ public class ExplorePrivate extends AppCompatActivity {
         return "[first=" + head + ", last=" + (n > 1 ? tail : head) + ", n=" + n + "]";
     }
 
+    @RequiresPermission(allOf = {Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION})
     private void requestLastLocationMaybeFetch() {
         Log.d(L, "requestLastLocationMaybeFetch()");
         fused.getLastLocation().addOnSuccessListener(l -> {
@@ -564,6 +526,7 @@ public class ExplorePrivate extends AppCompatActivity {
     }
 
     /* ================== PERMISSION RESULT HANDLING =================== */
+    @RequiresPermission(allOf = {Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION})
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions,
                                            @NonNull int[] grantResults) {

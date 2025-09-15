@@ -165,7 +165,7 @@ public class MarkerDetailsBottomSheet extends BottomSheetDialogFragment {
 
             cgActions.setVisibility(added > 0 ? View.VISIBLE : View.GONE);
         }
-        View chipType = root.findViewById(R.id.chip_type);
+        View chipType = root.findViewById(R.id.chip_type);/*
         if (chipType != null) {
             chipType.setOnLongClickListener(v -> {
                 // 1) Rol kontrolü
@@ -185,7 +185,7 @@ public class MarkerDetailsBottomSheet extends BottomSheetDialogFragment {
                 );
                 return true; // uzun basma tüketildi
             });
-        }
+        }*/
     }
 
     // ---------- Yardımcılar ----------

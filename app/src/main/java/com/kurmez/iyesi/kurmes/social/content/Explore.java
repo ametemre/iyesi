@@ -1,11 +1,14 @@
+// app/src/main/java/com/kurmez/iyesi/kurmes/social/content/Explore.java
 package com.kurmez.iyesi.kurmes.social.content;
 
 import static com.kurmez.iyesi.kayra.Classes.data.Soul.parseSouls;
 
 import android.content.Context;
+import android.content.Intent;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
+import android.provider.ContactsContract;
 import android.util.Log;
 import android.view.Gravity;
 import android.view.View;
@@ -23,216 +26,365 @@ import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseUser;
+import com.google.firebase.firestore.FirebaseFirestore;
+import com.google.firebase.functions.FirebaseFunctions;
+import com.google.firebase.functions.HttpsCallableResult;
 import com.kurmez.iyesi.BuildConfig;
+import com.kurmez.iyesi.R;
 import com.kurmez.iyesi.kayra.Classes.data.Soul;
+import com.kurmez.iyesi.kurmes.utilities.Helpers;
 import com.kurmez.iyesi.kurmes.utilities.adapters.CompanionAdapter;
+import com.kurmez.iyesi.kurmes.utilities.adapters.ContentAdapter;
+import com.kurmez.iyesi.kurmes.utilities.adapters.SoulAdapter;
 import com.kurmez.iyesi.kurmes.utilities.helper.net.CFClient;
+import com.kurmez.iyesi.umay.Welcome;
 
 import org.json.JSONObject;
 
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-/**
- * Explore — ExplorePrivate görünümündeki gibi üstte kullanıcı kartı + yol satırı,
- * altta Welcome/CompanionAdapter kart listesi.
- * Veri: GET /listSoulsByFields, health="critical" (sabit) + needsCare (opsiyonel).
- */
+import okhttp3.Request;
+
 public class Explore extends AppCompatActivity {
+    private static final String TAG = "ExploreActivity";
 
-    private static final String TAG = "Explore";
+    // Erişim yetkili roller
+    List<String> allowedRoles = Arrays.asList("İye", "Körmes", "Ülgen", "Tengri", "Ağaç");
 
-    // ---------- Header (user card) ----------
-    private FrameLayout headerCard;
-    private ImageView ivAvatar;
-    private TextView tvUserName;
-    private ImageView btnOverflow;
+    // Firebase
+    private FirebaseAuth auth;
+    private FirebaseUser user;
+    private FirebaseFunctions functions;
+    private FirebaseFirestore firestore;
 
-    // ---------- Path row ----------
-    private FrameLayout pathRow;
-    private TextView tvPath;
-    private ImageView ivChevron;
+    // Kullanıcı rolü
+    private String userRole;
 
-    // ---------- Filter ----------
-    private CheckBox cbNeedsCare;
+    // Kritik mod bayrağı
+    private boolean criticalMode = false;
 
-    // ---------- List ----------
+    // UI referansları
+    private FrameLayout criticalRoot;
     private SwipeRefreshLayout swipeRefresh;
-    private ListView listView;
+    private FrameLayout headerCard, pathRow;
+    private ImageView ivAvatar, ivChevron, btnOverflow;
+    private TextView tvUserName, tvPath, emptyView;
+    private CheckBox cbNeedsCare;
     private ProgressBar progress;
-    private TextView emptyView;
 
-    // ---------- Data ----------
+    // Ana liste: ListView + CompanionAdapter
+    private ListView listView;
+
+    // Veri kaynakları
     private final List<Soul> companions = new ArrayList<>();
-    private CompanionAdapter adapter;
+    private final List<Content> contentList = new ArrayList<>(); // (opsiyonel: başka akışlar için)
+    private CompanionAdapter companionAdapter; // ListView adaptörü (Base/Array)
 
-    // ---------- Infra ----------
+    // Ağ/CF
     private CFClient cf;
     private ExecutorService io;
 
-    // Layout constants
-    private static final int HEADER_TOP = 8;       // dp
-    private static final int HEADER_RADIUS = 16;   // dp
-    private static final int AVATAR_SIZE = 40;     // dp
-    private static final int HEADER_H = 64;        // ~dp (padding + avatar yüksekliği)
-    private static final int PATH_TOP_MARGIN = 68; // dp (header altı)
-    private static final int PATH_ROW_H = 36;      // ~dp
-    private static final int CB_TOP_MARGIN = 108;  // dp (header+path altı)
-    private static final int LIST_TOP_MARGIN = 156;// dp (header+path+checkbox altı)
-
-    // =============================================================================================
-    // Lifecycle
-    // =============================================================================================
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        io = Executors.newFixedThreadPool(2);
+        setContentView(R.layout.activity_explore);
 
-        FrameLayout root = new FrameLayout(this);
+        // 1) Auth kontrolü
+        auth = FirebaseAuth.getInstance();
+        user = auth.getCurrentUser();
+        if (user == null) {
+            Helpers.showToastSafe(this, "Lütfen önce giriş yapın.");
+            finish();
+            return;
+        }
 
-        swipeRefresh = new SwipeRefreshLayout(this);
-        root.addView(swipeRefresh, new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        // 2) Firestore init (profil/rol vb.)
+        firestore = FirebaseFirestore.getInstance();
+        this.cf = new CFClient(BuildConfig.CF_BASE_URL);
 
-        FrameLayout content = new FrameLayout(this);
-        swipeRefresh.addView(content, new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        // 3) UI bind
+        listView = findViewById(R.id.recycler_explore); // XML’de ListView olmalı
+        emptyView = findViewById(R.id.tv_empty);
+        progress = findViewById(R.id.progress);
 
-        // -------- User Header (ExplorePrivate stili) --------
-        headerCard = new FrameLayout(this);
-        headerCard.setBackground(roundedBg(0xFFFFFFFF, HEADER_RADIUS));
-        headerCard.setPadding(dp(this, 12), dp(this, 12), dp(this, 12), dp(this, 12));
-        headerCard.setElevation(dp(this, 2));
+        // ListView boş görünümü bağla (aynı parent altında olmalı)
+        if (listView != null && emptyView != null) {
+            listView.setEmptyView(emptyView);
+        }
 
-        FrameLayout.LayoutParams lpHeader = new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        lpHeader.topMargin = dp(this, HEADER_TOP);
-        lpHeader.leftMargin = dp(this, 12);
-        lpHeader.rightMargin = dp(this, 12);
-        content.addView(headerCard, lpHeader);
+        // CompanionAdapter: ListView sürümü (Context + List<Soul>)
+        companionAdapter = new CompanionAdapter(this, companions);
+        listView.setAdapter(companionAdapter);
 
-        ivAvatar = new ImageView(this);
-        ivAvatar.setId(View.generateViewId());
-        ivAvatar.setImageResource(android.R.drawable.sym_def_app_icon); // placeholder
-        FrameLayout.LayoutParams lpAvatar = new FrameLayout.LayoutParams(
-                dp(this, AVATAR_SIZE), dp(this, AVATAR_SIZE));
-        lpAvatar.gravity = Gravity.START | Gravity.CENTER_VERTICAL;
-        headerCard.addView(ivAvatar, lpAvatar);
-
-        tvUserName = new TextView(this);
-        tvUserName.setText("KullanıcıAdı");
-        tvUserName.setTextSize(18);
-        tvUserName.setTypeface(Typeface.DEFAULT_BOLD);
-        FrameLayout.LayoutParams lpName = new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        lpName.leftMargin = dp(this, AVATAR_SIZE + 12);
-        lpName.gravity = Gravity.CENTER_VERTICAL | Gravity.START;
-        headerCard.addView(tvUserName, lpName);
-
-        btnOverflow = new ImageView(this);
-        btnOverflow.setImageResource(android.R.drawable.ic_menu_more);
-        FrameLayout.LayoutParams lpOv = new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        lpOv.gravity = Gravity.END | Gravity.CENTER_VERTICAL;
-        headerCard.addView(btnOverflow, lpOv);
-
-        btnOverflow.setOnClickListener(v -> {
-            PopupMenu pm = new PopupMenu(this, btnOverflow);
-            pm.getMenu().add("Profil");
-            pm.getMenu().add("Ayarlar");
-            pm.getMenu().add("Çıkış");
-            pm.setOnMenuItemClickListener(mi -> {
-                showToast(mi.getTitle().toString());
-                return true;
+        // Profil header tıklaması (opsiyonel)
+        View profileHeader = findViewById(R.id.profile_header);
+        if (profileHeader != null) {
+            profileHeader.setOnClickListener(v -> {
+                try {
+                    // Not: Bu Intent çalışmayabilir; gerçek bir Profile Activity yoksa kaldırılabilir.
+                    startActivity(new Intent(this, ContactsContract.Profile.class));
+                } catch (Throwable ignored) {
+                }
             });
-            pm.show();
-        });
+        }
 
-        // -------- Path Row ("Yol seçilmedi") --------
-        pathRow = new FrameLayout(this);
-        FrameLayout.LayoutParams lpPath = new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        lpPath.topMargin = dp(this, PATH_TOP_MARGIN); // header altına yerleştir
-        lpPath.leftMargin = dp(this, 12);
-        lpPath.rightMargin = dp(this, 12);
-        content.addView(pathRow, lpPath);
+        // 4) Tokenları al ve rol/kayıtları yükle
+        cf.getTokens((idTok, appTok) -> {
+            // Örnek test endpoint (gerekmiyorsa kaldırılabilir)
+            String url = "https://us-central1-iyesi-e8d4f.cloudfunctions.net/listSoulsByFields?col=Souls&where=status:eq:adoptable&limit=3";
+            Request.Builder rb = new Request.Builder().url(url).get()
+                    .addHeader("Authorization", "Bearer " + idTok);
+            if (appTok != null && !appTok.isEmpty()) {
+                rb.addHeader("X-Firebase-AppCheck", appTok);
+            }
 
-        tvPath = new TextView(this);
-        tvPath.setText("Yol seçilmedi");
-        tvPath.setTextSize(14);
-        tvPath.setPadding(0, dp(this, 8), 0, dp(this, 8));
-        FrameLayout.LayoutParams lpPathText = new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        lpPathText.gravity = Gravity.START | Gravity.CENTER_VERTICAL;
-        pathRow.addView(tvPath, lpPathText);
-
-        ivChevron = new ImageView(this);
-        ivChevron.setImageResource(android.R.drawable.arrow_down_float);
-        FrameLayout.LayoutParams lpCh = new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        lpCh.gravity = Gravity.END | Gravity.CENTER_VERTICAL;
-        pathRow.addView(ivChevron, lpCh);
-
-        View.OnClickListener choosePath = v -> showToast("Yol seçimi açılacak");
-        tvPath.setOnClickListener(choosePath);
-        ivChevron.setOnClickListener(choosePath);
-
-        // -------- needsCare filtresi (header + path altına) --------
-        cbNeedsCare = new CheckBox(this);
-        cbNeedsCare.setText("Sadece bakım ihtiyacı olanlar (needsCare)");
-        cbNeedsCare.setChecked(false);
-        FrameLayout.LayoutParams lpCb = new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        lpCb.topMargin = dp(this, CB_TOP_MARGIN);
-        lpCb.leftMargin = dp(this, 12);
-        lpCb.rightMargin = dp(this, 12);
-        content.addView(cbNeedsCare, lpCb);
-
-        // -------- ListView + CompanionAdapter (Welcome görünümü) --------
-        listView = new ListView(this);
-        adapter = new CompanionAdapter(this, companions);
-        listView.setAdapter(adapter);
-
-        FrameLayout.LayoutParams lpList = new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
-        lpList.topMargin = dp(this, LIST_TOP_MARGIN);
-        content.addView(listView, lpList);
-
-        // Boş görünüm
-        emptyView = new TextView(this);
-        emptyView.setText("Kayıt bulunamadı.");
-        emptyView.setGravity(Gravity.CENTER);
-        emptyView.setVisibility(View.GONE);
-        content.addView(emptyView, new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-
-        // Progress
-        progress = new ProgressBar(this, null, android.R.attr.progressBarStyleLarge);
-        FrameLayout.LayoutParams lpProg = new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        lpProg.gravity = Gravity.CENTER;
-        root.addView(progress, lpProg);
-
-        setContentView(root);
-
-        // Etkileşimler
-        //swipeRefresh.setOnRefreshListener(() -> refresh(true));
-        cbNeedsCare.setOnCheckedChangeListener((b, c) -> refresh(true));
+            // Rol doğrulama + veri çekme
+/*            Helpers.getRoleFunction()
+                    .addOnSuccessListener(role -> {
+                        if (role == null) {
+                            Helpers.showToastSafe(this, "Rol atanmadı!");
+                            finish();
+                            return;
+                        }
+                        userRole = role;
+                        if (!allowedRoles.contains(role)) {
+                            Toast.makeText(this, "Bu sayfaya erişim yetkiniz yok: " + role, Toast.LENGTH_SHORT).show();
+                            finish();
+                            return;
+                        }
+                        functions = FirebaseFunctions.getInstance();
+                        fetchSouls(); // ilk yükleme
+                    })
+                    .addOnFailureListener(e -> {
+                        Toast.makeText(this, "Rol sorgusu hatası: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                    });
+*/
+            // Header menü/refresh
+            Helpers.ConversationHeaderHelper.setupHeader(this, R.menu.menu_explore_options, item -> {
+                int id = item.getItemId();
+                if (id == R.id.action_refresh) {
+                    if (criticalMode) {
+                        // future: refreshCritical(true);
+                        refresh(true);
+                    } else {
+                        refresh(true);
+                    }
+                    return true;
+                }
+                if (id == R.id.action_toggle_critical) {
+                    criticalMode = !criticalMode;
+                    if (criticalMode) {
+                        // future: enterCriticalMode();
+                    } else {
+                        // future: exitCriticalMode();
+                    }
+                    return true;
+                }
+                return false;
+            });
+        }, e -> Log.e(TAG, "token fail", e));
     }
 
     @Override
     protected void onResume() {
         super.onResume();
-        // Base URL tam kök olmalı: https://us-central1-<proj>.cloudfunctions.net
-        this.cf = new CFClient(BuildConfig.CF_BASE_URL);
-        Log.i(TAG, "CF base=" + BuildConfig.CF_BASE_URL + " (GET listSoulsByFields, health=critical)");
-
-        // İstersen gerçek kullanıcıyı burada bağla
+        if (criticalMode) {
+            this.cf = new CFClient(BuildConfig.CF_BASE_URL);
+            Log.i(TAG, "CF base=" + BuildConfig.CF_BASE_URL + " (GET listSoulsByFields, health=critical)");
+        }
         bindUser("KullanıcıAdı", null);
-
         refresh(false);
+    }
+
+    /** health="critical" sabit, needsCare opsiyonel (cbNeedsCare). Limit=20. */
+    private void fetchSouls() {
+        setLoading(true);
+
+        final boolean needsCare = cbNeedsCare != null && cbNeedsCare.isChecked();
+        final CFClient.WhereBuilder wb = new CFClient.WhereBuilder().eq("health", "critical");
+        if (needsCare) wb.eq("needsCare", "true");
+
+        ensureIo();
+        io.execute(() -> cf.listSoulsByFields(wb, 20, new CFClient.JsonCallback() {
+
+            private void logChunked(String prefix, String text) {
+                if (text == null) { Log.d(TAG, prefix + " <null>"); return; }
+                final int MAX = 1000;
+                for (int i = 0; i < text.length(); i += MAX) {
+                    Log.d(TAG, prefix + " " + text.substring(i, Math.min(i + MAX, text.length())));
+                }
+            }
+
+            @Override
+            public void onSuccess(@NonNull JSONObject json) {
+                try {
+                    String pretty;
+                    try { pretty = json.toString(2); } catch (Exception e) { pretty = json.toString(); }
+                    logChunked("raw json:", pretty);
+
+                    // Souls'u parse et
+                    List<Soul> parsed = parseSouls(json);
+                    if (parsed == null) parsed = java.util.Collections.emptyList();
+                    Log.d(TAG, "parsed.size=" + parsed.size());
+
+                    if (parsed.isEmpty()) {
+                        String keys = (json.names() != null) ? json.names().toString() : "<no-keys>";
+                        Log.w(TAG, "Empty parsed. Keys=" + keys);
+                        int dataLen = json.optJSONArray("data") != null ? json.optJSONArray("data").length() : -1;
+                        int itemsLen = json.optJSONArray("items") != null ? json.optJSONArray("items").length() : -1;
+                        int soulsLen = json.optJSONArray("souls") != null ? json.optJSONArray("Souls").length() : -1;
+                        Log.w(TAG, "ok=" + json.optBoolean("ok")
+                                + " total=" + json.optInt("total", -1)
+                                + " data.length=" + dataLen
+                                + " items.length=" + itemsLen
+                                + " Souls.length=" + soulsLen);
+
+                        org.json.JSONArray probe = json.optJSONArray("data");
+                        if (probe == null) probe = json.optJSONArray("items");
+                        if (probe == null) probe = json.optJSONArray("souls");
+                        if (probe != null && probe.length() > 0) {
+                            org.json.JSONObject first = probe.optJSONObject(0);
+                            Log.d(TAG, "first item probe=" + (first != null ? first.toString() : "null"));
+                        }
+                        showToast("Boş liste döndü");
+                    }
+
+                    final List<Soul> finalParsed = parsed;
+                    runOnUiThread(() -> {
+                        companions.clear();
+                        companions.addAll(finalParsed);
+                        Log.d(TAG, "UI companions.size=" + companions.size());
+                        companionAdapter.notifyDataSetChanged();
+                        setLoading(false);
+                        renderEmptyState();
+                    });
+
+                } catch (Throwable e) {
+                    Log.e(TAG, "parse error", e);
+                    showToast("Veri çözümlenirken hata.");
+                    runOnUiThread(() -> {
+                        setLoading(false);
+                        renderEmptyState();
+                    });
+                }
+            }
+
+            @Override
+            public void onError(@NonNull Throwable t) {
+                Log.e(TAG, "listSoulsByFields", t);
+                showToast("Veri alınamadı: " + t.getMessage());
+                runOnUiThread(() -> {
+                    setLoading(false);
+                    renderEmptyState();
+                });
+            }
+        }));
+    }
+
+    private void bindUser(String name, android.graphics.Bitmap avatarBmp) {
+        if (tvUserName != null && name != null && !name.isEmpty()) tvUserName.setText(name);
+        if (ivAvatar != null && avatarBmp != null) ivAvatar.setImageBitmap(avatarBmp);
+    }
+
+    private void ensureIo() {
+        if (io == null || io.isShutdown()) io = Executors.newFixedThreadPool(2);
+    }
+
+    private void setLoading(boolean state) {
+        runOnUiThread(() -> {
+            if (progress == null) return;
+            if (state && companions.isEmpty()) {
+                progress.setVisibility(View.VISIBLE);
+            } else {
+                progress.setVisibility(View.GONE);
+                if (swipeRefresh != null) swipeRefresh.setRefreshing(false);
+            }
+        });
+    }
+
+    private void renderEmptyState() {
+        // Boşluk kontrolü COMPANIONS üzerinden yapılmalı
+        boolean empty = companions.isEmpty();
+        if (emptyView != null) emptyView.setVisibility(empty ? View.VISIBLE : View.GONE);
+        if (listView != null) listView.setVisibility(empty ? View.GONE : View.VISIBLE);
+
+        // ListView için emptyView zaten set edildi; parent hiyerarşisi uygunsa otomatik çalışır.
+        // Bu görünürlük yönetimi, parent hiyerarşisi uygun değilse fallback olarak kalır.
+    }
+
+    private void showToast(String s) {
+        runOnUiThread(() -> Toast.makeText(this, s, Toast.LENGTH_SHORT).show());
+    }
+
+    private static int dp(Context c, int d) {
+        float den = c.getResources().getDisplayMetrics().density;
+        return Math.round(d * den);
+    }
+
+    // (Opsiyonel) Public Completed Posts örnek akışı — ayrı adapter varsa orayı kullan
+    private void fetchPublicCompletedPosts() {
+        if (functions == null) return;
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("onlyCompleted", true);
+        payload.put("onlyPublic", true);
+
+        functions.getHttpsCallable("getPosts")
+                .call(payload)
+                .addOnCompleteListener(task -> {
+                    if (!task.isSuccessful()) {
+                        Log.e(TAG, "getPosts failed", task.getException());
+                        Toast.makeText(this, "Gönderiler yüklenemedi.", Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+                    HttpsCallableResult result = task.getResult();
+                    parsePosts(result.getData());
+                });
+    }
+
+    @SuppressWarnings("unchecked")
+    private void parsePosts(Object data) {
+        contentList.clear();
+        try {
+            Map<String, Object> resultMap = (Map<String, Object>) data;
+            List<Map<String, Object>> posts = (List<Map<String, Object>>) resultMap.get("posts");
+            if (posts != null) {
+                for (Map<String, Object> post : posts) {
+                    Boolean isPublic = (Boolean) post.get("isPublic");
+                    String status = (String) post.get("status");
+                    if (!Boolean.TRUE.equals(isPublic) || !"completed".equalsIgnoreCase(status)) continue;
+
+                    String mediaUrl = post.get("mediaUrl") != null ? (String) post.get("mediaUrl") : "";
+                    String contentText = post.get("content") != null ? (String) post.get("content") : "";
+                    String ownerId = post.get("ownerId") != null ? (String) post.get("ownerId") : "";
+                    String displayText = contentText + "\nKayıt sahibi: " + ownerId;
+
+                    Content item = new Content(mediaUrl, displayText, 0, 0, false);
+                    contentList.add(item);
+                }
+            }
+        } catch (ClassCastException e) {
+            Log.e(TAG, "parsePosts hatası", e);
+        }
+
+        // Bu ekran companions’ı listeliyor; contentList ayrı bir akışsa ayrı adapter kullanın.
+        // Şimdilik yalnızca companions’ın adapter’ını güncellemek yeterli.
+        companionAdapter.notifyDataSetChanged();
+    }
+
+    private GradientDrawable roundedBg(int color, float radiusDp) {
+        GradientDrawable d = new GradientDrawable();
+        d.setColor(color);
+        float r = dp(this, (int) radiusDp);
+        d.setCornerRadii(new float[]{r, r, r, r, r, r, r, r});
+        return d;
     }
 
     @Override
@@ -248,96 +400,27 @@ public class Explore extends AppCompatActivity {
     private void refresh(boolean fromUser) {
         if (fromUser) showToast("Yenileniyor…");
         companions.clear();
-        adapter.notifyDataSetChanged();
+        contentList.clear();
+        companionAdapter.notifyDataSetChanged();
         fetchSouls();
     }
 
-    /** Tek kanal: GET /listSoulsByFields — health="critical" sabit, needsCare opsiyonel. */
-    private void fetchSouls() {
-        setLoading(true);
+    // ----------------------------------------------------------------------
+    // Placeholder Content sınıfı (eğer başka bir yerde tanımlı değilse)
+    // ----------------------------------------------------------------------
+    public static class Content {
+        public final String mediaUrl;
+        public final String text;
+        public final int likeCount;
+        public final int commentCount;
+        public final boolean isPinned;
 
-        final boolean needsCare = cbNeedsCare != null && cbNeedsCare.isChecked();
-        final CFClient.WhereBuilder wb = new CFClient.WhereBuilder().eq("health", "critical");
-        if (needsCare) wb.eq("needsCare", "true");
-
-        ensureIo();
-        io.execute(() -> cf.listSoulsByFields(wb, 20, new CFClient.JsonCallback() {
-            @Override public void onSuccess(@NonNull JSONObject json) {
-                try {
-                    List<Soul> parsed = parseSouls(json);
-                    if (parsed == null) parsed = java.util.Collections.emptyList();
-
-                    final List<Soul> finalParsed = parsed;
-                    runOnUiThread(() -> {
-                        companions.clear();
-                        companions.addAll(finalParsed);
-                        adapter.notifyDataSetChanged();
-                        setLoading(false);
-                        renderEmptyState();
-                    });
-                } catch (Throwable e) {
-                    Log.e(TAG, "parse error", e);
-                    showToast("Veri çözümlenirken hata.");
-                    setLoading(false);
-                    renderEmptyState();
-                }
-            }
-
-            @Override public void onError(@NonNull Throwable t) {
-                Log.e(TAG, "listSoulsByFields", t);
-                showToast("Veri alınamadı: " + t.getMessage());
-                setLoading(false);
-                renderEmptyState();
-            }
-        }));
-    }
-
-    // =============================================================================================
-    // UI helpers
-    // =============================================================================================
-    private void bindUser(String name, android.graphics.Bitmap avatarBmp) {
-        if (name != null && !name.isEmpty()) tvUserName.setText(name);
-        if (avatarBmp != null) ivAvatar.setImageBitmap(avatarBmp);
-        // Avatarı daire yapmak istersen:
-        // ivAvatar.setBackground(roundedBg(0xFFECECEC, AVATAR_SIZE));
-        // ivAvatar.setClipToOutline(true);
-    }
-
-    private void setLoading(boolean state) {
-        runOnUiThread(() -> {
-            if (state && companions.isEmpty()) {
-                progress.setVisibility(View.VISIBLE);
-            } else {
-                progress.setVisibility(View.GONE);
-                swipeRefresh.setRefreshing(false);
-            }
-        });
-    }
-
-    private void renderEmptyState() {
-        boolean empty = companions.isEmpty();
-        emptyView.setVisibility(empty ? View.VISIBLE : View.GONE);
-        listView.setVisibility(empty ? View.GONE : View.VISIBLE);
-    }
-
-    private void showToast(String s) {
-        runOnUiThread(() -> Toast.makeText(this, s, Toast.LENGTH_SHORT).show());
-    }
-
-    private static int dp(Context c, int d) {
-        float den = c.getResources().getDisplayMetrics().density;
-        return Math.round(d * den);
-    }
-
-    private GradientDrawable roundedBg(int color, float radiusDp) {
-        GradientDrawable d = new GradientDrawable();
-        d.setColor(color);
-        float r = dp(this, (int) radiusDp);
-        d.setCornerRadii(new float[]{r, r, r, r, r, r, r, r});
-        return d;
-    }
-
-    private void ensureIo() {
-        if (io == null || io.isShutdown()) io = Executors.newFixedThreadPool(2);
+        public Content(String mediaUrl, String text, int likeCount, int commentCount, boolean isPinned) {
+            this.mediaUrl = mediaUrl;
+            this.text = text;
+            this.likeCount = likeCount;
+            this.commentCount = commentCount;
+            this.isPinned = isPinned;
+        }
     }
 }

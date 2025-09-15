@@ -26,6 +26,7 @@ import com.kurmez.iyesi.AppCheckTokenProvider;
 import com.kurmez.iyesi.R;
 import com.kurmez.iyesi.kayra.appCheck.TopActivity;
 import com.kurmez.iyesi.kurmes.social.Profile;
+import com.kurmez.iyesi.kurmes.utilities.helper.CFHelper;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -33,6 +34,7 @@ import org.json.JSONObject;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.function.Consumer;
 
@@ -47,7 +49,12 @@ import okhttp3.Response;
 
 /** Ortak yardımcılar + Cloud Functions HTTP yardımcıları */
 public class Helpers {
-
+    private static final String L = "Helper";
+    private CFHelper cf;
+    private String userRole;
+    private static final List<String> ALLOWED_ROLES = Arrays.asList(
+            "İye", "Körmös", "Körmes", "Ülgen", "Tengri", "Ağaç"
+    );
     /* ===================== Mevcut yardımcılar (korundu) ===================== */
 
     void showToast(String message, Context context) {
@@ -59,46 +66,54 @@ public class Helpers {
                 Toast.makeText(ctx, msg, Toast.LENGTH_SHORT).show());
     }
 
-    /** Sunucudan rol bilgisini çeker. (Örnek mevcut fonksiyon) */
-    public static Task<String> getRoleFunction() {
-        TaskCompletionSource<String> taskSource = new TaskCompletionSource<>();
-        FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
-        if (user == null) {
-            taskSource.setException(new Exception("Kullanıcı oturum açmamış!"));
-            return taskSource.getTask();
+    /* ======================= ROLE / ACCESS FLOW ======================= */
+    public void resolveRoleAndFetch(Context ctx, Activity activity) {
+        Log.i(L, "resolveRoleAndFetch() → GİRİŞ");
+        cf = new CFHelper(ctx,"iyesi-e8d4f",null);
+        new Thread(() -> cf.refreshRole(role -> {
+            Log.d(L, "refreshRole() → ÇIKIŞ role=" + role);
+            if (role != null) {
+                activity.runOnUiThread(() -> handleRole(role,activity,ctx));
+            } else {
+                Log.w(L, "Role bulunamadı → finish()");
+                activity.runOnUiThread(() -> {
+                    Helpers.showToastSafe(ctx,"Rol bulunamadı");
+                    activity.finish();
+                });
+            }
+        })).start();
+    }
+    private void handleRole(String role, Activity activity,Context ctx) {
+        long t0 = System.currentTimeMillis();
+        Log.i(L, "handleRole() → GİRİŞ roleRaw=" + role);
+
+        if (role == null || !isAllowed(role)) {
+            Log.w(L, "Erişim reddedildi: " + role);
+            Helpers.showToastSafe(ctx,"Bu sayfaya erişim yetkiniz yok: " + role);
+            activity.finish();
+            return;
         }
-        user.getIdToken(true).addOnSuccessListener(getTokenResult -> {
-            String idToken = getTokenResult.getToken();
-            OkHttpClient client = new OkHttpClient();
-            Request request = new Request.Builder()
-                    .url("https://us-central1-iyesi-e8d4f.cloudfunctions.net/getRole")
-                    .addHeader("Authorization", "Bearer " + idToken)
-                    .post(RequestBody.create("{\"data\":{}}",
-                            MediaType.parse("application/json")))
-                    .build();
-            client.newCall(request).enqueue(new Callback() {
-                @Override public void onFailure(@NonNull Call call, @NonNull IOException e) {
-                    taskSource.setException(e);
-                }
-                @Override public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
-                    String responseBody = response.body() != null ? response.body().string() : "";
-                    if (!response.isSuccessful()) {
-                        taskSource.setException(new IOException(
-                                "HTTP " + response.code() + " - " + responseBody));
-                        return;
-                    }
-                    try {
-                        JSONObject json = new JSONObject(responseBody);
-                        taskSource.setResult(json.optString("role", null));
-                    } catch (JSONException e) {
-                        taskSource.setException(e);
-                    }
-                }
-            });
-        }).addOnFailureListener(taskSource::setException);
-        return taskSource.getTask();
+        userRole = normalizeRole(role);
+        Log.d(L, "role normalized=" + userRole + " → fetchAllFromRTDB()");
+
+        Log.i(L, "handleRole() → ÇIKIŞ (" + (System.currentTimeMillis() - t0) + " ms)");
+    }
+    private boolean isAllowed(String roleRaw) {
+        if (roleRaw == null) return false;
+        for (String r : ALLOWED_ROLES) {
+            if (r.equalsIgnoreCase(roleRaw)) return true;
+        }
+        return false;
     }
 
+    public String normalizeRole(String r) {
+        if (r == null) return "İye";
+        if (r.equalsIgnoreCase("Tengri")) return "Tengri";
+        if (r.equalsIgnoreCase("Ülgen") || r.equalsIgnoreCase("Ulgen")) return "Ülgen";
+        if (r.equalsIgnoreCase("Körmös") || r.equalsIgnoreCase("Körmes") || r.equalsIgnoreCase("Kormos")) return "Körmös";
+        if (r.equalsIgnoreCase("Ağaç") || r.equalsIgnoreCase("Agac")) return "Ağaç";
+        return "İye";
+    }
     /** JSON -> Profile list (örnek mevcut) */
     public static List<Profile> parseProfiles(String jsonBody) throws JSONException {
         JSONObject root = new JSONObject(jsonBody);

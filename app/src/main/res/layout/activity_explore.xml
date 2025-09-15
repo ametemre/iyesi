@@ -3,7 +3,10 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent">
 
-
+    <TextView
+        android:id="@+id/tv_empty"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"/>
     <!-- Profile Header -->
     <include
         android:id="@+id/profile_header"
@@ -12,7 +15,7 @@
         android:layout_height="wrap_content" />
 
     <!-- RecyclerView -->
-    <androidx.recyclerview.widget.RecyclerView
+    <ListView
         android:id="@+id/recycler_explore"
         android:layout_width="match_parent"
         android:layout_height="match_parent"

@@ -13,8 +13,10 @@ import android.os.Handler;
 import android.provider.Settings;
 import android.util.Base64;
 import android.util.Log;
+import android.view.View;
 import android.widget.EditText;
 import android.widget.ImageButton;
+import android.widget.ProgressBar;
 import android.widget.Toast;
 
 import androidx.annotation.RequiresPermission;
@@ -77,6 +79,7 @@ public class MainActivity extends AppCompatActivity {
     private static final int MAX_CLICKS = 10;
     private static final int SCAN_QR_REQUEST_CODE = 1001;
     private static final long CLOUD_PROJECT_NUMBER = 238523750447L; // Play Integrity
+    private ProgressBar progress;
 
     private FirebaseFunctions functions;
     private FirebaseFirestore db;
@@ -172,8 +175,18 @@ public class MainActivity extends AppCompatActivity {
                 }
             }
         });
+        setLoading(false);
     }
-
+    private void setLoading(boolean state) {
+        runOnUiThread(() -> {
+            if (progress == null) return;
+            if (state) {
+                progress.setVisibility(View.VISIBLE);
+            } else {
+                progress.setVisibility(View.GONE);
+            }
+        });
+    }
     private static boolean isGmsOk(Context ctx) {
         int gms = GoogleApiAvailability.getInstance().isGooglePlayServicesAvailable(ctx);
         return gms == ConnectionResult.SUCCESS;
