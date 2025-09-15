@@ -1,4 +1,4 @@
-package com.kurmez.iyesi.kayra;
+package com.kurmez.iyesi.kayra.appCheck;
 
 import android.content.ActivityNotFoundException;
 import android.content.Context;
@@ -15,7 +15,6 @@ import androidx.annotation.Nullable;
 
 import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.common.GoogleApiAvailability;
-import com.kurmez.iyesi.kayra.TopActivity;
 
 /**
  * Play Integrity (App Check) için önkoşul denetleri:

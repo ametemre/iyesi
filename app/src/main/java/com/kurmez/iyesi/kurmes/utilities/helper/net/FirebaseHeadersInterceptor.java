@@ -6,6 +6,7 @@ import com.google.android.gms.tasks.Tasks;
 import com.google.firebase.appcheck.FirebaseAppCheck;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
+import com.kurmez.iyesi.kayra.appCheck.TopActivity;
 
 import java.io.IOException;
 
@@ -103,7 +104,7 @@ public final class FirebaseHeadersInterceptor implements Interceptor {
             // Global bir context yoksa bu header'ı kullanma.
             return Settings.Secure.getString(
                     // replace with your UI/Application context getter if needed
-                    com.kurmez.iyesi.kayra.TopActivity.uiContext().getContentResolver(),
+                    TopActivity.uiContext().getContentResolver(),
                     Settings.Secure.ANDROID_ID
             );
         } catch (Exception ignore) {

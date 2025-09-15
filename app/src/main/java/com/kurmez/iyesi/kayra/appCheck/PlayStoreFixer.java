@@ -1,4 +1,4 @@
-package com.kurmez.iyesi.kayra;
+package com.kurmez.iyesi.kayra.appCheck;
 
 import android.app.Activity;
 import android.app.AlertDialog;

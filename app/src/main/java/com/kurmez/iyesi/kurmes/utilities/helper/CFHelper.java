@@ -765,11 +765,4 @@ public class CFHelper {
             return map;
         }
     }
-
-    // Örn: kaynak erişimi, SharedPreferences vs. — UI yok
-    public static void saveFlag(@Nullable Context ctx, String key, boolean v) {
-        Context app = ctx != null ? ctx.getApplicationContext() : AppCheckTokenProvider.app();
-        app.getSharedPreferences("cf", Context.MODE_PRIVATE)
-                .edit().putBoolean(key, v).apply();
-    }
 }

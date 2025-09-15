@@ -24,7 +24,7 @@ import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 import com.kurmez.iyesi.AppCheckTokenProvider;
 import com.kurmez.iyesi.R;
-import com.kurmez.iyesi.kayra.TopActivity;
+import com.kurmez.iyesi.kayra.appCheck.TopActivity;
 import com.kurmez.iyesi.kurmes.social.Profile;
 
 import org.json.JSONArray;
@@ -306,72 +306,4 @@ public class Helpers {
             }
         }
     }
-    public final class UIHelper {
-
-        // Güvenli Context seçimi: Activity > Application
-        private static Context pickUiContext(@Nullable Context ctx) {
-            if (ctx instanceof Activity) return ctx;
-            Activity top = TopActivity.activity(); // bizim lifecycle tracker
-            if (top != null && !top.isFinishing()) return top;
-            return AppCheckTokenProvider.app(); // son çare (Toast gibi işler için ok)
-        }
-
-        // Örnek: Toast
-        public static void toast(@Nullable Context ctx, String msg) {
-            Context c = pickUiContext(ctx);
-            new android.os.Handler(android.os.Looper.getMainLooper())
-                    .post(() -> android.widget.Toast.makeText(c, msg, android.widget.Toast.LENGTH_SHORT).show());
-        }
-
-        // Örnek: Dialog (Activity şart)
-        public static void confirm(@Nullable Activity act,
-                                   String title, String msg,
-                                   Runnable onOk) {
-            Activity a = (act != null) ? act : TopActivity.activity();
-            if (a == null || a.isFinishing()) return; // Activity yoksa dialog açma
-
-            a.runOnUiThread(() ->
-                    new androidx.appcompat.app.AlertDialog.Builder(a)
-                            .setTitle(title).setMessage(msg)
-                            .setPositiveButton("OK", (d, w) -> { if (onOk != null) onOk.run(); })
-                            .setNegativeButton("İptal", null)
-                            .show()
-            );
-        }
-
-        // Örnek: Activity başlatma
-        public static void openSettings(@Nullable Activity act) {
-            Activity a = (act != null) ? act : TopActivity.activity();
-            if (a == null || a.isFinishing()) return;
-            a.startActivity(new android.content.Intent(android.provider.Settings.ACTION_SETTINGS));
-        }
-    }
-    // Senkron JSON GET
-    JSONObject getJson(HttpUrl url, OkHttpClient client) throws IOException, JSONException {
-        Request req = new Request.Builder().url(url).get().build();
-        try (Response resp = client.newCall(req).execute()) {
-            if (!resp.isSuccessful()) {
-                String err = resp.body() != null ? resp.body().string() : null;
-                throw new IOException("HTTP " + resp.code() + " " + err);
-            }
-            String body = resp.body() != null ? resp.body().string() : "{}";
-            return new JSONObject(body);
-        }
-    }
-
-    // Asenkron POST (App Check + Auth header’lı)
-    void postJsonAsync(Request req, OkHttpClient client, Consumer<JSONObject> ok, Consumer<Throwable> fail) {
-        client.newCall(req).enqueue(new Callback() {
-            @Override public void onResponse(Call call, Response resp) {
-                try (Response r = resp) {
-                    String body = r.body() != null ? r.body().string() : "{}";
-                    ok.accept(new JSONObject(body));
-                } catch (Throwable t) {
-                    fail.accept(t);
-                }
-            }
-            @Override public void onFailure(Call call, IOException e) { fail.accept(e); }
-        });
-    }
-
 }
