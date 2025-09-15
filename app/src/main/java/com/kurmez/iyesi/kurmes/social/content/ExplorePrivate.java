@@ -23,8 +23,10 @@ import com.google.android.gms.location.LocationServices;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.database.DataSnapshot;
+import com.google.firebase.database.DatabaseError;
 import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
+import com.google.firebase.database.ValueEventListener;
 import com.kurmez.iyesi.R;
 import com.kurmez.iyesi.kayra.Classes.data.Soul;
 import com.kurmez.iyesi.kurmes.social.Profile;
@@ -64,7 +66,8 @@ public class ExplorePrivate extends AppCompatActivity {
     }
 
     /* ======================= CONST / PERMISSIONS ===================== */
-    private static final String RTDB_URL = "https://iyesi-e8d4f.firebaseio.com";
+    // DOĞRU RTDB URL (default-rtdb alan adı)
+    private static final String RTDB_URL = "https://iyesi-e8d4f-default-rtdb.firebaseio.com/";
     private static final List<String> ALLOWED_ROLES = Arrays.asList(
             "İye", "Körmös", "Körmes", "Ülgen", "Tengri", "Ağaç"
     );
@@ -84,6 +87,9 @@ public class ExplorePrivate extends AppCompatActivity {
     private String userRole;
     private DatabaseReference pendingRef;
     private FusedLocationProviderClient fused;
+
+    // CANLI DİNLEME
+    private ValueEventListener liveListener;
 
     /* =========================== LIFECYCLE =========================== */
     @Override
@@ -136,12 +142,25 @@ public class ExplorePrivate extends AppCompatActivity {
         try {
             Helpers helper = new Helpers();
             helper.resolveRoleAndFetch(this,this);
+            // İlk çekim (tek seferlik)
             fetchAllFromRTDB();
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
 
         Log.i(L, "onCreate() → ÇIKIŞ (" + (System.currentTimeMillis() - t0) + " ms)");
+    }
+
+    @Override
+    protected void onStart() {
+        super.onStart();
+        attachLiveListener(); // CANLI dinleme başlat
+    }
+
+    @Override
+    protected void onStop() {
+        super.onStop();
+        detachLiveListener(); // CANLI dinleme durdur
     }
 
     /* ======================= PRIORITY SCORING ======================== */
@@ -170,8 +189,7 @@ public class ExplorePrivate extends AppCompatActivity {
     private String safe(String s)            { return s == null ? "-" : s; }
 
     /* ======================= ROLE / ACCESS FLOW ======================= */
-
-
+    // (Mevcut akışını korudum)
 
     /* ============================ RTDB FETCH ========================== */
     /**
@@ -187,90 +205,116 @@ public class ExplorePrivate extends AppCompatActivity {
                 .addOnSuccessListener(snap -> {
                     long t1 = System.currentTimeMillis();
                     Log.i(L, "RTDB get() OK in " + (t1 - t0) + " ms | children=" + snap.getChildrenCount());
-
-                    List<Row> rows = new ArrayList<>();
-                    int idx = 0;
-                    for (DataSnapshot child : snap.getChildren()) {
-                        idx++;
-                        final String key = child.getKey();
-
-                        @SuppressWarnings("unchecked")
-                        Map<String, Object> map = (Map<String, Object>) child.getValue();
-                        if (map == null) {
-                            Log.w(L, "child[" + idx + "] key=" + key + " → value=null (skip)");
-                            continue;
-                        }
-
-                        JSONObject o = new JSONObject(map);
-                        try { o.put("id", key); } catch (Exception ignore) {}
-
-                        if (VERBOSE_JSON) logChunked("RTDB.child[" + idx + "]." + key, o.toString());
-
-                        Soul s = Soul.fromJson(o);
-                        if (s == null) {
-                            s = new Soul(
-                                    null,
-                                    o.optString("species"),
-                                    o.optString("breed"),
-                                    o.optString("age"),
-                                    o.optString("health"),
-                                    o.optString("foundDate"),
-                                    o.optString("foundLocation"),
-                                    null,
-                                    o.optString("imageResId", o.optString("imageUrl")),
-                                    o.optString("finderName", o.optString("finder")),
-                                    o.optLong("timestamp", 0)
-                            );
-                        }
-
-                        String imageUrl = !isEmpty(s.getImageResId()) ? s.getImageResId() : s.getImageUrl();
-                        String text = "Tür: " + safe(s.getSpecies())
-                                + "\nKayıt sahibi: " + safe(s.getFinderName())
-                                + "\nKonum: " + safe(s.getFoundLocation());
-
-                        int sc = computeAttentionScore(s);
-                        long ts = s.getTimestamp();
-
-                        Row r = new Row();
-                        r.key = key;
-                        r.soul = s;
-                        r.imageUrl = imageUrl;
-                        r.score = sc;
-                        r.ts = ts;
-                        r.displayText = text;
-
-                        rows.add(r);
-                    }
-
-                    // Sıralama: score desc, ts desc
-                    rows.sort((a, b) -> {
-                        if (b.score != a.score) return Integer.compare(b.score, a.score);
-                        return Long.compare(b.ts, a.ts);
-                    });
-
-                    items.clear();
-                    souls.clear();
-                    keys.clear();
-
-                    for (Row r : rows) {
-                        keys.add(r.key);
-                        souls.add(r.soul);
-                        String badge = r.score >= 5 ? "★ " : (r.score >= 3 ? "• " : "");
-                        items.add(new Content(r.imageUrl, badge + r.displayText, 0, 0, true));
-                    }
-
-                    adapter.notifyDataSetChanged();
-
-                    // ÇIKIŞ özeti
-                    Log.i(L, "fetchAllFromRTDB() → ÇIKIŞ count=" + keys.size()
-                            + " | " + previewKeys(keys)
-                            + " | total " + (System.currentTimeMillis() - t0) + " ms");
-                    Helpers.showToastSafe(this, "ExplorePrivate: " + keys.size() + " kayıt (önceliklendirilmiş)");
+                    applySnapshot(snap, /*source=*/"get()");
                 })
                 .addOnFailureListener(e -> {
                     Log.e(L, "RTDB get() FAILED: " + e.getMessage(), e);
-                    Helpers.showToastSafe(this, "RTDB hata: " + e.getMessage());
+                    toastForReadError(e);
                 });
+    }
+
+    /** CANLI dinlemeyi bağlar (ValueEventListener). */
+    private void attachLiveListener() {
+        if (liveListener != null) return;
+        Log.d(L, "attachLiveListener()");
+        liveListener = new ValueEventListener() {
+            @Override public void onDataChange(@NonNull DataSnapshot snapshot) {
+                Log.d(L, "live.onDataChange children=" + snapshot.getChildrenCount());
+                applySnapshot(snapshot, /*source=*/"live");
+            }
+            @Override public void onCancelled(@NonNull DatabaseError error) {
+                Log.e(L, "live.onCancelled: " + error.getMessage(), error.toException());
+                toastForReadError(error.toException());
+            }
+        };
+        pendingRef.addValueEventListener(liveListener);
+    }
+
+    /** CANLI dinlemeyi kaldırır. */
+    private void detachLiveListener() {
+        if (liveListener == null) return;
+        Log.d(L, "detachLiveListener()");
+        pendingRef.removeEventListener(liveListener);
+        liveListener = null;
+    }
+
+    /** Ortak snapshot işleyici (sıralama + adapter güncelleme). */
+    private void applySnapshot(@NonNull DataSnapshot snap, @NonNull String source) {
+        List<Row> rows = new ArrayList<>();
+        int idx = 0;
+
+        for (DataSnapshot child : snap.getChildren()) {
+            idx++;
+            final String key = child.getKey();
+
+            @SuppressWarnings("unchecked")
+            Map<String, Object> map = (Map<String, Object>) child.getValue();
+            if (map == null) {
+                Log.w(L, "child[" + idx + "] key=" + key + " → value=null (skip)");
+                continue;
+            }
+
+            JSONObject o = new JSONObject(map);
+            try { o.put("id", key); } catch (Exception ignore) {}
+
+            if (VERBOSE_JSON) logChunked("RTDB.child[" + idx + "]." + key, o.toString());
+
+            Soul s = Soul.fromJson(o);
+            if (s == null) {
+                s = new Soul(
+                        null,
+                        o.optString("species"),
+                        o.optString("breed"),
+                        o.optString("age"),
+                        o.optString("health"),
+                        o.optString("foundDate"),
+                        o.optString("foundLocation"),
+                        null,
+                        o.optString("imageResId", o.optString("imageUrl")),
+                        o.optString("finderName", o.optString("finder")),
+                        o.optLong("timestamp", 0)
+                );
+            }
+
+            String imageUrl = !isEmpty(s.getImageResId()) ? s.getImageResId() : s.getImageUrl();
+            String text = "Tür: " + safe(s.getSpecies())
+                    + "\nKayıt sahibi: " + safe(s.getFinderName())
+                    + "\nKonum: " + safe(s.getFoundLocation());
+
+            int sc = computeAttentionScore(s);
+            long ts = s.getTimestamp();
+
+            Row r = new Row();
+            r.key = key;
+            r.soul = s;
+            r.imageUrl = imageUrl;
+            r.score = sc;
+            r.ts = ts;
+            r.displayText = text;
+
+            rows.add(r);
+        }
+
+        // Sıralama: score desc, ts desc
+        rows.sort((a, b) -> {
+            if (b.score != a.score) return Integer.compare(b.score, a.score);
+            return Long.compare(b.ts, a.ts);
+        });
+
+        items.clear();
+        souls.clear();
+        keys.clear();
+
+        for (Row r : rows) {
+            keys.add(r.key);
+            souls.add(r.soul);
+            String badge = r.score >= 5 ? "★ " : (r.score >= 3 ? "• " : "");
+            items.add(new Content(r.imageUrl, badge + r.displayText, 0, 0, true));
+        }
+
+        adapter.notifyDataSetChanged();
+        Log.i(L, "applySnapshot(" + source + ") → count=" + keys.size() + " | " + previewKeys(keys));
+        Helpers.showToastSafe(this, "ExplorePrivate: " + keys.size() + " kayıt (" + source + ")");
     }
 
     /* =========================== CF (optional) ============================ */
@@ -541,5 +585,16 @@ public class ExplorePrivate extends AppCompatActivity {
                 fetchPendingViaCF(41.015137, 28.97953); // sadece flag açıksa çalışır
             }
         }
+    }
+
+    /* ======================== ERROR → USER TOAST ===================== */
+    private void toastForReadError(Exception e) {
+        String msg = e != null ? e.getMessage() : "bilinmeyen";
+        String userMsg = "Veri okunamadı";
+        String low = msg != null ? msg.toLowerCase() : "";
+        if (low.contains("permission")) userMsg = "İzin reddedildi (Rules/App Check?)";
+        else if (low.contains("app check") || low.contains("appcheck")) userMsg = "App Check doğrulaması eksik";
+        else if (low.contains("network")) userMsg = "Ağ hatası";
+        Helpers.showToastSafe(this, userMsg + " • " + (msg == null ? "" : msg));
     }
 }

@@ -38,20 +38,15 @@ import com.google.android.play.core.integrity.model.IntegrityErrorCode;
 import com.google.firebase.FirebaseApp;
 import com.google.firebase.appcheck.AppCheckToken;
 import com.google.firebase.appcheck.FirebaseAppCheck;
-
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
-
 import com.google.firebase.firestore.FirebaseFirestore;
-
 import com.google.firebase.functions.FirebaseFunctions;
 import com.google.firebase.functions.HttpsCallableResult;
 
 import com.google.zxing.BarcodeFormat;
 import com.google.zxing.WriterException;
 import com.journeyapps.barcodescanner.BarcodeEncoder;
-
-// import com.kurmez.iyesi.kayra.appCheck.GmsIntegrityPreflight;
 
 import com.kurmez.iyesi.kurmes.Kurmes;
 import com.kurmez.iyesi.kurmes.ui.SoulsManagerActivity;
@@ -61,24 +56,25 @@ import com.kurmez.iyesi.kurmes.utilities.helper.PermissionHelper;
 import com.kurmez.iyesi.umay.Welcome;
 
 import java.io.IOException;
+import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.function.Consumer;
+import java.nio.charset.StandardCharsets;
 
-/**
- * MainActivity
- * - Preflight (GMS + Play Store + tek atış Play Integrity). Başarısızsa kullanıcıyı yönlendir.
- * - Firebase App Check warm-up
- * - Auth (mevcut kullanıcı → refresh; yoksa anon giriş)
- * - QR/BT akışı
- * - health_check callable opsiyonel
- */
 public class MainActivity extends AppCompatActivity {
 
     private static final String TAG = "MainActivity";
     private static final int MAX_CLICKS = 10;
     private static final int SCAN_QR_REQUEST_CODE = 1001;
-    private static final long CLOUD_PROJECT_NUMBER = 238523750447L; // Play Integrity
+
+    /** Play Integrity Cloud Project Number (GCP Project Number) */
+    private static final long CLOUD_PROJECT_NUMBER = 238523750447L;
+
+    /** Debug geliştirirken Play dışı kurulumlara izin ver (App Check Debug ile). */
+    private static final boolean DEV_ALLOW_NON_PLAY_INSTALLS = BuildConfig.DEBUG;
+
     private ProgressBar progress;
 
     private FirebaseFunctions functions;
@@ -101,10 +97,13 @@ public class MainActivity extends AppCompatActivity {
     private volatile boolean hasAppCheckToken = false;
     private volatile boolean hasAuthIdToken  = false;
 
-    private final PermissionHelper.Callback permissionCallback = new PermissionHelper.Callback() {
-        @Override public void onGranted() { Log.d(TAG, "Permissions granted"); }
-        @Override public void onDenied()  { Log.w(TAG, "Some permissions denied"); }
-    };
+    // ----- Basit preflight durumları -----
+    private enum PreflightStatus {
+        RETRIABLE_INPUT_ERROR,
+        ENV_MISSING_OR_OUTDATED,
+        TRANSIENT_ERROR,
+        UNKNOWN_ERROR
+    }
 
     @SuppressLint("MissingPermission")
     @Override
@@ -112,13 +111,18 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
+        progress = findViewById(R.id.progress);
+
         // Firebase init (idempotent)
         try { FirebaseApp.initializeApp(this); } catch (Throwable ignore) { }
 
         // PermissionHelper
         permissionHelper = new PermissionHelper();
         permissionHelper.setActivity(this);
-        permissionHelper.setCallback(permissionCallback);
+        permissionHelper.setCallback(new PermissionHelper.Callback() {
+            @Override public void onGranted() { Log.d(TAG, "Permissions granted"); }
+            @Override public void onDenied()  { Log.w(TAG, "Some permissions denied"); }
+        });
         permissionHelper.initialize();
 
         // Preflight
@@ -132,64 +136,151 @@ public class MainActivity extends AppCompatActivity {
     }
 
     // =============================================================================================
+    // Integrity: güvenli nonce + -10 için tek sefer retry
+    // =============================================================================================
+
+    private void requestIntegrityWithRetry(Consumer<String> onOk, Consumer<Exception> onFail) {
+        final String nonce = buildBoundNonce();
+        Log.d(TAG, "Integrity nonce(b64url).len=" + nonce.length());
+
+        IntegrityManager im = IntegrityManagerFactory.create(getApplicationContext());
+        IntegrityTokenRequest req = IntegrityTokenRequest.builder()
+                .setNonce(nonce)
+                .setCloudProjectNumber(CLOUD_PROJECT_NUMBER)
+                .build();
+
+        im.requestIntegrityToken(req)
+                .addOnSuccessListener(token -> onOk.accept(token.token()))
+                .addOnFailureListener(e -> {
+                    if (e instanceof IntegrityServiceException) {
+                        int code = ((IntegrityServiceException) e).getErrorCode();
+                        Log.w(TAG, "Integrity failed code=" + code + ", retry policy may apply.", e);
+                        if (code == IntegrityErrorCode.NONCE_TOO_SHORT) {
+                            // Tekrar daha uzun nonce ile
+                            IntegrityTokenRequest retryReq = IntegrityTokenRequest.builder()
+                                    .setNonce(newIntegrityNonce(48))
+                                    .setCloudProjectNumber(CLOUD_PROJECT_NUMBER)
+                                    .build();
+                            IntegrityManager im2 = IntegrityManagerFactory.create(getApplicationContext());
+                            im2.requestIntegrityToken(retryReq)
+                                    .addOnSuccessListener(t -> onOk.accept(t.token()))
+                                    .addOnFailureListener(onFail::accept);
+                            return;
+                        }
+                    }
+                    onFail.accept(e);
+                });
+    }
+
+    private PreflightStatus mapIntegrityFailure(Exception e) {
+        if (e instanceof IntegrityServiceException) {
+            int code = ((IntegrityServiceException) e).getErrorCode();
+            if (code == IntegrityErrorCode.NONCE_TOO_SHORT) {
+                return PreflightStatus.RETRIABLE_INPUT_ERROR;
+            }
+            if (code == IntegrityErrorCode.API_NOT_AVAILABLE
+                    || code == IntegrityErrorCode.PLAY_STORE_NOT_FOUND
+                    || code == IntegrityErrorCode.PLAY_STORE_VERSION_OUTDATED
+                    || code == IntegrityErrorCode.GOOGLE_SERVER_UNAVAILABLE) {
+                return PreflightStatus.ENV_MISSING_OR_OUTDATED; // <<< “erişilemedi/engellendi” dediğimiz dal
+            }
+            return PreflightStatus.TRANSIENT_ERROR;
+        }
+        return PreflightStatus.UNKNOWN_ERROR;
+    }
+
+
+    // =============================================================================================
     // Preflight
     // =============================================================================================
 
+    // MainActivity.java — Preflight'ın Integrity kısmı (cerrahi kesit)
+
     private void preflightIntegrityOrPrompt() {
-        if (!isGmsOk(this)) {
-            Log.e(TAG, "GMS not available. Opening Play Services page.");
-            showPlayEnvAdvice("Google Play Hizmetleri uygun değil");
-            return; // dialog butonları üzerinden finish
+        setLoading(true);
+
+        Log.i(TAG, "GMS=" + pkgVer(this, "com.google.android.gms") +
+                " PlayStore=" + pkgVer(this, "com.android.vending"));
+
+        // 1) Google Play services durumu
+        int gms = GoogleApiAvailability.getInstance().isGooglePlayServicesAvailable(this);
+        if (gms != ConnectionResult.SUCCESS) {
+            Log.w(TAG, "GMS not available, code=" + gms + " → opening update flow");
+            ensureGmsUpToDateOrPrompt();
+            return;
         }
 
-        if (!isPlayStoreOk(this)) {
-            Log.e(TAG, "Play Store missing/disabled. Opening Play Store page.");
-            showPlayEnvAdvice("Google Play Store kurulu değil / devre dışı");
-            return; // dialog butonları üzerinden finish
-        }
+        // 2) Play Store kurulu ve etkin mi?
+        final boolean playOk = isPlayStoreOk(this);
+        // 2.5) Uygulama Play Store’dan yüklenmiş mi?
+        final boolean installedFromPlay = isInstalledFromPlay(this);
 
-        requestIntegrityPreflight(this, new IntegrityPreflightCallback() {
-            @Override public void onOk() {
-                Log.i(TAG, "Integrity preflight OK. Proceeding to App Check warm-up...");
+        if (!playOk || !installedFromPlay) {
+            if (DEV_ALLOW_NON_PLAY_INSTALLS) {
+                // DEV: Integrity’yi BYPASS ediyoruz
+                Log.w(TAG, "Play ortamı eksik/installer=non-Play ama DEV_ALLOW_NON_PLAY_INSTALLS=true → Integrity atlanıyor.");
                 warmUpAppCheckThenInitUiAndAuth();
+                return;
+            } else {
+                // <<< ŞU LOG, “Integrity API erişilemedi veya engellendi” OLAYININ NEDENİNE İŞARET EDER
+                Log.w(TAG, "Integrity API erişilemedi veya engellendi (Play ortamı yok/uyumsuz)."); // <<< ARADIĞIN SATIR
+                showPlayEnvAdvice(!playOk ? "Google Play Store kurulu değil / devre dışı"
+                        : "Uygulama resmi Play Store’dan yüklenmemiş.");
+                setLoading(false);
+                return;
             }
+        }
 
-            @Override public void onFail(Throwable err, Integer code) {
-                String reason;
-                if (err instanceof IntegrityServiceException) {
-                    int c = ((IntegrityServiceException) err).getErrorCode();
-                    reason = "IntegrityServiceException: " + c;
-                    Log.e(TAG, "Integrity preflight failed. code=" + c, err);
+        // 3) Integrity çağrısı (başarısızsa aşağıdaki onFailure çalışır)
+        requestIntegrityWithRetry(
+                token -> {
+                    Log.i(TAG, "Integrity token alındı (preflight OK).");
+                    warmUpAppCheckThenInitUiAndAuth();
+                },
+                err -> {
+                    PreflightStatus s = mapIntegrityFailure(err);
+                    Log.e(TAG, "Integrity preflight failed: " + s, err);
 
-                    if (c == IntegrityErrorCode.PLAY_STORE_NOT_FOUND) {
-                        showPlayEnvAdvice("Play Store bulunamadı / resmi sürüm değil (kod -2)");
-                    } else if (c == IntegrityErrorCode.NONCE_IS_NOT_BASE64) {
-                        showPlayEnvAdvice("Nonce formatı hatalı: web-safe base64 (no wrap, no padding) kullanın.");
-                    } else {
-                        showPlayEnvAdvice("Play Integrity başarısız: kod=" + c);
+                    if (DEV_ALLOW_NON_PLAY_INSTALLS &&
+                            (s == PreflightStatus.ENV_MISSING_OR_OUTDATED || s == PreflightStatus.TRANSIENT_ERROR)) {
+                        Log.w(TAG, "Dev modda Integrity hatası bypass → AppCheck+Auth’a devam.");
+                        warmUpAppCheckThenInitUiAndAuth();
+                        return;
                     }
-                } else {
-                    reason = err == null ? "unknown" : err.getMessage();
-                    Log.e(TAG, "Integrity preflight failed: " + reason, err);
-                    showPlayEnvAdvice("Play Integrity başarısız: " + reason);
+
+                    // <<< BURADA DA AÇIKÇA LOGLUYORUZ
+                    if (s == PreflightStatus.ENV_MISSING_OR_OUTDATED) {
+                        Log.w(TAG, "Integrity API erişilemedi veya engellendi (ENV_MISSING_OR_OUTDATED)."); // <<< ARADIĞIN SATIR
+                        showPlayEnvAdvice("Play ortamı eksik/eski. (Integrity env)");
+                    } else if (s == PreflightStatus.TRANSIENT_ERROR) {
+                        Log.w(TAG, "Integrity API erişilemedi veya geçici hata."); // <<< ALTERNATİF LOG
+                        showPlayEnvAdvice("Geçici hata: Lütfen tekrar deneyin.");
+                    } else if (s == PreflightStatus.RETRIABLE_INPUT_ERROR) {
+                        showPlayEnvAdvice("Nonce girdisi hatası tekrarlandı.");
+                    } else {
+                        showPlayEnvAdvice("Bilinmeyen Integrity hatası.");
+                    }
+                    setLoading(false);
                 }
-            }
-        });
-        setLoading(false);
+        );
     }
+
+
+    /** GMS update flow: sistem ekranını açar; tamamlanınca preflight'i yeniden dener. */
+    private void ensureGmsUpToDateOrPrompt() {
+        GoogleApiAvailability.getInstance()
+                .makeGooglePlayServicesAvailable(this)
+                .addOnCompleteListener(t -> {
+                    Log.i(TAG, "GMS update flow result: " + (t.isSuccessful() ? "OK" : "FAIL"));
+                    handler.post(this::preflightIntegrityOrPrompt);
+                });
+    }
+
     private void setLoading(boolean state) {
         runOnUiThread(() -> {
             if (progress == null) return;
-            if (state) {
-                progress.setVisibility(View.VISIBLE);
-            } else {
-                progress.setVisibility(View.GONE);
-            }
+            progress.setVisibility(state ? View.VISIBLE : View.GONE);
         });
-    }
-    private static boolean isGmsOk(Context ctx) {
-        int gms = GoogleApiAvailability.getInstance().isGooglePlayServicesAvailable(ctx);
-        return gms == ConnectionResult.SUCCESS;
     }
 
     private static boolean isPlayStoreOk(Context ctx) {
@@ -204,40 +295,20 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    /** Tek atış Play Integrity preflight (nonce: base64 web-safe, no-wrap, no-padding). */
-    private void requestIntegrityPreflight(Context ctx, IntegrityPreflightCallback cb) {
+    private static String pkgVer(Context c, String pkg) {
+        try { return c.getPackageManager().getPackageInfo(pkg, 0).versionName; }
+        catch (Exception e) { return "NA"; }
+    }
+
+    /** Uygulama resmi Play Store’dan (com.android.vending) mı yüklenmiş? */
+    private static boolean isInstalledFromPlay(Context ctx) {
         try {
-            IntegrityManager mgr = IntegrityManagerFactory.create(ctx);
-            String nonce = generateWebSafeBase64Nonce(32); // 32 bytes → 16–500 aralığında
-            IntegrityTokenRequest req = IntegrityTokenRequest.builder()
-                    .setNonce(nonce)
-                    .setCloudProjectNumber(CLOUD_PROJECT_NUMBER)
-                    .build();
-            mgr.requestIntegrityToken(req)
-                    .addOnSuccessListener(token -> cb.onOk())
-                    .addOnFailureListener(err -> {
-                        Integer code = (err instanceof IntegrityServiceException)
-                                ? ((IntegrityServiceException) err).getErrorCode()
-                                : null;
-                        cb.onFail(err, code);
-                    });
-        } catch (Throwable t) {
-            cb.onFail(t, null);
+            String installer = ctx.getPackageManager()
+                    .getInstallerPackageName(ctx.getPackageName());
+            return "com.android.vending".equals(installer);
+        } catch (Exception e) {
+            return false;
         }
-    }
-
-    private interface IntegrityPreflightCallback {
-        void onOk();
-        void onFail(Throwable err, Integer code);
-    }
-
-    /** Web-safe Base64 (URL_SAFE | NO_WRAP | NO_PADDING). */
-    private static String generateWebSafeBase64Nonce(int numBytes) {
-        byte[] seed = new byte[numBytes];
-        new SecureRandom().nextBytes(seed);
-        // URL-safe, no wrap, no padding → Play Integrity'nin istediği format.
-        return Base64.encodeToString(seed,
-                Base64.URL_SAFE | Base64.NO_WRAP | Base64.NO_PADDING);
     }
 
     // =============================================================================================
@@ -301,36 +372,39 @@ public class MainActivity extends AppCompatActivity {
 
                     // UI
                     ImageButton patiEnterButton = findViewById(R.id.pati_enter);
+                    if (patiEnterButton != null) {
+                        patiEnterButton.setOnClickListener(v -> {
+                            clickCounter++;
+                            if (startCameraRunnable != null) handler.removeCallbacks(startCameraRunnable);
+                            Log.d(TAG, "pati_enter clicked → " + clickCounter);
 
-                    patiEnterButton.setOnClickListener(v -> {
-                        clickCounter++;
-                        if (startCameraRunnable != null) handler.removeCallbacks(startCameraRunnable);
-                        Log.d(TAG, "pati_enter clicked → " + clickCounter);
-
-                        if (clickCounter >= MAX_CLICKS) {
-                            clickCounter = 0;
-                            try {
-                                permissionHelper.requestBluetooth();
-                                PrivateCom.connectToBluetoothDevice(this, this::openQRScannerForRegistration);
-                            } catch (Exception e) {
-                                Log.e(TAG, "Bluetooth connect failed", e);
+                            if (clickCounter >= MAX_CLICKS) {
+                                clickCounter = 0;
+                                try {
+                                    permissionHelper.requestBluetooth();
+                                    PrivateCom.connectToBluetoothDevice(this, this::openQRScannerForRegistration);
+                                } catch (Exception e) {
+                                    Log.e(TAG, "Bluetooth connect failed", e);
+                                }
+                            } else {
+                                startCameraRunnable = this::openCameraWithDelay;
+                                handler.postDelayed(startCameraRunnable, 500);
                             }
-                        } else {
-                            startCameraRunnable = this::openCameraWithDelay;
-                            handler.postDelayed(startCameraRunnable, 500);
-                        }
-                    });
+                        });
 
-                    patiEnterButton.setOnLongClickListener(v -> {
-                        handleLongClickForQRCode();
-                        return true;
-                    });
+                        patiEnterButton.setOnLongClickListener(v -> {
+                            handleLongClickForQRCode();
+                            return true;
+                        });
+                    }
 
                     Log.d("AUTH", user == null ? "Kullanıcı yok" : ("Kullanıcı var: " + user.getUid()));
+                    setLoading(false);
                 })
                 .addOnFailureListener(e -> {
                     Log.e(TAG, "AppCheck warm-up FAILED", e);
                     showPlayEnvAdvice("AppCheck warm-up başarısız: " + (e.getMessage() == null ? "unknown" : e.getMessage()));
+                    setLoading(false);
                 });
     }
 
@@ -518,23 +592,14 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
 
-        try {
-            permissionHelper.requestBluetooth();
-        } catch (Throwable t) {
-            Log.w(TAG, "requestBluetooth warn", t);
-        }
-
-        try {
-            privateCom.enableBluetoothAndMakeDiscoverable(this, 60);
-        } catch (Throwable t) {
-            Log.w(TAG, "enableBluetoothAndMakeDiscoverable warn", t);
-        }
+        try { permissionHelper.requestBluetooth(); } catch (Throwable t) { Log.w(TAG, "requestBluetooth warn", t); }
+        try { privateCom.enableBluetoothAndMakeDiscoverable(this, 60); } catch (Throwable t) { Log.w(TAG, "enableBluetoothAndMakeDiscoverable warn", t); }
 
         showQRCodePopup(generatedQRCode);
 
         if (response == null) {
             try {
-                response = PrivateCom.receiveDataBlocking(); // gerekirse background thread'e al
+                response = PrivateCom.receiveDataBlocking();
                 Log.d(TAG, "BT received: " + response);
                 // TODO: response işlenip uygun ekrana yönlendirme
             } catch (IOException e) {
@@ -580,6 +645,33 @@ public class MainActivity extends AppCompatActivity {
                 : new Intent(this, Kurmes.class);
         startActivity(intent);
         finish();
+    }
+
+    // --- Nonce üretimi ---
+    private static final SecureRandom RAND = new SecureRandom();
+
+    /** 32–48 bayt önerilir; 16 bayt minimumdur (Base64 ÖNCEKİ bayt sayısı). */
+    private static String newIntegrityNonce(int numBytes) {
+        if (numBytes < 16) numBytes = 32;
+        byte[] buf = new byte[numBytes];
+        RAND.nextBytes(buf);
+        return Base64.encodeToString(buf, Base64.URL_SAFE | Base64.NO_WRAP | Base64.NO_PADDING);
+    }
+
+    /** Bağlama duyarlı (appId+uid+ts+rand) → SHA-256 → b64url; sunucuda doğrulamaya uygun. */
+    private static String buildBoundNonce() {
+        try {
+            String payload = "app=" + BuildConfig.APPLICATION_ID +
+                    "&uid=" + (FirebaseAuth.getInstance().getUid() == null ? "anon" : FirebaseAuth.getInstance().getUid()) +
+                    "&ts=" + System.currentTimeMillis() +
+                    "&rand=" + RAND.nextLong();
+            MessageDigest sha = MessageDigest.getInstance("SHA-256");
+            byte[] digest = sha.digest(payload.getBytes(StandardCharsets.UTF_8)); // 32 byte
+            return Base64.encodeToString(digest, Base64.URL_SAFE | Base64.NO_WRAP | Base64.NO_PADDING);
+        } catch (Exception e) {
+            Log.w(TAG, "buildBoundNonce fallback to random", e);
+            return newIntegrityNonce(32);
+        }
     }
 
     private void navigateToRegister() {
