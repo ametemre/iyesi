@@ -2,10 +2,12 @@ package com.kurmez.iyesi.kayra;
 
 import android.app.Activity;
 import android.app.Application;
+import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
+import android.net.Uri;
 import android.util.Log;
 
 import androidx.annotation.IntRange;
@@ -66,7 +68,16 @@ public final class PlayEnvDiagnostics {
         // 2) GMS Core uygun mu?
         if (!isGmsAvailable(ctx)) {
             Log.w(TAG, "Google Play services uygun değil/güncel değil");
-            PlayStoreFixer.openPlayStoreForPackage(ctx, "com.android.vending"); // Play Store sayfası
+            //PlayStoreFixer.openPlayStoreForPackage(ctx, "com.android.vending"); // Play Store sayfası
+            PendingIntent pi = androidx.core.app.TaskStackBuilder.create(ctx)
+                    .addNextIntentWithParentStack(
+                            new Intent(Intent.ACTION_VIEW,
+                                    Uri.parse("market://details?id=" + ctx.getPackageName()))
+                                    .setPackage("com.android.vending"))
+                    .getPendingIntent(1001,
+                            PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+// Bildirime pi’yi ver; kullanıcı dokununca açılır (BAL yok).
+
             return PlayEnvStatus.GMSCORE_MISSING_OR_OUTDATED;
         }
 
@@ -79,7 +90,16 @@ public final class PlayEnvDiagnostics {
         // 4) Integrity'ye hızlı prob
         if (!quickIntegrityProbe(ctx, /*timeoutMs=*/1200)) {
             Log.w(TAG, "Integrity API erişilemedi veya engellendi");
-            PlayStoreFixer.openPlayStoreForPackage(ctx, "com.android.vending"); // Play Store sayfası
+            //PlayStoreFixer.openPlayStoreForPackage(ctx, "com.android.vending"); // Play Store sayfası
+            PendingIntent pi = androidx.core.app.TaskStackBuilder.create(ctx)
+                    .addNextIntentWithParentStack(
+                            new Intent(Intent.ACTION_VIEW,
+                                    Uri.parse("market://details?id=" + ctx.getPackageName()))
+                                    .setPackage("com.android.vending"))
+                    .getPendingIntent(1001,
+                            PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+// Bildirime pi’yi ver; kullanıcı dokununca açılır (BAL yok).
+
             return PlayEnvStatus.INTEGRITY_UNAVAILABLE_OR_BLOCKED;
         }
 
@@ -115,7 +135,16 @@ public final class PlayEnvDiagnostics {
             }
             boolean ok = PKG_PLAY_STORE.equals(installer);
             if (!ok) Log.w(TAG, "installer=" + installer + " (Play değil)");
-            PlayStoreFixer.openPlayStoreForPackage(ctx, "com.android.vending"); // Play Store sayfası
+            //PlayStoreFixer.openPlayStoreForPackage(ctx, "com.android.vending"); // Play Store sayfası
+            PendingIntent pi = androidx.core.app.TaskStackBuilder.create(ctx)
+                    .addNextIntentWithParentStack(
+                            new Intent(Intent.ACTION_VIEW,
+                                    Uri.parse("market://details?id=" + ctx.getPackageName()))
+                                    .setPackage("com.android.vending"))
+                    .getPendingIntent(1001,
+                            PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+// Bildirime pi’yi ver; kullanıcı dokununca açılır (BAL yok).
+
 
             return ok;
         } catch (Throwable t) {

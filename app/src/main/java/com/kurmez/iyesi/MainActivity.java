@@ -2,8 +2,10 @@ package com.kurmez.iyesi;
 
 import android.Manifest;
 import android.annotation.SuppressLint;
+import android.content.Context;
 import android.content.Intent;
 import android.graphics.Bitmap;
+import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.provider.Settings;
@@ -16,7 +18,10 @@ import androidx.annotation.RequiresPermission;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 
+import com.google.android.gms.tasks.Task;
+import com.google.android.gms.tasks.Tasks;
 import com.google.firebase.FirebaseApp;
+import com.google.firebase.appcheck.AppCheckToken;
 import com.google.firebase.appcheck.FirebaseAppCheck;
 
 import com.google.firebase.auth.FirebaseAuth;
@@ -25,7 +30,7 @@ import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.zxing.BarcodeFormat;
 import com.google.zxing.WriterException;
 import com.journeyapps.barcodescanner.BarcodeEncoder;
-import com.kurmez.iyesi.kayra.PlayStoreFixer;
+import com.kurmez.iyesi.kayra.GmsIntegrityPreflight;
 import com.kurmez.iyesi.kurmes.Kurmes;
 import com.kurmez.iyesi.kurmes.ui.SoulsManagerActivity;
 import com.kurmez.iyesi.kurmes.utilities.Helpers;
@@ -56,6 +61,7 @@ public class MainActivity extends AppCompatActivity {
     private String response = null;
     private PermissionHelper permissionHelper;
     private String idToken;
+    private FirebaseUser user;
     // callback’i dışarıda tanımladık:
     private final PermissionHelper.Callback permissionCallback = new PermissionHelper.Callback() {
         @Override public void onGranted() {
@@ -70,64 +76,72 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-        FirebaseAuth mAuth = FirebaseAuth.getInstance();
-        FirebaseUser user = mAuth.getCurrentUser();
-        if (user != null) {
-            try {
-                org.json.JSONObject payload = new org.json.JSONObject()
-                        .put("kind", "health_check")
-                        .put("ts", System.currentTimeMillis())
-                        .put("note", "startup_warmup");  // opsiyonel
-                user.reload() // profil/claim meta güncellensin
-                        .addOnSuccessListener(__ ->
-                                user.getIdToken(true) // force refresh
-                                        .addOnSuccessListener(tokenResult -> {
-                                            idToken = tokenResult.getToken();
-                                            Log.d("Role:", idToken);
-                                        }));
-                // App.app() Context döndürüyor; App'e cast edip çağırıyoruz
-                ((AppCheckTokenProvider) AppCheckTokenProvider.app()).sendRequestWithAppCheckAndAuth(payload);
-            } catch (Exception ignore) {
-                // Anonim giriş
-                mAuth.signInAnonymously()
-                        .addOnSuccessListener(res -> {
-                            FirebaseUser u = mAuth.getCurrentUser();
-                            u.getIdToken(/*forceRefresh=*/true)
-                                    .addOnSuccessListener(tok -> {
-                                        idToken = tok.getToken();  // Bunu Functions’a Bearer olarak gönder
-                                    });
-                        })
-                        .addOnFailureListener(e -> Log.w("AUTH", "Anon sign-in fail: " + e));
-                        Log.d("Role:", idToken);
-                PlayStoreFixer.openPlayStoreForPackage(this, "com.android.vending"); // Play Store sayfası
-            }
-        }
+        GmsIntegrityPreflight.Result pf = GmsIntegrityPreflight.run(this);
+        Log.i("AppCheckPF", "installer=" + getPackageManager().getInstallerPackageName(getPackageName())
+                + " gms=" + pf.ok + " reason=" + pf.reason + " uid=" + android.os.Process.myUid());
+        warmUpAppCheck().addOnSuccessListener(tok -> {
+            Log.d("Token1", tok.toString());
+            FirebaseAuth mAuth = FirebaseAuth.getInstance();
+            user = mAuth.getCurrentUser();
 
-// Anonim giriş
-        mAuth.signInAnonymously()
-                .addOnSuccessListener(res -> {
-                    FirebaseUser u = mAuth.getCurrentUser();
-                    u.getIdToken(/*forceRefresh=*/true)
-                            .addOnSuccessListener(tok -> {
-                                String idToken = tok.getToken();  // Bunu Functions’a Bearer olarak gönder
-                            });
-                })
-                .addOnFailureListener(e -> Log.w("AUTH", "Anon sign-in fail: " + e));
+            if (user != null) {
+                try {
+                    org.json.JSONObject payload = new org.json.JSONObject()
+                            .put("kind", "health_check")
+                            .put("ts", System.currentTimeMillis())
+                            .put("note", "startup_warmup");  // opsiyonel
+                    user.reload() // profil/claim meta güncellensin
+                            .addOnSuccessListener(__ ->
+                                    user.getIdToken(true) // force refresh
+                                            .addOnSuccessListener(tokenResult -> {
+                                                idToken = tokenResult.getToken();
+                                                Log.d("Role:", idToken);
+                                            }));
+                    // App.app() Context döndürüyor; App'e cast edip çağırıyoruz
+                    ((AppCheckTokenProvider) AppCheckTokenProvider.app()).sendRequestWithAppCheckAndAuth(payload);
+                } catch (Exception ignore) {
+                    // Anonim giriş
+
+                    mAuth.signInAnonymously()
+                            .addOnSuccessListener(res -> {
+                                FirebaseUser u = mAuth.getCurrentUser();
+                                u.getIdToken(/*forceRefresh=*/true)
+                                        .addOnSuccessListener(token -> {
+                                            idToken = token.getToken();  // Bunu Functions’a Bearer olarak gönder
+                                            Log.d("Token2", token.toString());
+                                        });
+                            })
+                            .addOnFailureListener(e -> Log.w("AUTH", "Anon sign-in fail: " + e));
+                            Log.d("Role:", idToken);
+    // Bir tık olayı içinde, görünür Activity bağlamında:
+                    Uri uri = Uri.parse("market://details?id=" + getPackageName());
+                    Intent i = new Intent(Intent.ACTION_VIEW, uri)
+                            .setPackage("com.android.vending");
+                    startActivity(i); // BAL yemez: kullanıcı tıkladı ve app foreground
+                }
+            }
+            // 1) helper’ı oluştur, 2) activity ve callback ata,
+            permissionHelper = new PermissionHelper();
+            permissionHelper.setActivity(this);
+            permissionHelper.setCallback(permissionCallback);
+            // 3) parametresiz initialize:
+            permissionHelper.initialize();
+
+            // artık dilediğiniz yerde:
+            //permissionHelper.requestAllPermissions();
+            privateCom = new PrivateCom();
+            // Initialize Firebase instances
+            functions = FirebaseFunctions.getInstance();   // ← burayı ekleyin
+
+        }).addOnFailureListener(e -> {
+            Log.e("Error on Startup:",e.getMessage());
+            // -2 veya nonce hatası vs. geldi → kullanıcıyı yönlendir
+            // Play Store / GMS update intentlerini göster
+        });
 
         Log.d("AUTH", user == null ? "Kullanıcı yok" : "Kullanıcı var: " + user.getUid());
 
-        // 1) helper’ı oluştur, 2) activity ve callback ata,
-        permissionHelper = new PermissionHelper();
-        permissionHelper.setActivity(this);
-        permissionHelper.setCallback(permissionCallback);
-        // 3) parametresiz initialize:
-        permissionHelper.initialize();
 
-        // artık dilediğiniz yerde:
-        //permissionHelper.requestAllPermissions();
-        privateCom = new PrivateCom();
-        // Initialize Firebase instances
-        functions = FirebaseFunctions.getInstance();   // ← burayı ekleyin
         // Find the ImageButton
         ImageButton patiEnterButton = findViewById(R.id.pati_enter);
 // Kullanıcı login ise küçük bir "health_check" at
@@ -175,6 +189,41 @@ public class MainActivity extends AppCompatActivity {
             handler.removeCallbacksAndMessages(null);
         }
     }
+    public static void openPlayServices(Context ctx) {
+        try {
+            ctx.startActivity(new Intent(Intent.ACTION_VIEW)
+                    .setData(Uri.parse("market://details?id=com.google.android.gms"))
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+        } catch (Exception ignore) {
+            ctx.startActivity(new Intent(Intent.ACTION_VIEW)
+                    .setData(Uri.parse("https://play.google.com/store/apps/details?id=com.google.android.gms"))
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+        }
+    }
+
+    public static void openPlayStore(Context ctx) {
+        try {
+            ctx.startActivity(new Intent(Intent.ACTION_VIEW)
+                    .setData(Uri.parse("market://details?id=com.android.vending"))
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+        } catch (Exception ignore) {
+            ctx.startActivity(new Intent(Intent.ACTION_VIEW)
+                    .setData(Uri.parse("https://play.google.com/store/apps/details?id=com.android.vending"))
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+        }
+    }
+
+    public static Task<AppCheckToken> warmUpAppCheck() {
+        FirebaseAppCheck ac = FirebaseAppCheck.getInstance();
+        return ac.getAppCheckToken(false)  // forceRefresh=false; ilk deneme
+                .continueWithTask(t -> {
+                    if (t.isSuccessful()) return Tasks.forResult(t.getResult());
+                    // Bir kez daha zorla yenile:
+                    return ac.getAppCheckToken(true);
+                });
+    }
+
+
 
     private void openQRScannerForRegistration() {
         // Sadece QR Scanner’ı başlatıyoruz

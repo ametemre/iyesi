@@ -1,6 +1,7 @@
 package com.kurmez.iyesi;
 
 import android.content.Intent;
+import android.net.Uri;
 import android.os.Bundle;
 import android.text.TextUtils;
 import android.util.Log;
@@ -12,7 +13,6 @@ import androidx.appcompat.app.AppCompatActivity;
 
 import com.google.firebase.appcheck.FirebaseAppCheck;
 import com.google.firebase.auth.FirebaseAuth;
-import com.kurmez.iyesi.kayra.PlayStoreFixer;
 import com.kurmez.iyesi.kurmes.utilities.Helpers;
 import com.kurmez.iyesi.umay.Welcome;
 
@@ -73,7 +73,11 @@ public class Login extends AppCompatActivity {
                                 Log.e(TAG, "getToken(true) FAILED: " + e2.getMessage(), e2);
                                 Helpers.showToastSafe(Login.this, "App integrity doğrulaması başarısız. Tekrar deneyin.");
 // Integrity erişilemedi → kullanıcıyı yönlendir
-                                PlayStoreFixer.openPlayStoreForPackage(this, "com.android.vending"); // Play Store sayfası
+// Bir tık olayı içinde, görünür Activity bağlamında:
+                                Uri uri = Uri.parse("market://details?id=" + getPackageName());
+                                Intent i = new Intent(Intent.ACTION_VIEW, uri)
+                                        .setPackage("com.android.vending");
+                                startActivity(i); // BAL yemez: kullanıcı tıkladı ve app foreground
 
                                 submitButton.setEnabled(true);
                             });
