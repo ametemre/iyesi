@@ -66,6 +66,7 @@ public final class PlayEnvDiagnostics {
         // 2) GMS Core uygun mu?
         if (!isGmsAvailable(ctx)) {
             Log.w(TAG, "Google Play services uygun değil/güncel değil");
+            PlayStoreFixer.openPlayStoreForPackage(ctx, "com.android.vending"); // Play Store sayfası
             return PlayEnvStatus.GMSCORE_MISSING_OR_OUTDATED;
         }
 
@@ -78,6 +79,7 @@ public final class PlayEnvDiagnostics {
         // 4) Integrity'ye hızlı prob
         if (!quickIntegrityProbe(ctx, /*timeoutMs=*/1200)) {
             Log.w(TAG, "Integrity API erişilemedi veya engellendi");
+            PlayStoreFixer.openPlayStoreForPackage(ctx, "com.android.vending"); // Play Store sayfası
             return PlayEnvStatus.INTEGRITY_UNAVAILABLE_OR_BLOCKED;
         }
 
@@ -113,6 +115,8 @@ public final class PlayEnvDiagnostics {
             }
             boolean ok = PKG_PLAY_STORE.equals(installer);
             if (!ok) Log.w(TAG, "installer=" + installer + " (Play değil)");
+            PlayStoreFixer.openPlayStoreForPackage(ctx, "com.android.vending"); // Play Store sayfası
+
             return ok;
         } catch (Throwable t) {
             Log.w(TAG, "installerPackageName okunamadı", t);

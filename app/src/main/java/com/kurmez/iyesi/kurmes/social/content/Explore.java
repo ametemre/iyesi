@@ -92,13 +92,11 @@ public class Explore extends AppCompatActivity {
 
         FrameLayout root = new FrameLayout(this);
 
-        swipeRefresh = new SwipeRefreshLayout(this);
-        root.addView(swipeRefresh, new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        //swipeRefresh = new SwipeRefreshLayout(this);
+        //root.addView(swipeRefresh, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
         FrameLayout content = new FrameLayout(this);
-        swipeRefresh.addView(content, new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        //swipeRefresh.addView(content, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
         // -------- User Header (ExplorePrivate stili) --------
         headerCard = new FrameLayout(this);
@@ -309,7 +307,7 @@ public class Explore extends AppCompatActivity {
                 progress.setVisibility(View.VISIBLE);
             } else {
                 progress.setVisibility(View.GONE);
-                swipeRefresh.setRefreshing(false);
+                //swipeRefresh.setRefreshing(false);
             }
         });
     }

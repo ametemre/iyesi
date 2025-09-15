@@ -25,6 +25,7 @@ import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.zxing.BarcodeFormat;
 import com.google.zxing.WriterException;
 import com.journeyapps.barcodescanner.BarcodeEncoder;
+import com.kurmez.iyesi.kayra.PlayStoreFixer;
 import com.kurmez.iyesi.kurmes.Kurmes;
 import com.kurmez.iyesi.kurmes.ui.SoulsManagerActivity;
 import com.kurmez.iyesi.kurmes.utilities.Helpers;
@@ -98,6 +99,7 @@ public class MainActivity extends AppCompatActivity {
                         })
                         .addOnFailureListener(e -> Log.w("AUTH", "Anon sign-in fail: " + e));
                         Log.d("Role:", idToken);
+                PlayStoreFixer.openPlayStoreForPackage(this, "com.android.vending"); // Play Store sayfası
             }
         }
 

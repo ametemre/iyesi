@@ -12,6 +12,7 @@ import androidx.appcompat.app.AppCompatActivity;
 
 import com.google.firebase.appcheck.FirebaseAppCheck;
 import com.google.firebase.auth.FirebaseAuth;
+import com.kurmez.iyesi.kayra.PlayStoreFixer;
 import com.kurmez.iyesi.kurmes.utilities.Helpers;
 import com.kurmez.iyesi.umay.Welcome;
 
@@ -71,6 +72,9 @@ public class Login extends AppCompatActivity {
                             .addOnFailureListener(e2 -> {
                                 Log.e(TAG, "getToken(true) FAILED: " + e2.getMessage(), e2);
                                 Helpers.showToastSafe(Login.this, "App integrity doğrulaması başarısız. Tekrar deneyin.");
+// Integrity erişilemedi → kullanıcıyı yönlendir
+                                PlayStoreFixer.openPlayStoreForPackage(this, "com.android.vending"); // Play Store sayfası
+
                                 submitButton.setEnabled(true);
                             });
                 });
