@@ -26,7 +26,7 @@ import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.auth.GetTokenResult;
 
-import com.kurmez.iyesi.kayra.PlayIntegrityPrereq;
+import com.kurmez.iyesi.kayra.PlayEnvDiagnostics;
 import com.kurmez.iyesi.kayra.TopActivity;
 
 import org.json.JSONObject;
@@ -65,6 +65,22 @@ public class AppCheckTokenProvider extends Application {
             (BuildConfig.CF_URL_APP_SEND != null && !BuildConfig.CF_URL_APP_SEND.isEmpty())
                     ? BuildConfig.CF_URL_APP_SEND
                     : "https://us-central1-iyesi-e8d4f.cloudfunctions.net/appSend";
+
+    // İstersen release’te de zorla debug provider’a düşmek için (örn. QA buildleri):
+    // build.gradle(:app) defaultConfig içine ekleyebilirsin:
+    // buildConfigField "boolean", "APP_CHECK_ALLOW_DEBUG_FALLBACK", "true"
+    private static final boolean ALLOW_DEBUG_FALLBACK =
+            safeBoolean("APP_CHECK_ALLOW_DEBUG_FALLBACK", false);
+
+    private static boolean safeBoolean(String field, boolean def) {
+        try {
+            return AppCheckTokenProvider.class.getPackage() != null
+                    ? AppCheckTokenProvider.class.getClassLoader()
+                    .loadClass(BuildConfig.class.getName())
+                    .getField(field).getBoolean(null)
+                    : def;
+        } catch (Throwable ignore) { return def; }
+    }
 
     /* ------------------------------------------------------------------------
      * App Check token cache
@@ -147,13 +163,11 @@ public class AppCheckTokenProvider extends Application {
     private static final Interceptor FIREBASE_HEADERS_INTERCEPTOR = chain -> {
         Request orig = chain.request();
 
-        // Teşhis logları
-        try {
-            Log.d("HTTP", "→ " + orig.method() + " " + orig.url().encodedPath());
-        } catch (Throwable ignore) {}
+        try { Log.d("HTTP", "→ " + orig.method() + " " + orig.url().encodedPath()); } catch (Throwable ignore) {}
 
-        // 1) App Check token (cache → force)
-        String appTok;
+        // 1) App Check token (cache → force). Bulamazsak isteği BLOK-LAMA.
+        //    Header’ı atlamayı tercih ediyoruz; server enforcement varsa zaten 401/403 döner.
+        String appTok = null;
         {
             final CountDownLatch latch = new CountDownLatch(1);
             final String[] h = new String[1];
@@ -164,16 +178,20 @@ public class AppCheckTokenProvider extends Application {
                 getAppCheckTokenCached(true, t -> { h[0] = t; latchF.countDown(); });
                 try { latchF.await(1800, TimeUnit.MILLISECONDS); } catch (InterruptedException ignored) {}
             }
-            if (h[0] == null) throw new IOException("No AppCheck token");
-            appTok = h[0];
+            appTok = h[0]; // null olabilir
         }
 
         // 2) ID token (cache)
         String idTok = getIdTokenCachedBlocking(false);
 
         Request.Builder rb = orig.newBuilder()
-                .header("X-Firebase-AppCheck", appTok)
                 .header("Authorization", "Bearer " + idTok);
+
+        if (appTok != null) {
+            rb.header("X-Firebase-AppCheck", appTok);
+        } else {
+            Log.w(TAG, "No App Check token available; sending request without X-Firebase-AppCheck");
+        }
 
         Response rsp = chain.proceed(rb.build());
 
@@ -186,25 +204,22 @@ public class AppCheckTokenProvider extends Application {
             final String[] freshApp = new String[1];
             getAppCheckTokenCached(true, t -> { freshApp[0] = t; latch2.countDown(); });
             try { latch2.await(1800, TimeUnit.MILLISECONDS); } catch (InterruptedException ignored) {}
-            if (freshApp[0] == null) throw new IOException("AppCheck force refresh fail");
 
             String freshId = getIdTokenCachedBlocking(true);
 
-            Request retry = orig.newBuilder()
-                    .header("X-Firebase-AppCheck", freshApp[0])
-                    .header("Authorization", "Bearer " + freshId)
-                    .build();
+            Request.Builder rb2 = orig.newBuilder()
+                    .header("Authorization", "Bearer " + freshId);
 
-            Response rr = chain.proceed(retry);
-            try {
-                Log.d("HTTP", "← " + rr.code() + " " + orig.url().encodedPath());
-            } catch (Throwable ignore) {}
+            if (freshApp[0] != null) {
+                rb2.header("X-Firebase-AppCheck", freshApp[0]);
+            }
+
+            Response rr = chain.proceed(rb2.build());
+            try { Log.d("HTTP", "← " + rr.code() + " " + orig.url().encodedPath()); } catch (Throwable ignore) {}
             return rr;
         }
 
-        try {
-            Log.d("HTTP", "← " + rsp.code() + " " + orig.url().encodedPath());
-        } catch (Throwable ignore) {}
+        try { Log.d("HTTP", "← " + rsp.code() + " " + orig.url().encodedPath()); } catch (Throwable ignore) {}
         return rsp;
     };
 
@@ -222,21 +237,8 @@ public class AppCheckTokenProvider extends Application {
      * ID token yardımcıları (async kullanım isteyen yerler için)
      * --------------------------------------------------------------------- */
     public static void getIdTokenEnsuringAnon(@NonNull IdTokCb cb) {
-        // Önce App Check’i ısıt
-        getAppCheckTokenCached(false, t1 -> {
-            if (t1 == null) {
-                getAppCheckTokenCached(true, t2 -> {
-                    if (t2 == null) {
-                        Log.e(TAG, "App Check token alınamadı; anon sign-in denemeyeceğim.");
-                        cb.onReady(null);
-                    } else {
-                        proceedSignIn(cb);
-                    }
-                });
-            } else {
-                proceedSignIn(cb);
-            }
-        });
+        // Önce App Check’i ısıt (ama başarısız olursa da devam edebiliriz)
+        getAppCheckTokenCached(false, t1 -> proceedSignIn(cb));
     }
 
     private static void proceedSignIn(@NonNull IdTokCb cb) {
@@ -271,7 +273,7 @@ public class AppCheckTokenProvider extends Application {
                 @Override public void onProviderInstalled() {
                     Log.d(TAG, "TLS Provider yüklendi");
                 }
-                @Override public void onProviderInstallFailed(int errorCode, @Nullable Intent recoveryIntent) {
+                @Override public void onProviderInstallFailed(int errorCode, Intent recoveryIntent) {
                     Log.w(TAG, "TLS Provider yüklenemedi, code=" + errorCode);
                 }
             });
@@ -289,20 +291,19 @@ public class AppCheckTokenProvider extends Application {
         sInstance = this;
         TopActivity.init(this);
 
-        // 0) Play Store / GMS önkoşulları → gerekiyorsa kullanıcıyı update'e yönlendir
-        PlayIntegrityPrereq.checkAndFix(this, /*showUi=*/true, ok ->
-                Log.d(TAG, "PlayIntegrityPrereq ok=" + ok));
+        // 0) Play ortamı teşhisi (hızlı)
+        PlayEnvDiagnostics.PlayEnvStatus env = PlayEnvDiagnostics.initPreflight(this);
 
         // 1) Firebase init
         FirebaseApp.initializeApp(this);
 
         // 2) App Check provider’ı kur (Firebase init'ten hemen sonra)
-        configureAppCheckProvider();
+        configureAppCheckProvider(env);
 
         // 3) TLS provider (opsiyonel)
         safeInstallProviderIfNeeded(this);
 
-        // 4) App Check warm-up
+        // 4) App Check warm-up (başarısız olursa force dener, yine de uygulamayı bloklamaz)
         FirebaseAppCheck.getInstance()
                 .getAppCheckToken(false)
                 .addOnSuccessListener(t -> Log.d(TAG, "warm-up AppCheck OK"))
@@ -333,19 +334,28 @@ public class AppCheckTokenProvider extends Application {
         }
     }
 
-    private void configureAppCheckProvider() {
+    private void configureAppCheckProvider(PlayEnvDiagnostics.PlayEnvStatus env) {
         FirebaseAppCheck appCheck = FirebaseAppCheck.getInstance();
 
+        boolean shouldUseDebug =
+                BuildConfig.DEBUG
+                        || (ALLOW_DEBUG_FALLBACK
+                        && (env == PlayEnvDiagnostics.PlayEnvStatus.INTEGRITY_UNAVAILABLE_OR_BLOCKED
+                        || env == PlayEnvDiagnostics.PlayEnvStatus.APP_NOT_INSTALLED_FROM_PLAY
+                        || env == PlayEnvDiagnostics.PlayEnvStatus.PLAY_STORE_MISSING_OR_DISABLED));
+
         try {
-            if (BuildConfig.DEBUG) {
-                // Debug varyantında Debug Provider; reflection ile (release'te sınıf yoksa crash olmasın)
+            if (shouldUseDebug) {
+                // Debug provider; reflection ile (release’te sınıf yoksa crash olmasın)
                 try {
                     Class<?> clazz = Class.forName("com.google.firebase.appcheck.debug.DebugAppCheckProviderFactory");
                     Object factory = clazz.getMethod("getInstance").invoke(null);
                     appCheck.installAppCheckProviderFactory((AppCheckProviderFactory) factory);
-                    Log.i(TAG, "AppCheck provider installed: Debug");
+                    Log.i(TAG, "AppCheck provider installed: Debug (fallback=" + (!BuildConfig.DEBUG) + ")");
                 } catch (Throwable e) {
-                    Log.w(TAG, "Debug AppCheck provider unavailable", e);
+                    Log.w(TAG, "Debug AppCheck provider unavailable; falling back to PlayIntegrity", e);
+                    appCheck.installAppCheckProviderFactory(PlayIntegrityAppCheckProviderFactory.getInstance());
+                    Log.i(TAG, "AppCheck provider installed: PlayIntegrity");
                 }
             } else {
                 // Release varyantında Play Integrity

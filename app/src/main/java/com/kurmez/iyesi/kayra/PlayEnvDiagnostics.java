@@ -1,203 +1,213 @@
-// PlayEnvDiagnostics.java
 package com.kurmez.iyesi.kayra;
 
+import android.app.Activity;
+import android.app.Application;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.ApplicationInfo;
-import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
-import android.os.Build;
-import android.security.NetworkSecurityPolicy;
-import android.text.TextUtils;
-import android.util.Base64;
 import android.util.Log;
 
+import androidx.annotation.IntRange;
+import androidx.annotation.MainThread;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
 import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.common.GoogleApiAvailability;
 import com.google.android.gms.security.ProviderInstaller;
+
 import com.google.android.play.core.integrity.IntegrityManager;
 import com.google.android.play.core.integrity.IntegrityManagerFactory;
-import com.google.android.play.core.integrity.IntegrityTokenRequest;
 import com.google.android.play.core.integrity.IntegrityServiceException;
+import com.google.android.play.core.integrity.IntegrityTokenRequest;
 
-import java.security.SecureRandom;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
+/**
+ * Play ortam teşhisi + TLS Provider kurulum yardımcıları.
+ *
+ * Kullanım (Application.onCreate):
+ *   PlayEnvDiagnostics.PlayEnvStatus st = PlayEnvDiagnostics.diagnose(getApplicationContext());
+ *   Log.d("PlayEnvDiag", "status=" + st);
+ *
+ * Eğer GMS uyumsuzsa ilk Activity’de:
+ *   PlayEnvDiagnostics.resolveGmsAvailability(this, 9000);
+ *
+ * TLS provider:
+ *   PlayEnvDiagnostics.ensureTlsProviderAsync(getApplicationContext());
+ */
 public final class PlayEnvDiagnostics {
+
     private static final String TAG = "PlayEnvDiag";
     private static final String PKG_PLAY_STORE = "com.android.vending";
-    private static final String PKG_GMS = "com.google.android.gms";
-    // İstersen minimum sürüm eşiği koyabilirsin:
-    private static final int MIN_GMS_VERSION_CODE = com.google.android.gms.common.GoogleApiAvailability.GOOGLE_PLAY_SERVICES_VERSION_CODE;
 
     private PlayEnvDiagnostics() {}
 
-    /** App, Play’den mi yüklü? (installer kontrolü) */
-    public static boolean isInstalledFromPlay(@NonNull Context ctx) {
-        String installer = ctx.getPackageManager().getInstallerPackageName(ctx.getPackageName());
-        return PKG_PLAY_STORE.equals(installer);
+    /** Ortamın üst seviye özeti. */
+    public enum PlayEnvStatus {
+        OK,
+        PLAY_STORE_MISSING_OR_DISABLED,
+        GMSCORE_MISSING_OR_OUTDATED,
+        APP_NOT_INSTALLED_FROM_PLAY,
+        INTEGRITY_UNAVAILABLE_OR_BLOCKED
     }
 
-    /** Play Store cihazda var ve etkin mi? */
-    public static boolean isPlayStorePresentAndEnabled(@NonNull Context ctx) {
+    /** Hızlı genel teşhis. Ağır işlem yapmaz; ~1 sn bloklayabilir. */
+    @NonNull
+    public static PlayEnvStatus diagnose(@NonNull Context ctx) {
+        // 1) Play Store var mı ve etkin mi?
+        if (!isPlayStoreEnabled(ctx)) {
+            Log.w(TAG, "Play Store yok ya da devre dışı");
+            return PlayEnvStatus.PLAY_STORE_MISSING_OR_DISABLED;
+        }
+
+        // 2) GMS Core uygun mu?
+        if (!isGmsAvailable(ctx)) {
+            Log.w(TAG, "Google Play services uygun değil/güncel değil");
+            return PlayEnvStatus.GMSCORE_MISSING_OR_OUTDATED;
+        }
+
+        // 3) Kurulum kaynağı Play Store mu? (bazı ROM'larda null dönebilir)
+        if (!isInstalledFromPlay(ctx)) {
+            Log.w(TAG, "Uygulama Play Store'dan kurulmamış görünüyor");
+            return PlayEnvStatus.APP_NOT_INSTALLED_FROM_PLAY;
+        }
+
+        // 4) Integrity'ye hızlı prob
+        if (!quickIntegrityProbe(ctx, /*timeoutMs=*/1200)) {
+            Log.w(TAG, "Integrity API erişilemedi veya engellendi");
+            return PlayEnvStatus.INTEGRITY_UNAVAILABLE_OR_BLOCKED;
+        }
+
+        return PlayEnvStatus.OK;
+    }
+
+    /** Play Store uygulaması mevcut ve etkin mi? */
+    public static boolean isPlayStoreEnabled(@NonNull Context ctx) {
         try {
             ApplicationInfo ai = ctx.getPackageManager().getApplicationInfo(PKG_PLAY_STORE, 0);
-            return ai.enabled;
+            return ai != null && ai.enabled;
         } catch (PackageManager.NameNotFoundException e) {
             return false;
         }
     }
 
-    /** GMS Core (Play Services) var mı ve sürüm yeterli mi? */
-    public static int checkGooglePlayServices(@NonNull Context ctx) {
-        int status = GoogleApiAvailability.getInstance().isGooglePlayServicesAvailable(ctx);
-        // SUCCESS ise iyi. Değilse kullanıcıya çözüm sunulabilir (update/enable/install)
-        return status;
+    /** Google Play services hazır mı? */
+    public static boolean isGmsAvailable(@NonNull Context ctx) {
+        int code = GoogleApiAvailability.getInstance().isGooglePlayServicesAvailable(ctx);
+        boolean ok = (code == ConnectionResult.SUCCESS);
+        if (!ok) Log.w(TAG, "GMS status=" + code);
+        return ok;
     }
 
-    /** GMS sürüm kodunu döndür (0 => bulunamadı) */
-    public static int getGmsVersionCode(@NonNull Context ctx) {
+    /** Uygulama Play Store’dan mı kurulmuş? Bazı ROM’larda null gelebilir → o zaman esnek davran. */
+    public static boolean isInstalledFromPlay(@NonNull Context ctx) {
         try {
-            PackageInfo pi = ctx.getPackageManager().getPackageInfo(PKG_GMS, 0);
-            if (Build.VERSION.SDK_INT >= 28) return (int) pi.getLongVersionCode();
-            return pi.versionCode;
-        } catch (PackageManager.NameNotFoundException e) {
-            return 0;
+            @Nullable String installer = ctx.getPackageManager().getInstallerPackageName(ctx.getPackageName());
+            if (installer == null) {
+                // MIUI/HyperOS bazen null döner; kesin hüküm vermeyelim.
+                Log.d(TAG, "installerPackageName=null (ROM davranışı olabilir)");
+                return true;
+            }
+            boolean ok = PKG_PLAY_STORE.equals(installer);
+            if (!ok) Log.w(TAG, "installer=" + installer + " (Play değil)");
+            return ok;
+        } catch (Throwable t) {
+            Log.w(TAG, "installerPackageName okunamadı", t);
+            return true; // Saptanamadı → engelleme.
         }
     }
 
-    /** Play Store sürüm kodunu döndür (0 => yok) */
-    public static int getPlayStoreVersionCode(@NonNull Context ctx) {
+    /**
+     * Integrity servisine "ulaşabiliyor muyuz" hızlı testi.
+     * Başarılıysa true döner. -2 (PLAY_STORE_NOT_FOUND) dahil tüm hatalarda false.
+     */
+    public static boolean quickIntegrityProbe(@NonNull Context ctx,
+                                              @IntRange(from = 300, to = 5000) int timeoutMs) {
+        final IntegrityManager im;
         try {
-            PackageInfo pi = ctx.getPackageManager().getPackageInfo(PKG_PLAY_STORE, 0);
-            if (Build.VERSION.SDK_INT >= 28) return (int) pi.getLongVersionCode();
-            return pi.versionCode;
-        } catch (PackageManager.NameNotFoundException e) {
-            return 0;
+            im = IntegrityManagerFactory.create(ctx);
+        } catch (Throwable t) {
+            Log.w(TAG, "IntegrityManagerFactory.create() başarısız", t);
+            return false;
         }
-    }
 
-    /** TLS provider kurulabiliyor mu? (ProviderInstaller) */
-// PlayEnvDiagnostics.ensureTlsProvider(...)
-    public static boolean ensureTlsProvider(@NonNull Context ctx) {
         final CountDownLatch latch = new CountDownLatch(1);
-        final boolean[] ok = {false};
+        final boolean[] ok = { false };
 
-        // import: com.google.android.gms.security.ProviderInstaller.ProviderInstallListener;
-        ProviderInstaller.installIfNeededAsync(ctx, new ProviderInstaller.ProviderInstallListener() {
-            @Override
-            public void onProviderInstalled() {
-                ok[0] = true;
-                latch.countDown();
-            }
-
-            @Override
-            public void onProviderInstallFailed(int errorCode, @Nullable Intent recoveryIntent) {
-                // İyileştirilebilir bir durumsa kullanıcıya çözüm bildirimi gösterebilirsin:
-                GoogleApiAvailability gms = GoogleApiAvailability.getInstance();
-                if (gms.isUserResolvableError(errorCode)) {
-                    // İstersen bildirim göster:
-                    // gms.showErrorNotification(ctx, errorCode);
-                    Log.w(TAG, "TLS provider install needs user action: " + errorCode);
-                } else {
-                    Log.w(TAG, "TLS provider install failed: code=" + errorCode);
-                }
-                latch.countDown();
-            }
-        });
-
-        try { latch.await(3, TimeUnit.SECONDS); } catch (InterruptedException ignored) {}
-        return ok[0];
-    }
-
-
-    /** Play Integrity'ye kısa ping: başarı veya hata kodu döndür. */
-    public static IntegrityProbeResult probeIntegrity(@NonNull Context ctx) {
-        IntegrityManager im = IntegrityManagerFactory.create(ctx);
-        byte[] nonce = new byte[32];
-        new SecureRandom().nextBytes(nonce);
-        String nonceB64 = Base64.encodeToString(nonce, Base64.NO_WRAP | Base64.URL_SAFE);
         IntegrityTokenRequest req = IntegrityTokenRequest.builder()
-                .setNonce(nonceB64)
-                // .setCloudProjectNumber(238523750447L) // istersen sabitle; eşleşme şart!
+                .setNonce("ping") // Yanıtı kullanmıyoruz; sadece servis erişimi testi.
                 .build();
 
-        final CountDownLatch latch = new CountDownLatch(1);
-        final IntegrityProbeResult out = new IntegrityProbeResult();
-
         im.requestIntegrityToken(req)
-                .addOnSuccessListener(r -> {
-                    out.success = true;
-                    out.tokenPrefix = r.token().substring(0, Math.min(16, r.token().length()));
+                .addOnSuccessListener(response -> {
+                    ok[0] = true;
                     latch.countDown();
                 })
-                .addOnFailureListener(ex -> {
-                    out.success = false;
-                    if (ex instanceof IntegrityServiceException) {
-                        IntegrityServiceException ie = (IntegrityServiceException) ex;
-                        out.errorCode = ie.getErrorCode();
-                        out.errorMessage = ie.getMessage();
-                    } else {
-                        out.errorCode = Integer.MIN_VALUE;
-                        out.errorMessage = ex.getMessage();
-                    }
+                .addOnFailureListener(e -> {
+                    int code = (e instanceof IntegrityServiceException)
+                            ? ((IntegrityServiceException) e).getErrorCode()
+                            : Integer.MIN_VALUE;
+                    Log.w(TAG, "Integrity probe failed, code=" + code + ", e=" + e);
                     latch.countDown();
                 });
 
-        try { latch.await(5, TimeUnit.SECONDS); } catch (InterruptedException ignored) {}
-        return out;
+        try { latch.await(timeoutMs, TimeUnit.MILLISECONDS); } catch (InterruptedException ignored) {}
+        return ok[0];
     }
 
-    /** Toplu rapor. Logcat’e bas ve döndür. */
-    public static String buildReport(@NonNull Context ctx) {
-        StringBuilder sb = new StringBuilder();
-        boolean fromPlay = isInstalledFromPlay(ctx);
-        boolean hasPlayStore = isPlayStorePresentAndEnabled(ctx);
-        int gmsStatus = checkGooglePlayServices(ctx);
-        int gmsVc = getGmsVersionCode(ctx);
-        int psVc = getPlayStoreVersionCode(ctx);
-        boolean tlsOk = ensureTlsProvider(ctx);
-        IntegrityProbeResult pr = probeIntegrity(ctx);
+    /**
+     * TLS provider’ı güvenli şekilde kurar; UI gerekmez.
+     * Not: Başarısız olsa bile çoğu ağ çağrısı çalışır; ama eski TLS zincirlerinde kritik olabilir.
+     */
+    public static void ensureTlsProviderAsync(@NonNull Context ctx) {
+        // Önce GMS uygun mu?
+        if (!isGmsAvailable(ctx)) {
+            Log.w(TAG, "GMS uygun değil; TLS provider kurulumu atlanıyor");
+            return;
+        }
 
-        sb.append("=== Play Env Report ===\n");
-        sb.append("Installed from Play: ").append(fromPlay).append('\n');
-        sb.append("Play Store present/enabled: ").append(hasPlayStore)
-                .append(" (vc=").append(psVc).append(")\n");
-        sb.append("GMS status: ").append(gmsStatusToString(gmsStatus))
-                .append(" (vc=").append(gmsVc).append(", min=").append(MIN_GMS_VERSION_CODE).append(")\n");
-        sb.append("TLS Provider install ok: ").append(tlsOk).append('\n');
-        sb.append("Cleartext permitted (global): ").append(NetworkSecurityPolicy.getInstance().isCleartextTrafficPermitted()).append('\n');
-        sb.append("Integrity ping: ").append(pr.success ? "OK token" : "FAIL")
-                .append(pr.success ? (" (token~=" + pr.tokenPrefix + "...)") :
-                        (" (code=" + pr.errorCode + ", msg=" + safe(pr.errorMessage) + ")"))
-                .append('\n');
+        ProviderInstaller.installIfNeededAsync(ctx, new ProviderInstaller.ProviderInstallListener() {
+            @Override public void onProviderInstalled() {
+                Log.d(TAG, "TLS Provider yüklendi (GmsCore_OpenSSL)");
+            }
 
-        Log.i(TAG, sb.toString());
-        return sb.toString();
+            @Override public void onProviderInstallFailed(int errorCode, @Nullable Intent recoveryIntent) {
+                Log.w(TAG, "TLS Provider yüklenemedi, errorCode=" + errorCode + " intent=" + recoveryIntent);
+            }
+        });
     }
 
-    private static String safe(String s) { return TextUtils.isEmpty(s) ? "-" : s; }
+    /**
+     * GMS uygun değilse çözüm diyaloğunu açar.
+     * Bunu yalnızca Activity bağlamında ve UI thread’de çağır.
+     */
+    @MainThread
+    public static void resolveGmsAvailability(@NonNull Activity activity,
+                                              @IntRange(from = 1) int requestCode) {
+        GoogleApiAvailability gaa = GoogleApiAvailability.getInstance();
+        int code = gaa.isGooglePlayServicesAvailable(activity);
+        if (code == ConnectionResult.SUCCESS) return;
 
-    private static String gmsStatusToString(int status) {
-        switch (status) {
-            case ConnectionResult.SUCCESS: return "SUCCESS";
-            case ConnectionResult.SERVICE_MISSING: return "SERVICE_MISSING";
-            case ConnectionResult.SERVICE_UPDATING: return "SERVICE_UPDATING";
-            case ConnectionResult.SERVICE_VERSION_UPDATE_REQUIRED: return "SERVICE_VERSION_UPDATE_REQUIRED";
-            case ConnectionResult.SERVICE_DISABLED: return "SERVICE_DISABLED";
-            case ConnectionResult.SERVICE_INVALID: return "SERVICE_INVALID";
-            default: return "ERROR_" + status;
+        if (gaa.isUserResolvableError(code)) {
+            gaa.getErrorDialog(activity, code, requestCode).show();
+        } else {
+            Log.w(TAG, "GMS hatası kullanıcı tarafından çözülemez: code=" + code);
         }
     }
 
-    public static class IntegrityProbeResult {
-        public boolean success;
-        public int errorCode;
-        public String errorMessage;
-        public String tokenPrefix;
+    /* ------------------------------------------------------------
+     * Kolaylaştırıcı: Application içinden tek çağrıda yap
+     * ------------------------------------------------------------ */
+    public static @NonNull PlayEnvStatus initPreflight(@NonNull Application app) {
+        PlayEnvStatus st = diagnose(app.getApplicationContext());
+        Log.d(TAG, "preflight status=" + st);
+
+        // TLS provider denemesi (başarısız olsa da zararı yok)
+        ensureTlsProviderAsync(app.getApplicationContext());
+
+        return st;
     }
 }
