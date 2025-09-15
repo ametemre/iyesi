@@ -271,7 +271,7 @@ public class AppCheckTokenProvider extends Application {
                 @Override public void onProviderInstalled() {
                     Log.d(TAG, "TLS Provider yüklendi");
                 }
-                @Override public void onProviderInstallFailed(int errorCode, Intent recoveryIntent) {
+                @Override public void onProviderInstallFailed(int errorCode, @Nullable Intent recoveryIntent) {
                     Log.w(TAG, "TLS Provider yüklenemedi, code=" + errorCode);
                 }
             });
