@@ -41,7 +41,7 @@ import com.google.android.play.core.integrity.model.IntegrityErrorCode;
 import com.google.firebase.FirebaseApp;
 import com.google.firebase.appcheck.AppCheckToken;
 import com.google.firebase.appcheck.FirebaseAppCheck;
-import com.google.firebase.appcheck.debug.DebugAppCheckProviderFactory;
+import com.google.firebase.appcheck.AppCheckProviderFactory;
 import com.google.firebase.appcheck.playintegrity.PlayIntegrityAppCheckProviderFactory;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
@@ -124,7 +124,7 @@ public class MainActivity extends AppCompatActivity {
         // Firebase init (idempotent)
         try { FirebaseApp.initializeApp(this); } catch (Throwable ignore) { }
 
-        // App Check provider seçimi (idempotent)
+        // App Check provider seçimi (idempotent, reflection ile debug import’suz)
         ensureAppCheckProviderInstalled();
 
         // PermissionHelper
@@ -294,7 +294,6 @@ public class MainActivity extends AppCompatActivity {
             PackageManager pm = ctx.getPackageManager();
             ApplicationInfo ai = pm.getApplicationInfo("com.android.vending", 0);
             boolean enabled = ai != null && ai.enabled;
-            // Ayrıca versiyon bilgisi okunabiliyor mu?
             PackageInfo pi = pm.getPackageInfo("com.android.vending", 0);
             return enabled && pi != null;
         } catch (Exception e) {
@@ -312,12 +311,10 @@ public class MainActivity extends AppCompatActivity {
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                 InstallSourceInfo info = ctx.getPackageManager().getInstallSourceInfo(ctx.getPackageName());
-                // initiatingPackageName bazen paket yükleyiciyi, installingPackageName ise son yükleyeni verir
                 String installer = info != null ? info.getInstallingPackageName() : null;
                 if (installer == null) installer = info != null ? info.getInitiatingPackageName() : null;
                 return "com.android.vending".equals(installer);
             } else {
-                // Deprecated yol ama eski cihazlar için:
                 String installer = ctx.getPackageManager().getInstallerPackageName(ctx.getPackageName());
                 return "com.android.vending".equals(installer);
             }
@@ -425,7 +422,6 @@ public class MainActivity extends AppCompatActivity {
 
     public static Task<AppCheckToken> warmUpAppCheck() {
         FirebaseAppCheck ac = FirebaseAppCheck.getInstance();
-        // İlk deneme: taze olmayan token
         return ac.getAppCheckToken(false)
                 .continueWithTask(t -> t.isSuccessful() ? Tasks.forResult(t.getResult())
                         : ac.getAppCheckToken(true));
@@ -710,7 +706,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     // =============================================================================================
-    // Yardımcı: App Check provider kurulumu (idempotent)
+    // Yardımcı: App Check provider kurulumu (idempotent, reflection ile debug)
     // =============================================================================================
 
     private void ensureAppCheckProviderInstalled() {
@@ -718,9 +714,17 @@ public class MainActivity extends AppCompatActivity {
         try {
             FirebaseAppCheck appCheck = FirebaseAppCheck.getInstance();
             if (BuildConfig.DEBUG) {
-                // Debug’da zaten problemsizsin; bunu açık tutalım
-                appCheck.installAppCheckProviderFactory(DebugAppCheckProviderFactory.getInstance());
-                Log.i(TAG, "AppCheck provider = Debug");
+                // Debug provider'ı reflection ile dene (import gerekmesin)
+                try {
+                    Class<?> cls = Class.forName("com.google.firebase.appcheck.debug.DebugAppCheckProviderFactory");
+                    Object factory = cls.getMethod("getInstance").invoke(null);
+                    appCheck.installAppCheckProviderFactory((AppCheckProviderFactory) factory);
+                    Log.i(TAG, "AppCheck provider = Debug (reflection)");
+                } catch (Throwable t) {
+                    Log.w(TAG, "DebugAppCheckProviderFactory yok; PlayIntegrity'ye düşülüyor.", t);
+                    appCheck.installAppCheckProviderFactory(PlayIntegrityAppCheckProviderFactory.getInstance());
+                    Log.i(TAG, "AppCheck provider = PlayIntegrity (fallback in debug)");
+                }
             } else {
                 // Release’de Play Integrity provider’ı zorunlu
                 appCheck.installAppCheckProviderFactory(PlayIntegrityAppCheckProviderFactory.getInstance());
