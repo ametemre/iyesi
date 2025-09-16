@@ -5,9 +5,12 @@ import android.annotation.SuppressLint;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.ApplicationInfo;
+import android.content.pm.InstallSourceInfo;
+import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.provider.Settings;
@@ -38,6 +41,8 @@ import com.google.android.play.core.integrity.model.IntegrityErrorCode;
 import com.google.firebase.FirebaseApp;
 import com.google.firebase.appcheck.AppCheckToken;
 import com.google.firebase.appcheck.FirebaseAppCheck;
+import com.google.firebase.appcheck.debug.DebugAppCheckProviderFactory;
+import com.google.firebase.appcheck.playintegrity.PlayIntegrityAppCheckProviderFactory;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.firestore.FirebaseFirestore;
@@ -97,6 +102,9 @@ public class MainActivity extends AppCompatActivity {
     private volatile boolean hasAppCheckToken = false;
     private volatile boolean hasAuthIdToken  = false;
 
+    // App Check provider kurulumunu activity yaşam döngüsünde bir kez yapalım
+    private static volatile boolean appCheckProviderInstalled = false;
+
     // ----- Basit preflight durumları -----
     private enum PreflightStatus {
         RETRIABLE_INPUT_ERROR,
@@ -115,6 +123,9 @@ public class MainActivity extends AppCompatActivity {
 
         // Firebase init (idempotent)
         try { FirebaseApp.initializeApp(this); } catch (Throwable ignore) { }
+
+        // App Check provider seçimi (idempotent)
+        ensureAppCheckProviderInstalled();
 
         // PermissionHelper
         permissionHelper = new PermissionHelper();
@@ -182,7 +193,7 @@ public class MainActivity extends AppCompatActivity {
                     || code == IntegrityErrorCode.PLAY_STORE_NOT_FOUND
                     || code == IntegrityErrorCode.PLAY_STORE_VERSION_OUTDATED
                     || code == IntegrityErrorCode.GOOGLE_SERVER_UNAVAILABLE) {
-                return PreflightStatus.ENV_MISSING_OR_OUTDATED; // <<< “erişilemedi/engellendi” dediğimiz dal
+                return PreflightStatus.ENV_MISSING_OR_OUTDATED; // erişilemedi/engellendi
             }
             return PreflightStatus.TRANSIENT_ERROR;
         }
@@ -193,8 +204,6 @@ public class MainActivity extends AppCompatActivity {
     // =============================================================================================
     // Preflight
     // =============================================================================================
-
-    // MainActivity.java — Preflight'ın Integrity kısmı (cerrahi kesit)
 
     private void preflightIntegrityOrPrompt() {
         setLoading(true);
@@ -222,8 +231,7 @@ public class MainActivity extends AppCompatActivity {
                 warmUpAppCheckThenInitUiAndAuth();
                 return;
             } else {
-                // <<< ŞU LOG, “Integrity API erişilemedi veya engellendi” OLAYININ NEDENİNE İŞARET EDER
-                Log.w(TAG, "Integrity API erişilemedi veya engellendi (Play ortamı yok/uyumsuz)."); // <<< ARADIĞIN SATIR
+                Log.w(TAG, "Integrity API erişilemedi veya engellendi (Play ortamı yok/uyumsuz).");
                 showPlayEnvAdvice(!playOk ? "Google Play Store kurulu değil / devre dışı"
                         : "Uygulama resmi Play Store’dan yüklenmemiş.");
                 setLoading(false);
@@ -231,7 +239,7 @@ public class MainActivity extends AppCompatActivity {
             }
         }
 
-        // 3) Integrity çağrısı (başarısızsa aşağıdaki onFailure çalışır)
+        // 3) Integrity çağrısı
         requestIntegrityWithRetry(
                 token -> {
                     Log.i(TAG, "Integrity token alındı (preflight OK).");
@@ -248,12 +256,11 @@ public class MainActivity extends AppCompatActivity {
                         return;
                     }
 
-                    // <<< BURADA DA AÇIKÇA LOGLUYORUZ
                     if (s == PreflightStatus.ENV_MISSING_OR_OUTDATED) {
-                        Log.w(TAG, "Integrity API erişilemedi veya engellendi (ENV_MISSING_OR_OUTDATED)."); // <<< ARADIĞIN SATIR
+                        Log.w(TAG, "Integrity API erişilemedi veya engellendi (ENV_MISSING_OR_OUTDATED).");
                         showPlayEnvAdvice("Play ortamı eksik/eski. (Integrity env)");
                     } else if (s == PreflightStatus.TRANSIENT_ERROR) {
-                        Log.w(TAG, "Integrity API erişilemedi veya geçici hata."); // <<< ALTERNATİF LOG
+                        Log.w(TAG, "Integrity API geçici hata.");
                         showPlayEnvAdvice("Geçici hata: Lütfen tekrar deneyin.");
                     } else if (s == PreflightStatus.RETRIABLE_INPUT_ERROR) {
                         showPlayEnvAdvice("Nonce girdisi hatası tekrarlandı.");
@@ -264,7 +271,6 @@ public class MainActivity extends AppCompatActivity {
                 }
         );
     }
-
 
     /** GMS update flow: sistem ekranını açar; tamamlanınca preflight'i yeniden dener. */
     private void ensureGmsUpToDateOrPrompt() {
@@ -288,8 +294,9 @@ public class MainActivity extends AppCompatActivity {
             PackageManager pm = ctx.getPackageManager();
             ApplicationInfo ai = pm.getApplicationInfo("com.android.vending", 0);
             boolean enabled = ai != null && ai.enabled;
-            pm.getPackageInfo("com.android.vending", 0);
-            return enabled;
+            // Ayrıca versiyon bilgisi okunabiliyor mu?
+            PackageInfo pi = pm.getPackageInfo("com.android.vending", 0);
+            return enabled && pi != null;
         } catch (Exception e) {
             return false;
         }
@@ -300,13 +307,21 @@ public class MainActivity extends AppCompatActivity {
         catch (Exception e) { return "NA"; }
     }
 
-    /** Uygulama resmi Play Store’dan (com.android.vending) mı yüklenmiş? */
+    /** Uygulama resmi Play Store’dan (com.android.vending) mı yüklenmiş? (Android 11+ güvenilir yöntem) */
     private static boolean isInstalledFromPlay(Context ctx) {
         try {
-            String installer = ctx.getPackageManager()
-                    .getInstallerPackageName(ctx.getPackageName());
-            return "com.android.vending".equals(installer);
-        } catch (Exception e) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                InstallSourceInfo info = ctx.getPackageManager().getInstallSourceInfo(ctx.getPackageName());
+                // initiatingPackageName bazen paket yükleyiciyi, installingPackageName ise son yükleyeni verir
+                String installer = info != null ? info.getInstallingPackageName() : null;
+                if (installer == null) installer = info != null ? info.getInitiatingPackageName() : null;
+                return "com.android.vending".equals(installer);
+            } else {
+                // Deprecated yol ama eski cihazlar için:
+                String installer = ctx.getPackageManager().getInstallerPackageName(ctx.getPackageName());
+                return "com.android.vending".equals(installer);
+            }
+        } catch (Throwable t) {
             return false;
         }
     }
@@ -410,6 +425,7 @@ public class MainActivity extends AppCompatActivity {
 
     public static Task<AppCheckToken> warmUpAppCheck() {
         FirebaseAppCheck ac = FirebaseAppCheck.getInstance();
+        // İlk deneme: taze olmayan token
         return ac.getAppCheckToken(false)
                 .continueWithTask(t -> t.isSuccessful() ? Tasks.forResult(t.getResult())
                         : ac.getAppCheckToken(true));
@@ -690,6 +706,30 @@ public class MainActivity extends AppCompatActivity {
             Log.i(TAG, "User logged out successfully.");
         } catch (Throwable t) {
             Log.w(TAG, "SignOut warn", t);
+        }
+    }
+
+    // =============================================================================================
+    // Yardımcı: App Check provider kurulumu (idempotent)
+    // =============================================================================================
+
+    private void ensureAppCheckProviderInstalled() {
+        if (appCheckProviderInstalled) return;
+        try {
+            FirebaseAppCheck appCheck = FirebaseAppCheck.getInstance();
+            if (BuildConfig.DEBUG) {
+                // Debug’da zaten problemsizsin; bunu açık tutalım
+                appCheck.installAppCheckProviderFactory(DebugAppCheckProviderFactory.getInstance());
+                Log.i(TAG, "AppCheck provider = Debug");
+            } else {
+                // Release’de Play Integrity provider’ı zorunlu
+                appCheck.installAppCheckProviderFactory(PlayIntegrityAppCheckProviderFactory.getInstance());
+                Log.i(TAG, "AppCheck provider = PlayIntegrity");
+            }
+            appCheckProviderInstalled = true;
+        } catch (Throwable t) {
+            // Kurulum başarısız olursa warm-up zaten hata verecek; loglamak yeterli
+            Log.w(TAG, "AppCheck provider install failed (will rely on default)", t);
         }
     }
 }
