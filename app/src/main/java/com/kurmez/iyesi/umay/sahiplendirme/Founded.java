@@ -829,11 +829,26 @@ public class Founded extends AppCompatActivity {
                             Toast.makeText(Founded.this, "Yanıt anahtarı alınamadı", Toast.LENGTH_LONG).show();
                             return;
                         }
+// Founded.java (onSuccess içinde)
                         Intent i = new Intent(Founded.this, Companion.class);
                         i.putExtra("requestKey", key);
                         i.putExtra("node", "soul_inneed");
+
+// UI’yı hemen doldurabilmek için payload’dan alanları geçir
+                        i.putExtra("species",      payload.optString("species"));
+                        i.putExtra("breed",        payload.optString("breed", "TODO"));
+                        i.putExtra("foundDate",    payload.optString("foundDate"));
+                        i.putExtra("foundPlace",   payload.optString("adminPath",
+                                payload.optString("foundLocation")));
+                        i.putExtra("photoUrl",     payload.optString("imageUrl",
+                                payload.optString("imageResId", "")));
+                        i.putExtra("profileId",    FirebaseAuth.getInstance().getCurrentUser()!=null
+                                ? FirebaseAuth.getInstance().getCurrentUser().getUid() : "");
+                        i.putExtra("deviceId",     payload.optString("deviceId",""));
+
                         startActivity(i);
                         finish();
+
                     } catch (Exception je) {
                         Toast.makeText(Founded.this, "Yanıt çözümlenemedi", Toast.LENGTH_LONG).show();
                     }
