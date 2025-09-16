@@ -2,6 +2,7 @@
 agp = "8.7.3"
 firebaseBom = "33.7.0"
 glide = "4.16.0"
+integrityVersion = "1.5.0"
 junit = "4.13.2"
 junitVersion = "1.2.1"
 espressoCore = "3.6.1"
@@ -39,6 +40,7 @@ firebase-auth = { group = "com.google.firebase", name = "firebase-auth", version
 firebase-storage = { group = "com.google.firebase", name = "firebase-storage", version.ref = "firebaseStorage" }
 image-labeling-common = { group = "com.google.mlkit", name = "image-labeling-common", version.ref = "imageLabelingCommon" }
 image-labeling-default-common = { group = "com.google.mlkit", name = "image-labeling-default-common", version.ref = "imageLabelingDefaultCommon" }
+play-integrity = { module = "com.google.android.play:integrity", version.ref = "integrityVersion" }
 tensorflow-lite = { module = "org.tensorflow:tensorflow-lite", version.ref = "tensorflowLite" }
 core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 lifecycle-viewmodel-ktx = { group = "androidx.lifecycle", name = "lifecycle-viewmodel-ktx", version.ref = "lifecycleViewmodelKtx" }
