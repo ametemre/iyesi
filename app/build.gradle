@@ -72,7 +72,7 @@ android {
 
 dependencies {
     // ===================== Firebase (BoM ile) =====================
-    implementation platform('com.google.firebase:firebase-bom:33.7.0')
+    implementation platform('com.google.firebase:firebase-bom:32.8.1')
 
     // Temel servisler (sürüm belirtmeden)
     implementation 'com.google.firebase:firebase-analytics'
