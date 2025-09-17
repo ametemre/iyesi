@@ -1,6 +1,6 @@
 package com.kurmez.iyesi.kayra.Classes.data;
 
-import static org.opencv.android.NativeCameraView.TAG;
+import static org.opencv.android.NativeCameraView.TAG; // TODO: Eğer OpenCV bağımlılığı yoksa kaldırın ve aşağıdaki TAG sabitini açın.
 
 import android.os.Parcel;
 import android.os.Parcelable;
@@ -12,8 +12,18 @@ import androidx.annotation.Nullable;
 
 import com.google.firebase.firestore.GeoPoint;
 
+import org.json.JSONArray;
 import org.json.JSONObject;
 
+import java.io.BufferedInputStream;
+import java.io.BufferedOutputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.Closeable;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -35,6 +45,8 @@ import java.util.Objects;
  */
 @Keep
 public class Soul implements Parcelable {
+
+    // private static final String TAG = "Soul"; // TODO: OpenCV yoksa üstteki static import'u kaldırın ve bunu açın.
 
     // ---------- Temel alanlar ----------
     @Nullable private String id;              // Firestore docId (ops.)
@@ -470,15 +482,15 @@ public class Soul implements Parcelable {
         v = map.get("location");
         if (v instanceof Map) {
             Map<?,?> loc = (Map<?, ?>) v;
-            Double lat = toDouble(loc.get("lat"));
-            Double lng = toDouble(loc.get("lng"));
-            if (lat != null && lng != null) s.location = new GeoPoint(lat, lng);
+            Double dlat = toDouble(loc.get("lat"));
+            Double dlng = toDouble(loc.get("lng"));
+            if (dlat != null && dlng != null) s.location = new GeoPoint(dlat, dlng);
         }
         // Bazı feedler kökte lat/lng döndürebilir.
-        Double lat = toDouble(map.get("lat"));
-        Double lng = toDouble(map.get("lng"));
-        if (s.location == null && lat != null && lng != null) {
-            s.location = new GeoPoint(lat, lng);
+        Double flat = toDouble(map.get("lat"));
+        Double flng = toDouble(map.get("lng"));
+        if (s.location == null && flat != null && flng != null) {
+            s.location = new GeoPoint(flat, flng);
         }
 
         s.geohash = optString(map.get("geohash"));
@@ -555,14 +567,16 @@ public class Soul implements Parcelable {
         try { return v == null ? null : Double.parseDouble(String.valueOf(v)); }
         catch (Exception ignore) { return null; }
     }
+
+    // ---------- Çoklu parse ----------
     @NonNull
-    public static List<Soul> parseSouls(org.json.JSONObject json) {
-        List<Soul> out = new ArrayList<>();
+    public static List<Soul> parseSouls(@NonNull JSONObject json) {
+        List<Soul> out = new ArrayList<Soul>();
         try {
-            var arr = json.optJSONArray("items");
+            JSONArray arr = json.optJSONArray("items");
             if (arr == null) return out;
             for (int i = 0; i < arr.length(); i++) {
-                var o = arr.optJSONObject(i);
+                JSONObject o = arr.optJSONObject(i);
                 if (o == null) continue;
 
                 // JSON alanları: server tarafında items[i] içinde beklenen olası alanlar
@@ -577,7 +591,6 @@ public class Soul implements Parcelable {
                 String foundLocation = o.optString("foundLocation", o.optString("locationName", null));
                 String finderName    = o.optString("finderName", o.optString("ownerName", null));
 
-                // Soul objesini oluştur (boş ctor + setter’lar varsayıldı)
                 Soul s = new Soul();
                 try { s.setId(id); } catch (Throwable ignore) {}
                 try { s.setSpecies(species); } catch (Throwable ignore) {}
@@ -594,6 +607,116 @@ public class Soul implements Parcelable {
             Log.e(TAG, "parseSouls failed", t);
         }
         return out;
+    }
+
+    // ---------- DOSYA-TEMELLİ YARDIMCILAR (minSdk 23 uyumlu) ----------
+
+    /** Tek bir Soul nesnesini düz JSON dosyasından yükler. */
+    @NonNull
+    public static Soul fromJsonFile(@NonNull java.io.File file) throws java.io.IOException {
+        FileInputStream fis = null;
+        try {
+            fis = new FileInputStream(file);
+            byte[] data = readAllBytesCompat(fis);
+            String json = new String(data, StandardCharsets.UTF_8);
+            JSONObject o = new JSONObject(json);
+            return fromJson(o); // mevcut imza ile uyumlu
+        } catch (org.json.JSONException e) {
+            throw new java.io.IOException("JSON parse error", e);
+        } finally {
+            closeQuietly(fis);
+        }
+    }
+
+    /**
+     * Bir dosyadan çoklu Soul listesi okur.
+     * Beklenen kök: { "items": [ { ...soul... }, ... ] } — parseSouls(JSONObject) ile uyumlu.
+     */
+    @NonNull
+    public static List<Soul> listFromJsonFile(@NonNull java.io.File file) throws java.io.IOException {
+        FileInputStream fis = null;
+        try {
+            fis = new FileInputStream(file);
+            byte[] data = readAllBytesCompat(fis);
+            String json = new String(data, StandardCharsets.UTF_8);
+            JSONObject root = new JSONObject(json);
+            return parseSouls(root);
+        } catch (org.json.JSONException e) {
+            throw new java.io.IOException("JSON parse error", e);
+        } finally {
+            closeQuietly(fis);
+        }
+    }
+
+    /** Bu Soul'u düz JSON olarak dosyaya yazar (overwrite). */
+    public void toJsonFile(@NonNull java.io.File file) throws java.io.IOException {
+        FileOutputStream fos = null;
+        try {
+            String json = toJson().toString();
+            byte[] data = json.getBytes(StandardCharsets.UTF_8);
+            fos = new FileOutputStream(file, false);
+            writeAllCompat(fos, data);
+            fos.flush();
+        } finally {
+            closeQuietly(fos);
+        }
+    }
+
+    /** SAF/Uri kaynağından tek bir Soul yükler (örn. Dosyalar uygulamasından seçilen). */
+    @NonNull
+    public static Soul fromUri(@NonNull android.content.Context ctx, @NonNull android.net.Uri uri) throws java.io.IOException {
+        InputStream is = null;
+        try {
+            is = ctx.getContentResolver().openInputStream(uri);
+            if (is == null) throw new java.io.FileNotFoundException("Uri not readable: " + uri);
+            byte[] data = readAllBytesCompat(is);
+            String json = new String(data, StandardCharsets.UTF_8);
+            JSONObject o = new JSONObject(json);
+            return fromJson(o);
+        } catch (org.json.JSONException e) {
+            throw new java.io.IOException("JSON parse error", e);
+        } finally {
+            closeQuietly(is);
+        }
+    }
+
+    /** Bu Soul'u verilen Uri'ye yazar (örn. SAF ile oluşturulmuş hedef Uri). */
+    public void toUri(@NonNull android.content.Context ctx, @NonNull android.net.Uri dest) throws java.io.IOException {
+        OutputStream os = null;
+        try {
+            // minSdk 23: mod parametresi olmayan sürümü kullan
+            os = ctx.getContentResolver().openOutputStream(dest);
+            if (os == null) throw new java.io.FileNotFoundException("Uri not writable: " + dest);
+            byte[] data = toJson().toString().getBytes(StandardCharsets.UTF_8);
+            writeAllCompat(os, data);
+            os.flush();
+        } finally {
+            closeQuietly(os);
+        }
+    }
+
+    // ---------- minSdk 23 I/O yardımcıları ----------
+    private static byte[] readAllBytesCompat(@NonNull InputStream is) throws java.io.IOException {
+        BufferedInputStream bis = new BufferedInputStream(is);
+        ByteArrayOutputStream bos = new ByteArrayOutputStream(1024);
+        byte[] buf = new byte[8192];
+        int r;
+        while ((r = bis.read(buf)) != -1) {
+            bos.write(buf, 0, r);
+        }
+        return bos.toByteArray();
+    }
+
+    private static void writeAllCompat(@NonNull OutputStream os, @NonNull byte[] data) throws java.io.IOException {
+        BufferedOutputStream bos = new BufferedOutputStream(os);
+        bos.write(data, 0, data.length);
+        bos.flush();
+    }
+
+    private static void closeQuietly(@Nullable Closeable c) {
+        if (c != null) {
+            try { c.close(); } catch (Exception ignore) {}
+        }
     }
 
 }

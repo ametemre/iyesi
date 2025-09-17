@@ -201,7 +201,10 @@ public class Welcome extends AppCompatActivity {
             FirebaseAuth.getInstance().signOut();
             finish();
         });
-
+        listView.setOnItemLongClickListener((parent, view, position, id) -> {
+            Log.d("LongClicked","now");
+            return false;
+        });
         listView.setOnItemClickListener((parent, view, position, id) -> {
             if (position < 0 || position >= companions.size()) {
                 Log.w(TAG, "onItemClick: bad position=" + position + " size=" + companions.size());
@@ -217,14 +220,14 @@ public class Welcome extends AppCompatActivity {
 
             Intent intent = new Intent(Welcome.this, iyesiz.class);
             // ⚠️ DÜZELTİLENLER:
-            intent.putExtra("species", nz(s.getSpecies()));          // önce breed gönderiliyordu
-            intent.putExtra("breed",   nz(s.getBreed()));            // breed’i ayrıca yolla
-            intent.putExtra("foundDate",  nz(s.getFoundDate()));
-            intent.putExtra("foundPlace", nz(s.getFoundLocation())); // model alanıyla uyumlu
-            intent.putExtra("photoUrl",   nz(s.getImageUrl()));
-            intent.putExtra("profileId",  nz(s.getFinderName()));
-            intent.putExtra("status",     nz(s.getStatus()));
-            intent.putExtra("id",         nz(s.getId()));            // detay ekranı için faydalı
+            intent.putExtra("species",      nz(s.getSpecies()));          // önce breed gönderiliyordu
+            intent.putExtra("breed",        nz(s.getBreed()));            // breed’i ayrıca yolla
+            intent.putExtra("foundDate",    nz(s.getFoundDate()));
+            intent.putExtra("foundPlace",   nz(s.getFoundLocation())); // model alanıyla uyumlu
+            intent.putExtra("photoUrl",     nz(s.getImageUrl()));
+            intent.putExtra("profileId",    nz(s.getFinderName()));
+            intent.putExtra("status",       nz(s.getStatus()));
+            intent.putExtra("id",           nz(s.getId()));            // detay ekranı için faydalı
 
             startActivity(intent);
         });

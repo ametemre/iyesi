@@ -15,7 +15,7 @@ android {
         minSdk 23
         //noinspection EditedTargetSdkVersion
         targetSdk 36
-        versionCode 23
+        versionCode 24
         versionName "Wolf"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
@@ -131,7 +131,7 @@ dependencies {
 
     // ===================== Play Integrity API (isteğe bağlı) =====================
     implementation libs.play.integrity
-
+    implementation 'com.google.android.play:integrity:1.5.0'
     // ===================== AndroidX =====================
     implementation libs.appcompat
     implementation libs.material
