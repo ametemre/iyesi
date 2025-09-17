@@ -111,11 +111,21 @@ dependencies {
 
     // ===================== TensorFlow Lite (SEÇENEK A: Upstream TF ekosistemi) =====================
     // Not: GMS TFLite paketleriyle karıştırma. Tek ekosisteme odaklan.
-    implementation 'org.tensorflow:tensorflow-lite:2.15.0'
-    implementation 'org.tensorflow:tensorflow-lite-gpu:2.15.0'
-    implementation 'org.tensorflow:tensorflow-lite-select-tf-ops:2.15.0'
-    implementation 'org.tensorflow:tensorflow-lite-support:0.4.4'
-    implementation 'org.tensorflow:tensorflow-lite-task-audio:0.4.4'
+    implementation('org.tensorflow:tensorflow-lite:2.15.0') {
+        exclude group: 'com.google.inject', module: 'guice'
+    }
+    implementation('org.tensorflow:tensorflow-lite-gpu:2.15.0') {
+        exclude group: 'com.google.inject', module: 'guice'
+    }
+    implementation('org.tensorflow:tensorflow-lite-select-tf-ops:2.15.0') {
+        exclude group: 'com.google.inject', module: 'guice'
+    }
+    implementation('org.tensorflow:tensorflow-lite-support:0.4.4') {
+        exclude group: 'com.google.inject', module: 'guice'
+    }
+    implementation('org.tensorflow:tensorflow-lite-task-audio:0.4.4') {
+        exclude group: 'com.google.inject', module: 'guice'
+    }
 
     // Eğer GMS TFLite ekosistemini tercih edeceksen, yukarıdakileri kaldır ve bunun yerine:
     // implementation "com.google.android.gms:play-services-tflite-impl:16.2.0"
