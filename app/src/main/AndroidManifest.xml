@@ -86,7 +86,7 @@
             android:name=".kurmes.social.message.Message"
             android:windowSoftInputMode="adjustResize|stateHidden"
             android:exported="false" />
-        <activity android:name=".ProfileActivity" android:exported="false" />
+        <activity android:name=".iyesi" android:exported="false" />
 
         <!-- Google Play services / Maps -->
         <meta-data
@@ -115,7 +115,7 @@
         <activity android:name=".QR" android:exported="false" />
         <activity android:name=".Login" android:exported="false" />
         <activity android:name=".umay.sahiplendirme.Founded" android:exported="false" />
-        <activity android:name=".umay.sahiplendirme.Companion" android:exported="false" />
+        <activity android:name=".umay.sahiplendirme.iyesiz" android:exported="false" />
 
         <!-- Giriş (Launcher) -->
         <activity android:name=".MainActivity" android:exported="true">

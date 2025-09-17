@@ -7,11 +7,9 @@ import android.os.Bundle;
 import android.text.InputType;
 import android.text.TextUtils;
 import android.util.Log;
-import android.view.Gravity;
 import android.view.View;
 import android.view.Menu;
 import android.view.MenuItem;
-import android.view.LayoutInflater;
 import android.widget.BaseAdapter;
 import android.widget.EditText;
 import android.widget.ImageView;
@@ -46,7 +44,7 @@ import java.util.Map;
  * - uid & role düzenlenemez
  * - Backend callable: updateClaims
  */
-public class ProfileActivity extends AppCompatActivity {
+public class iyesi extends AppCompatActivity {
 
     // === UI ===
     private ImageView iyeImage, headerTitle;
@@ -323,16 +321,16 @@ public class ProfileActivity extends AppCompatActivity {
             View row = convertView;
             if (row == null) {
                 // Basit yatay layout: Label | EditText
-                LinearLayout layout = new LinearLayout(ProfileActivity.this);
+                LinearLayout layout = new LinearLayout(iyesi.this);
                 layout.setOrientation(LinearLayout.VERTICAL);
                 layout.setPadding(dp(12), dp(10), dp(12), dp(10));
 
-                TextView tv = new TextView(ProfileActivity.this);
+                TextView tv = new TextView(iyesi.this);
                 tv.setTypeface(Typeface.DEFAULT_BOLD);
                 tv.setTextSize(14);
                 tv.setPadding(0, 0, 0, dp(6));
 
-                EditText et = new EditText(ProfileActivity.this);
+                EditText et = new EditText(iyesi.this);
                 et.setSingleLine(true);
                 et.setPadding(dp(10), dp(8), dp(10), dp(8));
                 et.setBackground(null); // sade görünüm
@@ -389,13 +387,13 @@ public class ProfileActivity extends AppCompatActivity {
         return Math.round(v * d);
     }
     public void launchProfile(Context context) {
-        Intent intent = new Intent(context, ProfileActivity.class);
+        Intent intent = new Intent(context, iyesi.class);
         context.startActivity(intent);
         finish();
     }
     public static final String EXTRA_EDIT = "editMode";
     public void launchForEdit(Context ctx,Boolean editMode) {
-        Intent i = new Intent(ctx, ProfileActivity.class);
+        Intent i = new Intent(ctx, iyesi.class);
         i.putExtra(EXTRA_EDIT, editMode);
         ctx.startActivity(i);
         // İstersen ileride "editMode" flag’ı koyabilirsin:

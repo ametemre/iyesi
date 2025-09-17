@@ -37,7 +37,6 @@ import com.google.android.gms.location.FusedLocationProviderClient;
 import com.google.android.gms.location.LocationServices;
 import com.google.android.gms.location.Priority;
 import com.google.android.gms.tasks.CancellationTokenSource;
-import com.google.firebase.appcheck.FirebaseAppCheck;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.storage.FirebaseStorage;
@@ -830,7 +829,7 @@ public class Founded extends AppCompatActivity {
                             return;
                         }
 // Founded.java (onSuccess içinde)
-                        Intent i = new Intent(Founded.this, Companion.class);
+                        Intent i = new Intent(Founded.this, iyesiz.class);
                         i.putExtra("requestKey", key);
                         i.putExtra("node", "soul_inneed");
 
@@ -874,7 +873,7 @@ public class Founded extends AppCompatActivity {
     private void openCompanionFromJson(@NonNull String deviceId, @NonNull JSONObject companion) {
         Log.i(L, "openCompanionFromJson() → deviceId=" + deviceId);
         if (VERBOSE_JSON) logChunked("pending.companion", companion.toString());
-        Intent intent = new Intent(Founded.this, Companion.class);
+        Intent intent = new Intent(Founded.this, iyesiz.class);
         intent.putExtra("deviceId", deviceId);
         intent.putExtra("species", companion.optString("species"));
         intent.putExtra("foundDate", companion.optString("foundDate"));

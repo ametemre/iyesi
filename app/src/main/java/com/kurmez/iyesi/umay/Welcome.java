@@ -2,11 +2,9 @@ package com.kurmez.iyesi.umay;
 
 import static com.kurmez.iyesi.kayra.Classes.data.Soul.parseSouls;
 
-import com.kurmez.iyesi.kurmes.utilities.helper.CFHelper;
 import com.kurmez.iyesi.kayra.Classes.data.Soul; // tek ve doğru Soul
 import androidx.annotation.NonNull;
 
-import java.io.IOException;
 import java.util.List;
 
 
@@ -22,7 +20,6 @@ import android.widget.ListView;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.google.firebase.auth.FirebaseAuth;
@@ -37,13 +34,13 @@ import com.kurmez.iyesi.kurmes.utilities.adapters.CompanionAdapter;
 import com.kurmez.iyesi.kurmes.utilities.helper.net.CFClient;
 import com.kurmez.iyesi.kurmes.utilities.helper.net.FirebaseAuthenticator;
 import com.kurmez.iyesi.kurmes.utilities.helper.net.FirebaseHeadersInterceptor;
+import com.kurmez.iyesi.umay.sahiplendirme.iyesiz;
 
 import java.util.ArrayList;
 import java.util.concurrent.TimeUnit;
 
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
-import okhttp3.Response;
 
 public class Welcome extends AppCompatActivity {
     private static final String TAG = "WelcomeActivity";
@@ -218,7 +215,7 @@ public class Welcome extends AppCompatActivity {
             Soul s = companions.get(position);
             Toast.makeText(this, "Selected: " + nz(s.getName()), Toast.LENGTH_SHORT).show();
 
-            Intent intent = new Intent(Welcome.this, com.kurmez.iyesi.umay.sahiplendirme.Companion.class);
+            Intent intent = new Intent(Welcome.this, iyesiz.class);
             // ⚠️ DÜZELTİLENLER:
             intent.putExtra("species", nz(s.getSpecies()));          // önce breed gönderiliyordu
             intent.putExtra("breed",   nz(s.getBreed()));            // breed’i ayrıca yolla
