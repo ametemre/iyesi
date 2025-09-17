@@ -37,7 +37,39 @@ import com.kurmez.iyesi.kayra.Classes.data.Soul;
 import com.kurmez.iyesi.kurmes.utilities.Helpers;
 import com.kurmez.iyesi.kurmes.utilities.adapters.CompanionAdapter;
 import com.kurmez.iyesi.kurmes.utilities.adapters.ContentAdapter;
-import com.kurmez.iyesi.kurmes.utilities.adapters.SoulAdapter;
+import android.content.Context;
+import android.content.Intent;
+import android.graphics.Typeface;
+import android.graphics.drawable.GradientDrawable;
+import android.os.Bundle;
+import android.util.Log;
+import android.view.Gravity;
+import android.view.View;
+import android.view.ViewGroup;
+import android.widget.AdapterView;
+import android.widget.FrameLayout;
+import android.widget.ImageView;
+import android.widget.ListView;
+import android.widget.PopupMenu;
+import android.widget.ProgressBar;
+import android.widget.TextView;
+import android.widget.Toast;
+
+import androidx.annotation.NonNull;
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
+
+import com.kurmez.iyesi.BuildConfig;
+import com.kurmez.iyesi.kayra.Classes.data.Soul;
+import com.kurmez.iyesi.kurmes.utilities.adapters.CompanionAdapter;
+import com.kurmez.iyesi.kurmes.utilities.helper.net.CFClient;
+import com.kurmez.iyesi.umay.sahiplendirme.Companion;
+import com.kurmez.iyesi.R;
+
+import org.json.JSONObject;
+
+import java.util.ArrayList;
+import java.util.List;
 import com.kurmez.iyesi.kurmes.utilities.helper.net.CFClient;
 import com.kurmez.iyesi.umay.Welcome;
 
@@ -191,6 +223,16 @@ public class Explore extends AppCompatActivity {
                 return false;
             });
         }, e -> Log.e(TAG, "token fail", e));
+        // 👇 Tıklanabilirlik burada eklendi
+        listView.setOnItemClickListener((parent, view, position, id) -> {
+            Soul soul = companions.get(position);
+            Intent intent = new Intent(this, Companion.class);
+            intent.putExtra(Companion.EXTRA_SPECIES, soul.getSpecies());
+            intent.putExtra(Companion.EXTRA_BREED, soul.getBreed());
+            intent.putExtra(Companion.EXTRA_FOUNDDATE, soul.getFoundDate());
+            // Diğer field'lar gerekiyorsa buraya ekleyebilirsin (örneğin soulId, imageUrl)
+            startActivity(intent);
+        });
     }
 
     @Override

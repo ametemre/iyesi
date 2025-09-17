@@ -1,4 +1,4 @@
-// app/build.gradle (Groovy) — temizlenmiş ve release (Play Integrity) odaklı
+// app/build.gradle — OOM fix + tek App Check sağlayıcı
 
 plugins {
     alias(libs.plugins.android.application)
@@ -21,20 +21,17 @@ android {
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
 
         // Cloud Functions URL config
-        // Cloud Functions taban alanı (region + proje)
-        //buildConfigField "String", "CF_BASE_URL", "\"https://us-central1-iyesi-e8d4f.cloudfunctions.net\""
-        // Souls arama fonksiyonunun yolu: v2 onRequest fonksiyon adın neyse onu yaz
-        // ÖRNEK: "/soulsSearch" ya da "/souls/search" değil!
         buildConfigField "String", "CF_PATH_SOULS_SEARCH", "\"/soulsSearch\""
-        // Eğer Hosting rewrite kullanıyorsan yukarıdaki iki satırı şöyle değiştir:
-        // buildConfigField "String", "CF_BASE_URL", "\"https://<senin-projen>.web.app\""
-        // buildConfigField "String", "CF_PATH_SOULS_SEARCH", "\"/souls/search\""
+        buildConfigField "String", "CF_BASE_URL",           "\"https://us-central1-iyesi-e8d4f.cloudfunctions.net\""
+        buildConfigField "String", "CF_URL_ENSURECLAIMS",   "\"https://ensureclaims-...a.run.app\""
+        buildConfigField "String", "CF_URL_UID",            "\"https://uid-...a.run.app\""
+        buildConfigField "String", "CF_URL_APP_SEND",       "\"https://us-central1-iyesi-e8d4f.cloudfunctions.net/appSend\""
 
-        ///buildConfigField "String", "CF_URL_SOULS_SEARCH", "\"https://us-central1-iyesi-e8d4f.cloudfunctions.net/souls/search\""
-        buildConfigField "String", "CF_BASE_URL",      "\"https://us-central1-iyesi-e8d4f.cloudfunctions.net\""
-        buildConfigField "String", "CF_URL_ENSURECLAIMS", "\"https://ensureclaims-...a.run.app\""
-        buildConfigField "String", "CF_URL_UID",           "\"https://uid-...a.run.app\""
-        buildConfigField "String", "CF_URL_APP_SEND",      "\"https://us-central1-iyesi-e8d4f.cloudfunctions.net/appSend\""
+        // Vector → PNG türetmeyi kapatıp destek kütüphanesini aç (mergeResources OOM’u düşürür)
+        vectorDrawables {
+            useSupportLibrary = true
+            // generatedDensities=[]  // AGP 8+ için gerekmez; PNG türetme zaten yok
+        }
     }
 
     buildTypes {
@@ -43,9 +40,16 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
         debug {
-            // debug özel ayarlar gerekirse buraya
+            // debug özel ayarlar gerekirse
         }
     }
+
+    // Aşırı büyük kaynakları geçici izole etmek istersen, burada exclude kalıbı ekleyebilirsin.
+    // packagingOptions {
+    //     resources {
+    //         excludes += ["res/drawable/**/large_*"] // ÖRNEK
+    //     }
+    // }
 
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
@@ -82,13 +86,12 @@ dependencies {
     implementation 'com.google.firebase:firebase-storage'
     implementation 'com.google.firebase:firebase-database'
 
-    // App Check – çekirdek + provider’lar (varyant bazlı)
+    // App Check – çekirdek + Play Integrity (tek sağlayıcı; çakışmayı önlemek için releaseImplementation satırını kaldırdık)
     implementation 'com.google.firebase:firebase-appcheck'
     implementation libs.firebase.appcheck.playintegrity
     implementation libs.litert.gpu.api
-    implementation libs.swiperefreshlayout// opsiyonel ama netlik için ekli
-    debugImplementation  'com.google.firebase:firebase-appcheck-debug'
-    releaseImplementation 'com.google.firebase:firebase-appcheck-playintegrity'
+    implementation libs.swiperefreshlayout
+    debugImplementation 'com.google.firebase:firebase-appcheck-debug'
 
     // ===================== Google Play services / Maps & Location =====================
     implementation 'com.google.android.gms:play-services-location:21.3.0'
@@ -109,8 +112,7 @@ dependencies {
     // ===================== OkHttp =====================
     implementation "com.squareup.okhttp3:okhttp:4.12.0"
 
-    // ===================== TensorFlow Lite (SEÇENEK A: Upstream TF ekosistemi) =====================
-    // Not: GMS TFLite paketleriyle karıştırma. Tek ekosisteme odaklan.
+    // ===================== TensorFlow Lite (Upstream TF ekosistemi) =====================
     implementation('org.tensorflow:tensorflow-lite:2.15.0') {
         exclude group: 'com.google.inject', module: 'guice'
     }
@@ -127,16 +129,8 @@ dependencies {
         exclude group: 'com.google.inject', module: 'guice'
     }
 
-    // Eğer GMS TFLite ekosistemini tercih edeceksen, yukarıdakileri kaldır ve bunun yerine:
-    // implementation "com.google.android.gms:play-services-tflite-impl:16.2.0"
-    // implementation "com.google.android.gms:play-services-tflite-gpu:16.2.0"
-    // implementation "com.google.android.gms:play-services-tflite-support:16.2.0"
-
-    // ===================== Conscrypt (opsiyonel TLS) =====================
-    // Sadece belirli TLS/SSL sorunları yaşıyorsan etkinleştir.
-    // implementation "org.conscrypt:conscrypt-android:2.5.2"
+    // ===================== Play Integrity API (isteğe bağlı) =====================
     implementation libs.play.integrity
-
 
     // ===================== AndroidX =====================
     implementation libs.appcompat
