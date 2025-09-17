@@ -1,0 +1,16 @@
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+    <item
+        android:id="@+id/EvlatEdin"
+        android:title="Evlat Edin" />
+    <item
+        android:id="@+id/Duzenle"
+        android:title="Düzenle" />
+    <item
+        android:id="@+id/Kaydet"
+        android:title="Kaydet" />
+    <item
+        android:id="@+id/Kritik"
+        android:title="Kritik Sağlık Modu"
+        app:showAsAction="never" />
+</menu>

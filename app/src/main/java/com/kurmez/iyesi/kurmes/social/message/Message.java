@@ -97,8 +97,10 @@ public class Message extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_messaging);
-        if (user == null) {
-            Log.i("Kullanıcı oturumu yok","Giriş Yap");
+        if (user == null || user.isAnonymous()) {
+            Toast.makeText(this, "Devam etmek için giriş yapmalısınız.", Toast.LENGTH_LONG).show();
+            startActivity(new Intent(this, Login.class));
+            finish();
             return;
         }
 
@@ -111,12 +113,6 @@ public class Message extends AppCompatActivity {
         // ➋ Header’daki kullanıcı adını set et
         TextView headerName = findViewById(R.id.tvUsername);
         headerName.setText(targetUserName != null ? targetUserName : "Konuşma");
-        if (user == null) {
-            Toast.makeText(this, "Devam etmek için giriş yapmalısınız.", Toast.LENGTH_LONG).show();
-            startActivity(new Intent(this, Login.class));
-            finish();
-            return;
-        }
         // ➌ View’ları bağla
         rvMessages = findViewById(R.id.rvMessages);
         etMessage  = findViewById(R.id.etMessage);

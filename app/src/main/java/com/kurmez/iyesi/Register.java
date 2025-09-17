@@ -114,7 +114,7 @@ public class Register extends AppCompatActivity {
                     }
 
                     FirebaseUser user = mAuth.getCurrentUser();
-                    if (user == null) {
+                    if (user == null || user.isAnonymous()) {
                         Toast.makeText(this,
                                 "Beklenmedik hata: kullanıcı alınamadı",
                                 Toast.LENGTH_LONG).show();

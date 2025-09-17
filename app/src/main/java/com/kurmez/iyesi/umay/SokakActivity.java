@@ -85,7 +85,7 @@ public class SokakActivity extends FragmentActivity implements MarkerDetailsBott
     }
     private boolean ensureLoggedInOrGoLogin() {
         FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
-        if (user == null) {
+        if (user == null || user.isAnonymous()) {
             Toast.makeText(this, "Devam etmek için giriş yapmalısınız.", Toast.LENGTH_LONG).show();
             startActivity(new Intent(this, Login.class));
             finish();

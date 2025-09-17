@@ -103,7 +103,7 @@ public class Welcome extends AppCompatActivity {
         // Login kontrolü
         FirebaseAuth mAuth = FirebaseAuth.getInstance();
         FirebaseUser user = mAuth.getCurrentUser();
-        if (user == null) {
+        if (user == null || user.isAnonymous()) {
             Toast.makeText(this, "Devam etmek için giriş yapmalısınız.", Toast.LENGTH_LONG).show();
             startActivity(new Intent(this, Login.class));
             finish();

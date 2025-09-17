@@ -62,6 +62,7 @@ import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 import com.kurmez.iyesi.BuildConfig;
 import com.kurmez.iyesi.kayra.Classes.data.Soul;
 import com.kurmez.iyesi.kurmes.utilities.adapters.CompanionAdapter;
+import com.kurmez.iyesi.kurmes.utilities.helper.HeaderHelper;
 import com.kurmez.iyesi.kurmes.utilities.helper.net.CFClient;
 import com.kurmez.iyesi.umay.sahiplendirme.Companion;
 import com.kurmez.iyesi.R;
@@ -102,7 +103,7 @@ public class Explore extends AppCompatActivity {
 
     // Kritik mod bayrağı
     private boolean criticalMode = false;
-
+    private HeaderHelper headerHelper;
     // UI referansları
     private FrameLayout criticalRoot;
     private SwipeRefreshLayout swipeRefresh;
@@ -128,15 +129,16 @@ public class Explore extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_explore);
-
+        headerHelper  = new HeaderHelper(Explore.this);
         // 1) Auth kontrolü
         auth = FirebaseAuth.getInstance();
         user = auth.getCurrentUser();
-        if (user == null) {
+        if (user == null || user.isAnonymous()) {
             Helpers.showToastSafe(this, "Lütfen önce giriş yapın.");
             finish();
             return;
         }
+        headerHelper.refreshHeader(Explore.this);
 
         // 2) Firestore init (profil/rol vb.)
         firestore = FirebaseFirestore.getInstance();

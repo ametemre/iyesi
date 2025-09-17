@@ -22,6 +22,7 @@ import android.widget.ImageButton;
 import android.widget.ProgressBar;
 import android.widget.Toast;
 
+import androidx.annotation.RequiresApi;
 import androidx.annotation.RequiresPermission;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
@@ -57,6 +58,7 @@ import com.kurmez.iyesi.kurmes.Kurmes;
 import com.kurmez.iyesi.kurmes.ui.SoulsManagerActivity;
 import com.kurmez.iyesi.kurmes.utilities.Helpers;
 import com.kurmez.iyesi.kurmes.utilities.PrivateCom;
+import com.kurmez.iyesi.kurmes.utilities.handler.NonceUtils;
 import com.kurmez.iyesi.kurmes.utilities.helper.PermissionHelper;
 import com.kurmez.iyesi.umay.Welcome;
 
@@ -111,6 +113,7 @@ public class MainActivity extends AppCompatActivity {
         UNKNOWN_ERROR
     }
 
+    @RequiresApi(api = Build.VERSION_CODES.N)
     @SuppressLint("MissingPermission")
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -140,9 +143,13 @@ public class MainActivity extends AppCompatActivity {
         handler.removeCallbacksAndMessages(null);
     }
 
+    @RequiresApi(api = Build.VERSION_CODES.N)
     private void requestIntegrityWithRetry(Consumer<String> onOk, Consumer<Exception> onFail) {
-        final String nonce = buildBoundNonce();
-        Log.d(TAG, "Integrity nonce(b64url).len=" + nonce.length());
+        // Tek kullanımlık ve bağlamsal nonce (Android ID bağlamı)
+        final String androidId = Settings.Secure.getString(getContentResolver(), Settings.Secure.ANDROID_ID);
+        final String nonce = NonceUtils.newContextBoundNonceB64Url(androidId == null ? "" : androidId);
+
+        Log.d(TAG, "Integrity nonce(b64url).len=" + (nonce != null ? nonce.length() : -1));
 
         IntegrityManager im = IntegrityManagerFactory.create(getApplicationContext());
         IntegrityTokenRequest req = IntegrityTokenRequest.builder()
@@ -157,8 +164,9 @@ public class MainActivity extends AppCompatActivity {
                         int code = ((IntegrityServiceException) e).getErrorCode();
                         Log.w(TAG, "Integrity failed code=" + code + ", retry policy may apply.", e);
                         if (code == IntegrityErrorCode.NONCE_TOO_SHORT) {
+                            // Retry: daha uzun nonce ile dene (48 byte)
                             IntegrityTokenRequest retryReq = IntegrityTokenRequest.builder()
-                                    .setNonce(newIntegrityNonce(48))
+                                    .setNonce(NonceUtils.newNonceB64Url(48))
                                     .setCloudProjectNumber(CLOUD_PROJECT_NUMBER)
                                     .build();
                             IntegrityManager im2 = IntegrityManagerFactory.create(getApplicationContext());
@@ -189,6 +197,8 @@ public class MainActivity extends AppCompatActivity {
         return PreflightStatus.UNKNOWN_ERROR;
     }
 
+    @RequiresPermission(allOf = {Manifest.permission.BLUETOOTH_ADVERTISE, Manifest.permission.BLUETOOTH_CONNECT})
+    @RequiresApi(api = Build.VERSION_CODES.N)
     private void preflightIntegrityOrPrompt() {
         setLoading(true);
 
@@ -251,6 +261,7 @@ public class MainActivity extends AppCompatActivity {
         );
     }
 
+    @RequiresApi(api = Build.VERSION_CODES.N)
     private void ensureGmsUpToDateOrPrompt() {
         GoogleApiAvailability.getInstance()
                 .makeGooglePlayServicesAvailable(this)
@@ -300,6 +311,7 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    @RequiresPermission(allOf = {Manifest.permission.BLUETOOTH_ADVERTISE, Manifest.permission.BLUETOOTH_CONNECT})
     private void warmUpAppCheckThenInitUiAndAuth() {
         warmUpAppCheck()
                 .addOnSuccessListener(appCheckToken -> {
@@ -380,7 +392,7 @@ public class MainActivity extends AppCompatActivity {
                         });
                     }
 
-                    Log.d("AUTH", user == null ? "Kullanıcı yok" : ("Kullanıcı var: " + user.getUid()));
+                    Log.d("AUTH", user == null || user.isAnonymous() ? "Kullanıcı yok" : ("Kullanıcı var: " + user.getUid()));
                     setLoading(false);
                 })
                 .addOnFailureListener(e -> {

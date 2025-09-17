@@ -42,6 +42,7 @@ import com.kurmez.iyesi.kurmes.social.Profile;
 import com.kurmez.iyesi.kurmes.utilities.Helpers;
 import com.kurmez.iyesi.kurmes.utilities.PrivateCom;
 import com.kurmez.iyesi.kurmes.utilities.helper.CFHelper;
+import com.kurmez.iyesi.kurmes.utilities.helper.HeaderHelper;
 
 import org.json.JSONException;
 
@@ -63,7 +64,7 @@ public class Messaging extends AppCompatActivity {
     private FirebaseAuth auth;
     private FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
     private CFHelper cf;
-
+    private HeaderHelper headerHelper;
 
     private final OkHttpClient httpClient = new OkHttpClient.Builder().addInterceptor(chain -> {
         Request req = chain.request();
@@ -78,8 +79,8 @@ public class Messaging extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_inbox);
-
-        if (user == null) {
+        headerHelper = new HeaderHelper(Messaging.this);
+        if (user == null || user.isAnonymous()) {
             Toast.makeText(this, "Devam etmek için giriş yapmalısınız.", Toast.LENGTH_LONG).show();
             startActivity(new Intent(this, Login.class));
             finish();
@@ -93,12 +94,14 @@ public class Messaging extends AppCompatActivity {
         rvConversations.setAdapter(adapter);
 
         user = auth.getCurrentUser();
-        if (user == null) {
+        if (user == null || user.isAnonymous()) {
             Toast.makeText(this, "Devam etmek için giriş yapmalısınız.", Toast.LENGTH_LONG).show();
             startActivity(new Intent(this, Login.class));
             finish();
             return;
         }
+        headerHelper.refreshHeader(Messaging.this);
+
         conversationList.clear();
         FirebaseAuth.getInstance().getCurrentUser().getIdToken(true);
         // Rolü (sunucudan) tazele ve UI kapısını uygula

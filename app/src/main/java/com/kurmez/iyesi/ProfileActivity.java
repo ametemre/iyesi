@@ -122,7 +122,7 @@ public class ProfileActivity extends AppCompatActivity {
 
     // === Claims Yükleme / UI doldurma ===
     private void refreshClaimsAndRender(FirebaseUser user) {
-        if (user == null) {
+        if (user == null || user.isAnonymous()) {
             Toast.makeText(this, "Oturum bulunamadı.", Toast.LENGTH_LONG).show();
             finish();
             return;
@@ -222,7 +222,7 @@ public class ProfileActivity extends AppCompatActivity {
         // Backend’e gönder
         Map<String, Object> payload = new HashMap<>();
         payload.put("updates", filtered);
-        if (user == null) {
+        if (user == null || user.isAnonymous()) {
             Toast.makeText(this, "Giriş yapmalısın", Toast.LENGTH_LONG).show();
             startActivity(new Intent(this, Login.class));
             finish();
@@ -247,7 +247,7 @@ public class ProfileActivity extends AppCompatActivity {
     }
 
     private void onUpdateClaimsSuccess(HttpsCallableResult result) {
-        if (user == null) {
+        if (user == null || user.isAnonymous()) {
             setUiBusy(false);
             Toast.makeText(this, "Kullanıcı oturumu yok.", Toast.LENGTH_LONG).show();
             return;

@@ -33,6 +33,7 @@ import com.kurmez.iyesi.kurmes.social.Profile;
 import com.kurmez.iyesi.kurmes.utilities.Helpers;
 import com.kurmez.iyesi.kurmes.utilities.adapters.ContentAdapter;
 import com.kurmez.iyesi.kurmes.utilities.helper.CFHelper;
+import com.kurmez.iyesi.kurmes.utilities.helper.HeaderHelper;
 import com.kurmez.iyesi.umay.sahiplendirme.Companion;
 
 import org.json.JSONArray;
@@ -78,7 +79,7 @@ public class ExplorePrivate extends AppCompatActivity {
     private final List<Content> items = new ArrayList<>();
     private final List<Soul> souls = new ArrayList<>();
     private final List<String> keys = new ArrayList<>();
-
+    private HeaderHelper headerHelper;
     private RecyclerView recyclerView;
     private ContentAdapter adapter;
 
@@ -97,17 +98,18 @@ public class ExplorePrivate extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         long t0 = System.currentTimeMillis();
         Log.i(L, "onCreate() → GİRİŞ");
-
+        headerHelper = new HeaderHelper(ExplorePrivate.this);
         setContentView(R.layout.activity_explore_private);
 
         user = FirebaseAuth.getInstance().getCurrentUser();
-        if (user == null) {
+        if (user == null || user.isAnonymous()) {
             Log.w(L, "onCreate() → ÇIKIŞ (USER NULL) | Giriş gerekli");
             Toast.makeText(this, "Bu sayfayı görüntülemek için giriş yapmalısınız.", Toast.LENGTH_LONG).show();
             finish();
             return;
         }
         Log.d(L, "onCreate() user=" + user.getUid() + " email=" + user.getEmail());
+        headerHelper.refreshHeader(ExplorePrivate.this);
 
         FirebaseDatabase db = FirebaseDatabase.getInstance(RTDB_URL);
         pendingRef = db.getReference("Pending/Companion/soul_inneed");

@@ -12,12 +12,19 @@
     android:layout_marginTop="25dp"
     app:cardCornerRadius="40dp"
     tools:context=".Login">
+
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:orientation="vertical"
         android:weightSum="10"
         android:layout_gravity="center">
+        <!-- Profile Header -->
+        <include
+            android:id="@+id/profile_header"
+            layout="@layout/item_conversation_header"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content" />
         <ImageView
             android:id="@+id/companion_image"
             android:layout_width="match_parent"

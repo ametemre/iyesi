@@ -4,6 +4,7 @@ package com.kurmez.iyesi.umay.sahiplendirme;
 import android.annotation.SuppressLint;
 import android.os.Bundle;
 import android.provider.Settings;
+import android.util.Log;
 import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -16,6 +17,7 @@ import com.bumptech.glide.Glide;
 import com.google.firebase.database.DataSnapshot;
 import com.google.firebase.database.FirebaseDatabase;
 import com.kurmez.iyesi.R;
+import com.kurmez.iyesi.kurmes.utilities.helper.HeaderHelper;
 
 import org.json.JSONObject;
 
@@ -53,7 +55,7 @@ public class Companion extends AppCompatActivity {
 
     /* ====== Net ====== */
     private final OkHttpClient http = new OkHttpClient();
-
+    private HeaderHelper headerHelper;
     /* ====== State ====== */
     private String node = "soul_inneed";
     private String requestKey;
@@ -63,6 +65,7 @@ public class Companion extends AppCompatActivity {
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_companion);
+        headerHelper = new HeaderHelper(Companion.this);
 
         img     = findViewById(R.id.companion_image);
         tvTitle = findViewById(R.id.soul_companion);
@@ -83,7 +86,11 @@ public class Companion extends AppCompatActivity {
         node = nz(getIntent().getStringExtra(EXTRA_NODE));
         if (node.isEmpty()) node = "soul_inneed";
         requestKey = nz(getIntent().getStringExtra(EXTRA_REQUESTKEY));
-
+        try {
+            headerHelper.refreshHeader(Companion.this);
+        } catch (Exception e) {
+            Log.e("UserError",e.getMessage());
+        }
         @SuppressLint("HardwareIds")
         String fallback = Settings.Secure.getString(getContentResolver(), Settings.Secure.ANDROID_ID);
         deviceId = nz(getIntent().getStringExtra(EXTRA_DEVICE_ID));
