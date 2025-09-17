@@ -89,7 +89,7 @@ public class MainActivity extends AppCompatActivity {
 
     private String idToken;
     private String generatedQRCode;
-    private boolean isRegistered = false; // TODO: Gerçek kayıt kontrolüne bağla
+    private boolean isRegistered = false;
 
     private final Handler handler = new Handler();
     private Runnable startCameraRunnable;
@@ -102,10 +102,8 @@ public class MainActivity extends AppCompatActivity {
     private volatile boolean hasAppCheckToken = false;
     private volatile boolean hasAuthIdToken  = false;
 
-    // App Check provider kurulumunu activity yaşam döngüsünde bir kez yapalım
     private static volatile boolean appCheckProviderInstalled = false;
 
-    // ----- Basit preflight durumları -----
     private enum PreflightStatus {
         RETRIABLE_INPUT_ERROR,
         ENV_MISSING_OR_OUTDATED,
@@ -121,13 +119,10 @@ public class MainActivity extends AppCompatActivity {
 
         progress = findViewById(R.id.progress);
 
-        // Firebase init (idempotent)
         try { FirebaseApp.initializeApp(this); } catch (Throwable ignore) { }
 
-        // App Check provider seçimi (idempotent, reflection ile debug import’suz)
         ensureAppCheckProviderInstalled();
 
-        // PermissionHelper
         permissionHelper = new PermissionHelper();
         permissionHelper.setActivity(this);
         permissionHelper.setCallback(new PermissionHelper.Callback() {
@@ -136,7 +131,6 @@ public class MainActivity extends AppCompatActivity {
         });
         permissionHelper.initialize();
 
-        // Preflight
         preflightIntegrityOrPrompt();
     }
 
@@ -145,10 +139,6 @@ public class MainActivity extends AppCompatActivity {
         super.onDestroy();
         handler.removeCallbacksAndMessages(null);
     }
-
-    // =============================================================================================
-    // Integrity: güvenli nonce + -10 için tek sefer retry
-    // =============================================================================================
 
     private void requestIntegrityWithRetry(Consumer<String> onOk, Consumer<Exception> onFail) {
         final String nonce = buildBoundNonce();
@@ -167,7 +157,6 @@ public class MainActivity extends AppCompatActivity {
                         int code = ((IntegrityServiceException) e).getErrorCode();
                         Log.w(TAG, "Integrity failed code=" + code + ", retry policy may apply.", e);
                         if (code == IntegrityErrorCode.NONCE_TOO_SHORT) {
-                            // Tekrar daha uzun nonce ile
                             IntegrityTokenRequest retryReq = IntegrityTokenRequest.builder()
                                     .setNonce(newIntegrityNonce(48))
                                     .setCloudProjectNumber(CLOUD_PROJECT_NUMBER)
@@ -193,17 +182,12 @@ public class MainActivity extends AppCompatActivity {
                     || code == IntegrityErrorCode.PLAY_STORE_NOT_FOUND
                     || code == IntegrityErrorCode.PLAY_STORE_VERSION_OUTDATED
                     || code == IntegrityErrorCode.GOOGLE_SERVER_UNAVAILABLE) {
-                return PreflightStatus.ENV_MISSING_OR_OUTDATED; // erişilemedi/engellendi
+                return PreflightStatus.ENV_MISSING_OR_OUTDATED;
             }
             return PreflightStatus.TRANSIENT_ERROR;
         }
         return PreflightStatus.UNKNOWN_ERROR;
     }
-
-
-    // =============================================================================================
-    // Preflight
-    // =============================================================================================
 
     private void preflightIntegrityOrPrompt() {
         setLoading(true);
@@ -211,7 +195,6 @@ public class MainActivity extends AppCompatActivity {
         Log.i(TAG, "GMS=" + pkgVer(this, "com.google.android.gms") +
                 " PlayStore=" + pkgVer(this, "com.android.vending"));
 
-        // 1) Google Play services durumu
         int gms = GoogleApiAvailability.getInstance().isGooglePlayServicesAvailable(this);
         if (gms != ConnectionResult.SUCCESS) {
             Log.w(TAG, "GMS not available, code=" + gms + " → opening update flow");
@@ -219,14 +202,11 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
 
-        // 2) Play Store kurulu ve etkin mi?
         final boolean playOk = isPlayStoreOk(this);
-        // 2.5) Uygulama Play Store’dan yüklenmiş mi?
         final boolean installedFromPlay = isInstalledFromPlay(this);
 
         if (!playOk || !installedFromPlay) {
             if (DEV_ALLOW_NON_PLAY_INSTALLS) {
-                // DEV: Integrity’yi BYPASS ediyoruz
                 Log.w(TAG, "Play ortamı eksik/installer=non-Play ama DEV_ALLOW_NON_PLAY_INSTALLS=true → Integrity atlanıyor.");
                 warmUpAppCheckThenInitUiAndAuth();
                 return;
@@ -239,7 +219,6 @@ public class MainActivity extends AppCompatActivity {
             }
         }
 
-        // 3) Integrity çağrısı
         requestIntegrityWithRetry(
                 token -> {
                     Log.i(TAG, "Integrity token alındı (preflight OK).");
@@ -272,7 +251,6 @@ public class MainActivity extends AppCompatActivity {
         );
     }
 
-    /** GMS update flow: sistem ekranını açar; tamamlanınca preflight'i yeniden dener. */
     private void ensureGmsUpToDateOrPrompt() {
         GoogleApiAvailability.getInstance()
                 .makeGooglePlayServicesAvailable(this)
@@ -306,7 +284,6 @@ public class MainActivity extends AppCompatActivity {
         catch (Exception e) { return "NA"; }
     }
 
-    /** Uygulama resmi Play Store’dan (com.android.vending) mı yüklenmiş? (Android 11+ güvenilir yöntem) */
     private static boolean isInstalledFromPlay(Context ctx) {
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
@@ -323,10 +300,6 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    // =============================================================================================
-    // App Check + Auth + UI
-    // =============================================================================================
-
     private void warmUpAppCheckThenInitUiAndAuth() {
         warmUpAppCheck()
                 .addOnSuccessListener(appCheckToken -> {
@@ -334,7 +307,6 @@ public class MainActivity extends AppCompatActivity {
                     Log.d(TAG, "AppCheck warm-up OK? " + hasAppCheckToken +
                             " exp=" + (appCheckToken != null ? appCheckToken.getExpireTimeMillis() : -1));
 
-                    // Auth
                     mAuth = FirebaseAuth.getInstance();
                     user = mAuth.getCurrentUser();
 
@@ -377,12 +349,10 @@ public class MainActivity extends AppCompatActivity {
                                 });
                     }
 
-                    // Hizmetler
                     functions = FirebaseFunctions.getInstance();
                     db = FirebaseFirestore.getInstance();
                     privateCom = new PrivateCom();
 
-                    // UI
                     ImageButton patiEnterButton = findViewById(R.id.pati_enter);
                     if (patiEnterButton != null) {
                         patiEnterButton.setOnClickListener(v -> {
@@ -459,10 +429,6 @@ public class MainActivity extends AppCompatActivity {
                 });
     }
 
-    // =============================================================================================
-    // Ortam & Market yardımcıları (dialog leak korumalı)
-    // =============================================================================================
-
     private void safeFinishWithDelay() {
         handler.postDelayed(() -> {
             if (!isFinishing() && !isDestroyed()) finish();
@@ -537,10 +503,6 @@ public class MainActivity extends AppCompatActivity {
                 .show();
     }
 
-    // =============================================================================================
-    // QR / Registration / Navigation
-    // =============================================================================================
-
     private void openQRScannerForRegistration() {
         Intent intent = new Intent(this, QRScannerActivity.class);
         startActivityForResult(intent, SCAN_QR_REQUEST_CODE);
@@ -609,15 +571,19 @@ public class MainActivity extends AppCompatActivity {
 
         showQRCodePopup(generatedQRCode);
 
-        if (response == null) {
+        new Thread(() -> {
             try {
                 response = PrivateCom.receiveDataBlocking();
                 Log.d(TAG, "BT received: " + response);
-                // TODO: response işlenip uygun ekrana yönlendirme
+                runOnUiThread(() -> {
+                    if (response != null && response.equals("success")) {
+                        navigateToWelcome();
+                    }
+                });
             } catch (IOException e) {
                 Log.e(TAG, "Bluetooth receive failed", e);
             }
-        }
+        }).start();
     }
 
     private void showQRCodePopup(String deviceId) {
@@ -642,10 +608,6 @@ public class MainActivity extends AppCompatActivity {
         builder.show();
     }
 
-    // =============================================================================================
-    // Navigation helpers
-    // =============================================================================================
-
     private void navigateToWelcome() {
         startActivity(new Intent(this, Welcome.class));
         finish();
@@ -659,10 +621,8 @@ public class MainActivity extends AppCompatActivity {
         finish();
     }
 
-    // --- Nonce üretimi ---
     private static final SecureRandom RAND = new SecureRandom();
 
-    /** 32–48 bayt önerilir; 16 bayt minimumdur (Base64 ÖNCEKİ bayt sayısı). */
     private static String newIntegrityNonce(int numBytes) {
         if (numBytes < 16) numBytes = 32;
         byte[] buf = new byte[numBytes];
@@ -670,7 +630,6 @@ public class MainActivity extends AppCompatActivity {
         return Base64.encodeToString(buf, Base64.URL_SAFE | Base64.NO_WRAP | Base64.NO_PADDING);
     }
 
-    /** Bağlama duyarlı (appId+uid+ts+rand) → SHA-256 → b64url; sunucuda doğrulamaya uygun. */
     private static String buildBoundNonce() {
         try {
             String payload = "app=" + BuildConfig.APPLICATION_ID +
@@ -678,7 +637,7 @@ public class MainActivity extends AppCompatActivity {
                     "&ts=" + System.currentTimeMillis() +
                     "&rand=" + RAND.nextLong();
             MessageDigest sha = MessageDigest.getInstance("SHA-256");
-            byte[] digest = sha.digest(payload.getBytes(StandardCharsets.UTF_8)); // 32 byte
+            byte[] digest = sha.digest(payload.getBytes(StandardCharsets.UTF_8));
             return Base64.encodeToString(digest, Base64.URL_SAFE | Base64.NO_WRAP | Base64.NO_PADDING);
         } catch (Exception e) {
             Log.w(TAG, "buildBoundNonce fallback to random", e);
@@ -705,16 +664,11 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    // =============================================================================================
-    // Yardımcı: App Check provider kurulumu (idempotent, reflection ile debug)
-    // =============================================================================================
-
     private void ensureAppCheckProviderInstalled() {
         if (appCheckProviderInstalled) return;
         try {
             FirebaseAppCheck appCheck = FirebaseAppCheck.getInstance();
             if (BuildConfig.DEBUG) {
-                // Debug provider'ı reflection ile dene (import gerekmesin)
                 try {
                     Class<?> cls = Class.forName("com.google.firebase.appcheck.debug.DebugAppCheckProviderFactory");
                     Object factory = cls.getMethod("getInstance").invoke(null);
@@ -726,13 +680,11 @@ public class MainActivity extends AppCompatActivity {
                     Log.i(TAG, "AppCheck provider = PlayIntegrity (fallback in debug)");
                 }
             } else {
-                // Release’de Play Integrity provider’ı zorunlu
                 appCheck.installAppCheckProviderFactory(PlayIntegrityAppCheckProviderFactory.getInstance());
                 Log.i(TAG, "AppCheck provider = PlayIntegrity");
             }
             appCheckProviderInstalled = true;
         } catch (Throwable t) {
-            // Kurulum başarısız olursa warm-up zaten hata verecek; loglamak yeterli
             Log.w(TAG, "AppCheck provider install failed (will rely on default)", t);
         }
     }
