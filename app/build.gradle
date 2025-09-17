@@ -72,7 +72,7 @@ android {
 
 dependencies {
     // ===================== Firebase (BoM ile) =====================
-    implementation platform('com.google.firebase:firebase-bom:32.8.1')
+    implementation platform('com.google.firebase:firebase-bom:34.2.0')
 
     // Temel servisler (sürüm belirtmeden)
     implementation 'com.google.firebase:firebase-analytics'
@@ -83,7 +83,7 @@ dependencies {
     implementation 'com.google.firebase:firebase-database'
 
     // App Check – çekirdek + provider’lar (varyant bazlı)
-    implementation       'com.google.firebase:firebase-appcheck'
+    implementation 'com.google.firebase:firebase-appcheck'
     implementation libs.firebase.appcheck.playintegrity
     implementation libs.litert.gpu.api
     implementation libs.swiperefreshlayout// opsiyonel ama netlik için ekli

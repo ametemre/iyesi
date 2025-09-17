@@ -1,43 +1,54 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+<manifest
+    xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- Gerekli izinler -->
+    <!-- Ağ / Konum / Kamera / Ses -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
-    <uses-permission android:name="android.permission.BLUETOOTH" />
-    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />
-    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
-    <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" />
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
+    <!-- Depolama: API 32 ve altı -->
     <uses-permission
         android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="32" />
     <uses-permission
         android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32" />
-    <uses-permission
-        android:name="android.permission.READ_MEDIA_VISUAL"
-        android:required="false" />
-    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
-    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
-    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
 
-    <uses-feature
-        android:name="android.hardware.camera"
-        android:required="false" />
-    <uses-feature
-        android:name="android.hardware.camera.autofocus"
-        android:required="false" />
-    <uses-feature
-        android:name="android.hardware.camera.front"
-        android:required="false" />
-    <uses-feature
-        android:name="android.hardware.camera.front.autofocus"
-        android:required="false" />
+    <!-- Android 13+ medya izinleri (normal uses-permission, lint için targetApi ekledik) -->
+    <uses-permission
+        android:name="android.permission.READ_MEDIA_IMAGES"
+        tools:targetApi="33" />
+    <uses-permission
+        android:name="android.permission.READ_MEDIA_VIDEO"
+        tools:targetApi="33" />
+    <uses-permission
+        android:name="android.permission.READ_MEDIA_AUDIO"
+        tools:targetApi="33" />
+
+    <!-- İsteğe bağlı (Android 14+): kullanıcı seçimiyle görsele erişim -->
+    <!--
+    <uses-permission
+        android:name="android.permission.READ_MEDIA_VISUAL_USER_SELECTED"
+        tools:targetApi="34" />
+    -->
+
+    <!-- Bluetooth (31+ ayrı izinler) -->
+    <uses-permission android:name="android.permission.BLUETOOTH" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" />
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />
+
+    <!-- Donanım özellikleri opsiyonel -->
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
+    <uses-feature android:name="android.hardware.camera.front" android:required="false" />
+    <uses-feature android:name="android.hardware.camera.front.autofocus" android:required="false" />
 
     <queries>
         <package android:name="com.android.vending"/>
@@ -55,7 +66,6 @@
         </intent>
         <intent>
             <action android:name="android.intent.action.GET_CONTENT" />
-
             <data android:mimeType="image/*" />
         </intent>
     </queries>
@@ -70,82 +80,57 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.Iyesi"
-        tools:targetApi="36" >
+        tools:targetApi="35">
+
         <activity
             android:name=".kurmes.social.message.Message"
             android:windowSoftInputMode="adjustResize|stateHidden"
             android:exported="false" />
-        <activity
-            android:name=".ProfileActivity"
-            android:exported="false" />
+        <activity android:name=".ProfileActivity" android:exported="false" />
 
+        <!-- Google Play services / Maps -->
         <meta-data
             android:name="com.google.android.gms.version"
-            android:value="@integer/google_play_services_version" /> <!-- Google Maps API anahtarı -->
+            android:value="@integer/google_play_services_version" />
         <meta-data
             android:name="com.google.android.geo.API_KEY"
-            android:value="AIzaSyBbU_M5LP-eJoDPJYcQaACCfDwuzGK8Cx4" /> <!-- Aktiviteler -->
-        <activity
-            android:name=".umay.SokakActivity"
-            android:exported="false" />
-        <activity
-            android:name=".kurmes.ui.SoulsManagerActivity"
-            android:exported="false" />
-        <activity
-            android:name=".kurmes.social.message.Messaging"
-            android:exported="false" />
-        <activity
-            android:name=".umay.sahiplendirme.Sahiplendirme"
-            android:exported="false" />
+            android:value="AIzaSyBbU_M5LP-eJoDPJYcQaACCfDwuzGK8Cx4" />
+
+        <!-- Aktiviteler -->
+        <activity android:name=".umay.SokakActivity" android:exported="false" />
+        <activity android:name=".kurmes.ui.SoulsManagerActivity" android:exported="false" />
+        <activity android:name=".kurmes.social.message.Messaging" android:exported="false" />
+        <activity android:name=".umay.sahiplendirme.Sahiplendirme" android:exported="false" />
         <activity
             android:name=".kurmes.Kurmes"
             android:exported="true"
             android:enabled="@bool/feature_kurmes_enabled"
             android:label="@string/app_name" />
-        <activity
-            android:name=".kurmes.Kurmes_dummy"
-            android:exported="false" />
-        <activity
-            android:name=".QRScannerActivity"
-            android:exported="false" />
-        <activity
-            android:name=".kurmes.social.content.ExplorePrivate"
-            android:exported="true" />
-        <activity
-            android:name=".kurmes.social.content.Explore"
-            android:exported="false" />
-        <activity
-            android:name=".umay.Welcome"
-            android:exported="false" />
-        <activity
-            android:name=".Register"
-            android:exported="false" />
-        <activity
-            android:name=".QR"
-            android:exported="false" />
-        <activity
-            android:name=".Login"
-            android:exported="false" />
-        <activity
-            android:name=".umay.sahiplendirme.Founded"
-            android:exported="false" />
-        <activity
-            android:name=".umay.sahiplendirme.Companion"
-            android:exported="false" /> <!-- Giriş (Launcher) aktivitesi -->
-        <activity
-            android:name=".MainActivity"
-            android:exported="true" >
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
+        <activity android:name=".kurmes.Kurmes_dummy" android:exported="false" />
+        <activity android:name=".QRScannerActivity" android:exported="false" />
+        <activity android:name=".kurmes.social.content.ExplorePrivate" android:exported="true" />
+        <activity android:name=".kurmes.social.content.Explore" android:exported="false" />
+        <activity android:name=".umay.Welcome" android:exported="false" />
+        <activity android:name=".Register" android:exported="false" />
+        <activity android:name=".QR" android:exported="false" />
+        <activity android:name=".Login" android:exported="false" />
+        <activity android:name=".umay.sahiplendirme.Founded" android:exported="false" />
+        <activity android:name=".umay.sahiplendirme.Companion" android:exported="false" />
 
-                <category android:name="android.intent.category.LAUNCHER" />
+        <!-- Giriş (Launcher) -->
+        <activity android:name=".MainActivity" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
-        </activity> <!-- FileProvider -->
+        </activity>
+
+        <!-- FileProvider -->
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="com.kurmez.iyesi.fileprovider"
             android:exported="false"
-            android:grantUriPermissions="true" >
+            android:grantUriPermissions="true">
             <meta-data
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths" />
