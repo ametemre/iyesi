@@ -141,8 +141,9 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void requestIntegrityWithRetry(Consumer<String> onOk, Consumer<Exception> onFail) {
-        final String nonce = buildBoundNonce();
-        Log.d(TAG, "Integrity nonce(b64url).len=" + nonce.length());
+        // Daha uzun nonce kullan (minimum 16 bayt, 32-48 bayt önerilir)
+        final String nonce = newIntegrityNonce(48);
+        Log.d(TAG, "Integrity nonce(b64url).len=" + nonce.length() + ", bytes=" + (nonce.length() * 3 / 4));
 
         IntegrityManager im = IntegrityManagerFactory.create(getApplicationContext());
         IntegrityTokenRequest req = IntegrityTokenRequest.builder()
@@ -157,8 +158,9 @@ public class MainActivity extends AppCompatActivity {
                         int code = ((IntegrityServiceException) e).getErrorCode();
                         Log.w(TAG, "Integrity failed code=" + code + ", retry policy may apply.", e);
                         if (code == IntegrityErrorCode.NONCE_TOO_SHORT) {
+                            // Daha da uzun nonce ile tekrar dene
                             IntegrityTokenRequest retryReq = IntegrityTokenRequest.builder()
-                                    .setNonce(newIntegrityNonce(48))
+                                    .setNonce(newIntegrityNonce(64))
                                     .setCloudProjectNumber(CLOUD_PROJECT_NUMBER)
                                     .build();
                             IntegrityManager im2 = IntegrityManagerFactory.create(getApplicationContext());
@@ -181,10 +183,18 @@ public class MainActivity extends AppCompatActivity {
             if (code == IntegrityErrorCode.API_NOT_AVAILABLE
                     || code == IntegrityErrorCode.PLAY_STORE_NOT_FOUND
                     || code == IntegrityErrorCode.PLAY_STORE_VERSION_OUTDATED
+                    || code == IntegrityErrorCode.APP_NOT_INSTALLED
+                    || code == IntegrityErrorCode.APP_UID_MISMATCH
+                    || code == IntegrityErrorCode.CANNOT_BIND_TO_SERVICE
+                    || code == IntegrityErrorCode.NETWORK_ERROR
                     || code == IntegrityErrorCode.GOOGLE_SERVER_UNAVAILABLE) {
                 return PreflightStatus.ENV_MISSING_OR_OUTDATED;
             }
-            return PreflightStatus.TRANSIENT_ERROR;
+            if (code == IntegrityErrorCode.TOO_MANY_REQUESTS
+                    || code == IntegrityErrorCode.INTERNAL_ERROR) {
+                return PreflightStatus.TRANSIENT_ERROR;
+            }
+            return PreflightStatus.UNKNOWN_ERROR;
         }
         return PreflightStatus.UNKNOWN_ERROR;
     }
@@ -193,8 +203,11 @@ public class MainActivity extends AppCompatActivity {
         setLoading(true);
 
         Log.i(TAG, "GMS=" + pkgVer(this, "com.google.android.gms") +
-                " PlayStore=" + pkgVer(this, "com.android.vending"));
+                " PlayStore=" + pkgVer(this, "com.android.vending") +
+                " DEBUG=" + BuildConfig.DEBUG +
+                " DEV_ALLOW_NON_PLAY_INSTALLS=" + DEV_ALLOW_NON_PLAY_INSTALLS);
 
+        // 1) Google Play services durumu
         int gms = GoogleApiAvailability.getInstance().isGooglePlayServicesAvailable(this);
         if (gms != ConnectionResult.SUCCESS) {
             Log.w(TAG, "GMS not available, code=" + gms + " → opening update flow");
@@ -202,23 +215,29 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
 
+        // 2) Play Store kurulu ve etkin mi?
         final boolean playOk = isPlayStoreOk(this);
+        // 2.5) Uygulama Play Store'dan yüklenmiş mi?
         final boolean installedFromPlay = isInstalledFromPlay(this);
+
+        Log.d(TAG, "Play Store check: playOk=" + playOk + ", installedFromPlay=" + installedFromPlay);
 
         if (!playOk || !installedFromPlay) {
             if (DEV_ALLOW_NON_PLAY_INSTALLS) {
+                // DEV: Integrity'yi BYPASS ediyoruz
                 Log.w(TAG, "Play ortamı eksik/installer=non-Play ama DEV_ALLOW_NON_PLAY_INSTALLS=true → Integrity atlanıyor.");
                 warmUpAppCheckThenInitUiAndAuth();
                 return;
             } else {
                 Log.w(TAG, "Integrity API erişilemedi veya engellendi (Play ortamı yok/uyumsuz).");
                 showPlayEnvAdvice(!playOk ? "Google Play Store kurulu değil / devre dışı"
-                        : "Uygulama resmi Play Store’dan yüklenmemiş.");
+                        : "Uygulama resmi Play Store'dan yüklenmemiş.");
                 setLoading(false);
                 return;
             }
         }
 
+        // 3) Integrity çağrısı
         requestIntegrityWithRetry(
                 token -> {
                     Log.i(TAG, "Integrity token alındı (preflight OK).");
@@ -230,7 +249,7 @@ public class MainActivity extends AppCompatActivity {
 
                     if (DEV_ALLOW_NON_PLAY_INSTALLS &&
                             (s == PreflightStatus.ENV_MISSING_OR_OUTDATED || s == PreflightStatus.TRANSIENT_ERROR)) {
-                        Log.w(TAG, "Dev modda Integrity hatası bypass → AppCheck+Auth’a devam.");
+                        Log.w(TAG, "Dev modda Integrity hatası bypass → AppCheck+Auth'a devam.");
                         warmUpAppCheckThenInitUiAndAuth();
                         return;
                     }
@@ -251,12 +270,18 @@ public class MainActivity extends AppCompatActivity {
         );
     }
 
+    /** GMS update flow: sistem ekranını açar; tamamlanınca preflight'i yeniden dener. */
     private void ensureGmsUpToDateOrPrompt() {
         GoogleApiAvailability.getInstance()
                 .makeGooglePlayServicesAvailable(this)
                 .addOnCompleteListener(t -> {
                     Log.i(TAG, "GMS update flow result: " + (t.isSuccessful() ? "OK" : "FAIL"));
-                    handler.post(this::preflightIntegrityOrPrompt);
+                    if (t.isSuccessful()) {
+                        handler.post(this::preflightIntegrityOrPrompt);
+                    } else {
+                        showPlayEnvAdvice("Google Play Hizmetleri güncellenemedi.");
+                        setLoading(false);
+                    }
                 });
     }
 
@@ -284,6 +309,7 @@ public class MainActivity extends AppCompatActivity {
         catch (Exception e) { return "NA"; }
     }
 
+    /** Uygulama resmi Play Store'dan (com.android.vending) mı yüklenmiş? (Android 11+ güvenilir yöntem) */
     private static boolean isInstalledFromPlay(Context ctx) {
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
@@ -300,6 +326,10 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    // =============================================================================================
+    // App Check + Auth + UI
+    // =============================================================================================
+
     private void warmUpAppCheckThenInitUiAndAuth() {
         warmUpAppCheck()
                 .addOnSuccessListener(appCheckToken -> {
@@ -307,6 +337,7 @@ public class MainActivity extends AppCompatActivity {
                     Log.d(TAG, "AppCheck warm-up OK? " + hasAppCheckToken +
                             " exp=" + (appCheckToken != null ? appCheckToken.getExpireTimeMillis() : -1));
 
+                    // Auth
                     mAuth = FirebaseAuth.getInstance();
                     user = mAuth.getCurrentUser();
 
@@ -349,10 +380,12 @@ public class MainActivity extends AppCompatActivity {
                                 });
                     }
 
+                    // Hizmetler
                     functions = FirebaseFunctions.getInstance();
                     db = FirebaseFirestore.getInstance();
                     privateCom = new PrivateCom();
 
+                    // UI
                     ImageButton patiEnterButton = findViewById(R.id.pati_enter);
                     if (patiEnterButton != null) {
                         patiEnterButton.setOnClickListener(v -> {
@@ -429,6 +462,10 @@ public class MainActivity extends AppCompatActivity {
                 });
     }
 
+    // =============================================================================================
+    // Ortam & Market yardımcıları (dialog leak korumalı)
+    // =============================================================================================
+
     private void safeFinishWithDelay() {
         handler.postDelayed(() -> {
             if (!isFinishing() && !isDestroyed()) finish();
@@ -489,19 +526,25 @@ public class MainActivity extends AppCompatActivity {
 
     private void showPlayEnvAdvice(String reason) {
         if (isFinishing() || isDestroyed()) return;
-        new AlertDialog.Builder(this)
-                .setTitle("Güncelleme / Düzeltme Gerekli")
-                .setMessage(
-                        "Google Play ortamında eksik/uyumsuzluk algılandı.\n" +
-                                "Neden: " + reason +
-                                "\n\nLütfen Google Play Hizmetleri ve Play Store’u güncelleyin veya etkinleştirin."
-                )
-                .setPositiveButton("Play Hizmetleri", (d, w) -> openPlayServicesAndFinish())
-                .setNegativeButton("Play Store", (d, w) -> openPlayStoreAndFinish())
-                .setNeutralButton("Bu Uygulama (Store)", (d, w) -> openThisAppInPlayStoreAndFinish())
-                .setOnDismissListener(d -> safeFinishWithDelay())
-                .show();
+        runOnUiThread(() -> {
+            new AlertDialog.Builder(this)
+                    .setTitle("Güncelleme / Düzeltme Gerekli")
+                    .setMessage(
+                            "Google Play ortamında eksik/uyumsuzluk algılandı.\n" +
+                                    "Neden: " + reason +
+                                    "\n\nLütfen Google Play Hizmetleri ve Play Store'u güncelleyin veya etkinleştirin."
+                    )
+                    .setPositiveButton("Play Hizmetleri", (d, w) -> openPlayServicesAndFinish())
+                    .setNegativeButton("Play Store", (d, w) -> openPlayStoreAndFinish())
+                    .setNeutralButton("Bu Uygulama (Store)", (d, w) -> openThisAppInPlayStoreAndFinish())
+                    .setOnDismissListener(d -> safeFinishWithDelay())
+                    .show();
+        });
     }
+
+    // =============================================================================================
+    // QR / Registration / Navigation
+    // =============================================================================================
 
     private void openQRScannerForRegistration() {
         Intent intent = new Intent(this, QRScannerActivity.class);
@@ -608,6 +651,10 @@ public class MainActivity extends AppCompatActivity {
         builder.show();
     }
 
+    // =============================================================================================
+    // Navigation helpers
+    // =============================================================================================
+
     private void navigateToWelcome() {
         startActivity(new Intent(this, Welcome.class));
         finish();
@@ -621,8 +668,10 @@ public class MainActivity extends AppCompatActivity {
         finish();
     }
 
+    // --- Nonce üretimi ---
     private static final SecureRandom RAND = new SecureRandom();
 
+    /** 32-48 bayt önerilir; 16 bayt minimumdur (Base64 ÖNCEKİ bayt sayısı). */
     private static String newIntegrityNonce(int numBytes) {
         if (numBytes < 16) numBytes = 32;
         byte[] buf = new byte[numBytes];
@@ -630,6 +679,7 @@ public class MainActivity extends AppCompatActivity {
         return Base64.encodeToString(buf, Base64.URL_SAFE | Base64.NO_WRAP | Base64.NO_PADDING);
     }
 
+    /** Bağlama duyarlı (appId+uid+ts+rand) → SHA-256 → b64url; sunucuda doğrulamaya uygun. */
     private static String buildBoundNonce() {
         try {
             String payload = "app=" + BuildConfig.APPLICATION_ID +
@@ -637,7 +687,7 @@ public class MainActivity extends AppCompatActivity {
                     "&ts=" + System.currentTimeMillis() +
                     "&rand=" + RAND.nextLong();
             MessageDigest sha = MessageDigest.getInstance("SHA-256");
-            byte[] digest = sha.digest(payload.getBytes(StandardCharsets.UTF_8));
+            byte[] digest = sha.digest(payload.getBytes(StandardCharsets.UTF_8)); // 32 byte
             return Base64.encodeToString(digest, Base64.URL_SAFE | Base64.NO_WRAP | Base64.NO_PADDING);
         } catch (Exception e) {
             Log.w(TAG, "buildBoundNonce fallback to random", e);
@@ -664,11 +714,16 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    // =============================================================================================
+    // Yardımcı: App Check provider kurulumu (idempotent, reflection ile debug)
+    // =============================================================================================
+
     private void ensureAppCheckProviderInstalled() {
         if (appCheckProviderInstalled) return;
         try {
             FirebaseAppCheck appCheck = FirebaseAppCheck.getInstance();
             if (BuildConfig.DEBUG) {
+                // Debug provider'ı reflection ile dene (import gerekmesin)
                 try {
                     Class<?> cls = Class.forName("com.google.firebase.appcheck.debug.DebugAppCheckProviderFactory");
                     Object factory = cls.getMethod("getInstance").invoke(null);
@@ -680,11 +735,13 @@ public class MainActivity extends AppCompatActivity {
                     Log.i(TAG, "AppCheck provider = PlayIntegrity (fallback in debug)");
                 }
             } else {
+                // Release'de Play Integrity provider'ı zorunlu
                 appCheck.installAppCheckProviderFactory(PlayIntegrityAppCheckProviderFactory.getInstance());
                 Log.i(TAG, "AppCheck provider = PlayIntegrity");
             }
             appCheckProviderInstalled = true;
         } catch (Throwable t) {
+            // Kurulum başarısız olursa warm-up zaten hata verecek; loglamak yeterli
             Log.w(TAG, "AppCheck provider install failed (will rely on default)", t);
         }
     }
