@@ -21,6 +21,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.Closeable;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
@@ -29,6 +30,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+
+import okhttp3.OkHttpClient;
 
 /**
  * Soul — Bir can (hayvan) kaydı.
@@ -261,6 +264,19 @@ public class Soul implements Parcelable {
         }
         geohash = readNullableString(in);
         adminPath = readNullableString(in);
+        //---------------------------------------------------------------------------------------------------
+        Map<String, Object> patch = new HashMap<>();
+        patch.put("status", "adoptable");
+        patch.put("health", "ok");
+
+        Map<String, Object> loc = new HashMap<>();
+        loc.put("lat", 37.0001);
+        loc.put("lng", 35.3210);
+        patch.put("location", loc);
+
+// (İstersen) zaman damgasını client tarafında da set edebilirsin:
+        patch.put("timestamp", System.currentTimeMillis());
+        //---------------------------------------------------------------------------------------------------
     }
 
     @Override
@@ -717,6 +733,50 @@ public class Soul implements Parcelable {
         if (c != null) {
             try { c.close(); } catch (Exception ignore) {}
         }
+    }
+// CF UPDATE (merge) — Cloud Functions'ı değiştirmeden kullan
+// Gerekenler: OkHttp, CFHelper/CFClient’tan idToken + appCheckToken alma
+
+    public static void updateSoulViaCF(
+            @NonNull OkHttpClient client,
+            @NonNull String cfBaseUrl,   // örn: BuildConfig.CF_BASE_URL
+            @NonNull String soulId,      // güncellenecek belge id
+            @NonNull Map<String, Object> patch,  // sadece değiştirmek istediklerin (toPublicMap()’ten seç)
+            @NonNull String idToken,     // Firebase ID token
+            @NonNull String appCheckToken, // App Check token
+            @NonNull okhttp3.Callback cb // OkHttp callback
+    ) {
+        try {
+            // Sadece izinli alanları gönder (istenirse burada filtreleyebilirsin)
+            org.json.JSONObject bodyJson = new org.json.JSONObject(patch);
+
+            okhttp3.RequestBody body = okhttp3.RequestBody.create(
+                    bodyJson.toString(),
+                    okhttp3.MediaType.parse("application/json")
+            );
+
+            // id parametresi query'den okunuyor
+            String url = cfBaseUrl + "/updateSoulById?id=" + java.net.URLEncoder.encode(soulId, "UTF-8");
+
+            okhttp3.Request req = new okhttp3.Request.Builder()
+                    .url(url)
+                    .addHeader("Authorization", "Bearer " + idToken)          // requireAuth:true
+                    .addHeader("X-Firebase-AppCheck", appCheckToken)           // requireAppCheck:true
+                    .addHeader("X-Device-Id", getDeviceIdMaybe())              // opsiyonel; varsa ekle
+                    .patch(body)                                               // PATCH!
+                    .build();
+
+            client.newCall(req).enqueue(cb);
+        } catch (Exception e) {
+            // Hemen hata döndürmek istersen:
+            cb.onFailure(null, new IOException("updateSoulViaCF build failed", e));
+        }
+    }
+
+    // İstersen cihaz id'nizi header'a ekleyin (opsiyonel)
+    private static String getDeviceIdMaybe() {
+        // TODO: cihaz/ayar mimarine göre doldur veya header'ı kaldır.
+        return "android-" + android.os.Build.MODEL;
     }
 
 }

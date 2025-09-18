@@ -39,9 +39,9 @@ import com.google.android.play.core.integrity.IntegrityTokenRequest;
 import com.google.android.play.core.integrity.model.IntegrityErrorCode;
 
 import com.google.firebase.FirebaseApp;
-import com.google.firebase.appcheck.AppCheckProviderFactory;
 import com.google.firebase.appcheck.AppCheckToken;
 import com.google.firebase.appcheck.FirebaseAppCheck;
+import com.google.firebase.appcheck.AppCheckProviderFactory;
 import com.google.firebase.appcheck.playintegrity.PlayIntegrityAppCheckProviderFactory;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
@@ -65,7 +65,6 @@ import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.nio.charset.StandardCharsets;
 
@@ -103,7 +102,6 @@ public class MainActivity extends AppCompatActivity {
     private volatile boolean hasAppCheckToken = false;
     private volatile boolean hasAuthIdToken  = false;
 
-    /** Activity yaşam döngüsü boyunca bir kez sağlayıcı kur. */
     private static volatile boolean appCheckProviderInstalled = false;
 
     private enum PreflightStatus {
@@ -112,8 +110,6 @@ public class MainActivity extends AppCompatActivity {
         TRANSIENT_ERROR,
         UNKNOWN_ERROR
     }
-
-    // ------------- Activity -------------
 
     @SuppressLint("MissingPermission")
     @Override
@@ -125,10 +121,8 @@ public class MainActivity extends AppCompatActivity {
 
         try { FirebaseApp.initializeApp(this); } catch (Throwable ignore) { }
 
-        // App Check sağlayıcısını tak (Application'a almak idealdir; burada da garantiye alıyoruz)
         ensureAppCheckProviderInstalled();
 
-        // İzin yöneticisi
         permissionHelper = new PermissionHelper();
         permissionHelper.setActivity(this);
         permissionHelper.setCallback(new PermissionHelper.Callback() {
@@ -137,7 +131,6 @@ public class MainActivity extends AppCompatActivity {
         });
         permissionHelper.initialize();
 
-        // Başlangıç: Integrity preflight
         preflightIntegrityOrPrompt();
     }
 
@@ -147,11 +140,6 @@ public class MainActivity extends AppCompatActivity {
         handler.removeCallbacksAndMessages(null);
     }
 
-    // ------------- Play Integrity -------------
-
-    /**
-     * Integrity token iste ve transient hatalarda kısa bir backoff ile tek sefer daha dene.
-     */
     private void requestIntegrityWithRetry(Consumer<String> onOk, Consumer<Exception> onFail) {
         final String nonce = buildBoundNonce();
         Log.d(TAG, "Integrity nonce(b64url).len=" + nonce.length());
@@ -165,11 +153,9 @@ public class MainActivity extends AppCompatActivity {
         im.requestIntegrityToken(req)
                 .addOnSuccessListener(token -> onOk.accept(token.token()))
                 .addOnFailureListener(e -> {
-                    // NONCE_TOO_SHORT ise hemen düzelterek deneyelim
                     if (e instanceof IntegrityServiceException) {
                         int code = ((IntegrityServiceException) e).getErrorCode();
                         Log.w(TAG, "Integrity failed code=" + code + ", retry policy may apply.", e);
-
                         if (code == IntegrityErrorCode.NONCE_TOO_SHORT) {
                             IntegrityTokenRequest retryReq = IntegrityTokenRequest.builder()
                                     .setNonce(newIntegrityNonce(48))
@@ -179,19 +165,6 @@ public class MainActivity extends AppCompatActivity {
                             im2.requestIntegrityToken(retryReq)
                                     .addOnSuccessListener(t -> onOk.accept(t.token()))
                                     .addOnFailureListener(onFail::accept);
-                            return;
-                        }
-
-                        // Geçici hataya küçük bir backoff ile tek tekrar
-                        if (code == IntegrityErrorCode.NETWORK_ERROR
-                                || code == IntegrityErrorCode.INTERNAL_ERROR
-                                || code == IntegrityErrorCode.GOOGLE_SERVER_UNAVAILABLE) {
-                            handler.postDelayed(() -> {
-                                IntegrityManager im3 = IntegrityManagerFactory.create(getApplicationContext());
-                                im3.requestIntegrityToken(req)
-                                        .addOnSuccessListener(t -> onOk.accept(t.token()))
-                                        .addOnFailureListener(onFail::accept);
-                            }, 1200);
                             return;
                         }
                     }
@@ -287,7 +260,45 @@ public class MainActivity extends AppCompatActivity {
                 });
     }
 
-    // ------------- App Check + Auth -------------
+    private void setLoading(boolean state) {
+        runOnUiThread(() -> {
+            if (progress == null) return;
+            progress.setVisibility(state ? View.VISIBLE : View.GONE);
+        });
+    }
+
+    private static boolean isPlayStoreOk(Context ctx) {
+        try {
+            PackageManager pm = ctx.getPackageManager();
+            ApplicationInfo ai = pm.getApplicationInfo("com.android.vending", 0);
+            boolean enabled = ai != null && ai.enabled;
+            PackageInfo pi = pm.getPackageInfo("com.android.vending", 0);
+            return enabled && pi != null;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private static String pkgVer(Context c, String pkg) {
+        try { return c.getPackageManager().getPackageInfo(pkg, 0).versionName; }
+        catch (Exception e) { return "NA"; }
+    }
+
+    private static boolean isInstalledFromPlay(Context ctx) {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                InstallSourceInfo info = ctx.getPackageManager().getInstallSourceInfo(ctx.getPackageName());
+                String installer = info != null ? info.getInstallingPackageName() : null;
+                if (installer == null) installer = info != null ? info.getInitiatingPackageName() : null;
+                return "com.android.vending".equals(installer);
+            } else {
+                String installer = ctx.getPackageManager().getInstallerPackageName(ctx.getPackageName());
+                return "com.android.vending".equals(installer);
+            }
+        } catch (Throwable t) {
+            return false;
+        }
+    }
 
     private void warmUpAppCheckThenInitUiAndAuth() {
         warmUpAppCheck()
@@ -418,15 +429,6 @@ public class MainActivity extends AppCompatActivity {
                 });
     }
 
-    // ------------- UI / Dialog Helpers -------------
-
-    private void setLoading(boolean state) {
-        runOnUiThread(() -> {
-            if (progress == null) return;
-            progress.setVisibility(state ? View.VISIBLE : View.GONE);
-        });
-    }
-
     private void safeFinishWithDelay() {
         handler.postDelayed(() -> {
             if (!isFinishing() && !isDestroyed()) finish();
@@ -448,9 +450,46 @@ public class MainActivity extends AppCompatActivity {
         safeFinishWithDelay();
     }
 
+    public static void openPlayServices(Context ctx) {
+        try {
+            ctx.startActivity(new Intent(Intent.ACTION_VIEW)
+                    .setData(Uri.parse("market://details?id=com.google.android.gms"))
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+        } catch (Exception ignore) {
+            ctx.startActivity(new Intent(Intent.ACTION_VIEW)
+                    .setData(Uri.parse("https://play.google.com/store/apps/details?id=com.google.android.gms"))
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+        }
+    }
+
+    public static void openPlayStore(Context ctx) {
+        try {
+            ctx.startActivity(new Intent(Intent.ACTION_VIEW)
+                    .setData(Uri.parse("market://details?id=com.android.vending"))
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+        } catch (Exception ignore) {
+            ctx.startActivity(new Intent(Intent.ACTION_VIEW)
+                    .setData(Uri.parse("https://play.google.com/store/apps/details?id=com.android.vending"))
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+        }
+    }
+
+    public static void openThisAppInPlayStore(Context ctx) {
+        String pkg = ctx.getPackageName();
+        try {
+            ctx.startActivity(new Intent(Intent.ACTION_VIEW)
+                    .setData(Uri.parse("market://details?id=" + pkg))
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+        } catch (Exception ignore) {
+            ctx.startActivity(new Intent(Intent.ACTION_VIEW)
+                    .setData(Uri.parse("https://play.google.com/store/apps/details?id=" + pkg))
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+        }
+    }
+
     private void showPlayEnvAdvice(String reason) {
         if (isFinishing() || isDestroyed()) return;
-        AlertDialog dlg = new AlertDialog.Builder(this)
+        new AlertDialog.Builder(this)
                 .setTitle("Güncelleme / Düzeltme Gerekli")
                 .setMessage(
                         "Google Play ortamında eksik/uyumsuzluk algılandı.\n" +
@@ -461,12 +500,8 @@ public class MainActivity extends AppCompatActivity {
                 .setNegativeButton("Play Store", (d, w) -> openPlayStoreAndFinish())
                 .setNeutralButton("Bu Uygulama (Store)", (d, w) -> openThisAppInPlayStoreAndFinish())
                 .setOnDismissListener(d -> safeFinishWithDelay())
-                .create();
-        // MIUI arkaplan kısıtları: diyalog sadece kullanıcı etkileşimiyle link açacak
-        if (!isFinishing() && !isDestroyed()) dlg.show();
+                .show();
     }
-
-    // ------------- Navigation -------------
 
     private void openQRScannerForRegistration() {
         Intent intent = new Intent(this, QRScannerActivity.class);
@@ -570,123 +605,21 @@ public class MainActivity extends AppCompatActivity {
 
         builder.setView(qrImageButton);
         builder.setNegativeButton("Close", (dialog, which) -> dialog.dismiss());
-        if (!isFinishing() && !isDestroyed()) builder.show();
+        builder.show();
     }
 
     private void navigateToWelcome() {
-        if (isFinishing() || isDestroyed()) return;
         startActivity(new Intent(this, Welcome.class));
         finish();
     }
 
     private void navigateToKurmes() {
-        if (isFinishing() || isDestroyed()) return;
         Intent intent = isRegistered
                 ? new Intent(this, SoulsManagerActivity.class)
                 : new Intent(this, Kurmes.class);
         startActivity(intent);
         finish();
     }
-
-    private void navigateToRegister() {
-        if (isFinishing() || isDestroyed()) return;
-        startActivity(new Intent(this, Register.class));
-        finish();
-    }
-
-    private void navigateToLogin() {
-        if (isFinishing() || isDestroyed()) return;
-        startActivity(new Intent(this, Login.class));
-        finish();
-    }
-
-    public void Quit() {
-        try {
-            FirebaseAuth.getInstance().signOut();
-            Log.i(TAG, "User logged out successfully.");
-        } catch (Throwable t) {
-            Log.w(TAG, "SignOut warn", t);
-        }
-    }
-
-    // ------------- Market Helpers -------------
-
-    public static void openPlayServices(Context ctx) {
-        try {
-            ctx.startActivity(new Intent(Intent.ACTION_VIEW)
-                    .setData(Uri.parse("market://details?id=com.google.android.gms"))
-                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
-        } catch (Exception ignore) {
-            ctx.startActivity(new Intent(Intent.ACTION_VIEW)
-                    .setData(Uri.parse("https://play.google.com/store/apps/details?id=com.google.android.gms"))
-                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
-        }
-    }
-
-    public static void openPlayStore(Context ctx) {
-        try {
-            ctx.startActivity(new Intent(Intent.ACTION_VIEW)
-                    .setData(Uri.parse("market://details?id=com.android.vending"))
-                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
-        } catch (Exception ignore) {
-            ctx.startActivity(new Intent(Intent.ACTION_VIEW)
-                    .setData(Uri.parse("https://play.google.com/store/apps/details?id=com.android.vending"))
-                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
-        }
-    }
-
-    public static void openThisAppInPlayStore(Context ctx) {
-        String pkg = ctx.getPackageName();
-        try {
-            ctx.startActivity(new Intent(Intent.ACTION_VIEW)
-                    .setData(Uri.parse("market://details?id=" + pkg))
-                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
-        } catch (Exception ignore) {
-            ctx.startActivity(new Intent(Intent.ACTION_VIEW)
-                    .setData(Uri.parse("https://play.google.com/store/apps/details?id=" + pkg))
-                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
-        }
-    }
-
-    // ------------- Env Checks -------------
-
-    private static boolean isPlayStoreOk(Context ctx) {
-        try {
-            PackageManager pm = ctx.getPackageManager();
-            ApplicationInfo ai = pm.getApplicationInfo("com.android.vending", 0);
-            boolean enabled = ai != null && ai.enabled;
-            PackageInfo pi = pm.getPackageInfo("com.android.vending", 0);
-            return enabled && pi != null;
-        } catch (Exception e) {
-            return false;
-        }
-    }
-
-    private static String pkgVer(Context c, String pkg) {
-        try { return c.getPackageManager().getPackageInfo(pkg, 0).versionName; }
-        catch (Exception e) { return "NA"; }
-    }
-
-    private static boolean isInstalledFromPlay(Context ctx) {
-        try {
-            String installer = null;
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                InstallSourceInfo info = ctx.getPackageManager().getInstallSourceInfo(ctx.getPackageName());
-                if (info != null) {
-                    installer = info.getInstallingPackageName();
-                    if (installer == null) installer = info.getInitiatingPackageName();
-                    if (installer == null) installer = info.getOriginatingPackageName();
-                }
-            } else {
-                installer = ctx.getPackageManager().getInstallerPackageName(ctx.getPackageName());
-            }
-            return "com.android.vending".equals(installer);
-        } catch (Throwable t) {
-            return false;
-        }
-    }
-
-    // ------------- Integrity Nonce Helpers -------------
 
     private static final SecureRandom RAND = new SecureRandom();
 
@@ -712,21 +645,37 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    // ------------- App Check Provider Install -------------
+    private void navigateToRegister() {
+        startActivity(new Intent(this, Register.class));
+        finish();
+    }
+
+    private void navigateToLogin() {
+        startActivity(new Intent(this, Login.class));
+        finish();
+    }
+
+    public void Quit() {
+        try {
+            FirebaseAuth.getInstance().signOut();
+            Log.i(TAG, "User logged out successfully.");
+        } catch (Throwable t) {
+            Log.w(TAG, "SignOut warn", t);
+        }
+    }
 
     private void ensureAppCheckProviderInstalled() {
         if (appCheckProviderInstalled) return;
         try {
             FirebaseAppCheck appCheck = FirebaseAppCheck.getInstance();
             if (BuildConfig.DEBUG) {
-                // Debug cihazlarda DebugAppCheck → tokenlar Firebase Console'a düşer.
                 try {
                     Class<?> cls = Class.forName("com.google.firebase.appcheck.debug.DebugAppCheckProviderFactory");
                     Object factory = cls.getMethod("getInstance").invoke(null);
                     appCheck.installAppCheckProviderFactory((AppCheckProviderFactory) factory);
-                    Log.i(TAG, "AppCheck provider = Debug");
+                    Log.i(TAG, "AppCheck provider = Debug (reflection)");
                 } catch (Throwable t) {
-                    Log.w(TAG, "DebugAppCheckProviderFactory bulunamadı; PlayIntegrity'ye düşülüyor.", t);
+                    Log.w(TAG, "DebugAppCheckProviderFactory yok; PlayIntegrity'ye düşülüyor.", t);
                     appCheck.installAppCheckProviderFactory(PlayIntegrityAppCheckProviderFactory.getInstance());
                     Log.i(TAG, "AppCheck provider = PlayIntegrity (fallback in debug)");
                 }

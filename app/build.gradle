@@ -15,7 +15,7 @@ android {
         minSdk 23
         //noinspection EditedTargetSdkVersion
         targetSdk 36
-        versionCode 24
+        versionCode 25
         versionName "Wolf"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
