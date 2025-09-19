@@ -23,11 +23,13 @@
         tools:ignore="HardcodedText"
         android:clickable="true"/>
     <TextView
+        android:layout_marginTop="13dp"
+        android:layout_marginLeft="13dp"
         android:id="@+id/tvTitle"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
+        android:layout_width="match_parent"
+        android:layout_height="8dp"
         android:text="Güvenlik Doğrulaması"
-        android:textSize="22sp"
+        android:textSize="7sp"
         android:textStyle="bold"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintStart_toStartOf="parent"

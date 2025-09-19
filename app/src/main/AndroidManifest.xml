@@ -81,6 +81,13 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.Iyesi"
         tools:targetApi="35">
+        <!-- Tanılama ekranı (yalnızca uygulama içinden açılıyor) -->
+        <activity
+            android:name=".kayra.appCheck.TopActivity"
+            android:exported="false"
+            android:label="Tanılama"
+            android:launchMode="singleTop"
+            android:theme="@style/Theme.Material3.DayNight.NoActionBar" />
 
         <activity
             android:name=".kurmes.social.message.Message"

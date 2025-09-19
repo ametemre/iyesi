@@ -19,7 +19,6 @@ import com.google.firebase.appcheck.AppCheckProviderFactory;
 import com.google.firebase.appcheck.AppCheckToken;
 import com.google.firebase.appcheck.FirebaseAppCheck;
 import com.google.firebase.appcheck.playintegrity.PlayIntegrityAppCheckProviderFactory;
-
 import com.google.firebase.auth.AuthResult;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
@@ -59,6 +58,7 @@ public class AppCheckTokenProvider extends Application {
 
     private static final String TAG = "AppCheckTP";
     private static volatile AppCheckTokenProvider sInstance;
+    private static volatile boolean sInstalled = false; // install(Application) için idempotency
 
     // Cloud Functions URL (Gradle'dan override edilebilir)
     private static final String DEFAULT_CF_URL =
@@ -99,7 +99,7 @@ public class AppCheckTokenProvider extends Application {
                 .addOnSuccessListener((AppCheckToken t) -> {
                     if (t != null && t.getToken() != null) {
                         sAppCheckCached = t.getToken();
-                        // AppCheckToken'ın public expiry bilgisi yok → ~55 dk cache
+                        // AppCheckToken için public expire yok → ~55 dk cache
                         sAppCheckExpMs = System.currentTimeMillis() + 55 * 60_000L;
                         Log.d(TAG, "AppCheck refreshed (len=" + sAppCheckCached.length() + ")");
                         cb.onReady(sAppCheckCached);
@@ -247,7 +247,7 @@ public class AppCheckTokenProvider extends Application {
         ensureAnon
                 .onSuccessTask(v -> {
                     FirebaseUser cur = FirebaseAuth.getInstance().getCurrentUser();
-                    if (cur == null) return Tasks.forException(new IllegalStateException("No user after anon sign-in"));
+                    if (cur == null) return Tasks.forException(new Exception("No user after anon sign-in"));
                     return cur.getIdToken(true); // ilk çağrıda tazele
                 })
                 .addOnSuccessListener((GetTokenResult r) -> cb.onReady(r.getToken()))
@@ -292,16 +292,16 @@ public class AppCheckTokenProvider extends Application {
         super.onCreate();
         sInstance = this;
         TopActivity.init(this);
-
-        // 0) Play ortamı teşhisi (hızlı)
+        // Otomatik kurulum
+        install(this); // Bu satırı ekleyin
+        // 0) Play ortamı preflight (hızlı)
         PlayEnvDiagnostics.PlayEnvStatus env = PlayEnvDiagnostics.initPreflight(this);
+        if (BuildConfig.DEBUG && env == PlayEnvDiagnostics.PlayEnvStatus.INTEGRITY_UNAVAILABLE_OR_BLOCKED) {
+            Log.w(TAG, "Integrity preflight blocked (emulator/ROM). Skipping strict checks in DEBUG.");
+        }
 
         // 1) Firebase init
-        try {
-            FirebaseApp.initializeApp(this);
-        } catch (Throwable t) {
-            Log.e(TAG, "Firebase init failed", t);
-        }
+        try { FirebaseApp.initializeApp(this); } catch (Throwable t) { Log.e(TAG, "Firebase init failed", t); }
 
         // 2) App Check provider’ı kur (Firebase init'ten hemen sonra)
         configureAppCheckProvider(env);
@@ -342,6 +342,8 @@ public class AppCheckTokenProvider extends Application {
         if (BuildConfig.DEBUG) {
             Log.w(TAG, "APP_CHECK_DEBUG: Debug cihazını Console > App Check > Debug devices altında 'Allow' etmeyi unutma.");
         }
+
+        sInstalled = true; // install(Application) çağrıları için
     }
 
     private void configureAppCheckProvider(PlayEnvDiagnostics.PlayEnvStatus env) {
@@ -379,6 +381,45 @@ public class AppCheckTokenProvider extends Application {
     }
 
     public static Context app() { return sInstance; }
+
+    /* ------------------------------------------------------------------------
+     * Statik kurulum: MainActivity gibi yerlerden çağrılabilsin
+     * --------------------------------------------------------------------- */
+    public static synchronized void install(@NonNull Application app) {
+        if (sInstalled) {
+            Log.d(TAG, "install(): already installed, skipping.");
+            return;
+        }
+        try { FirebaseApp.initializeApp(app); } catch (Throwable ignore) {}
+
+        // Ortamı hızlıca değerlendir
+        PlayEnvDiagnostics.PlayEnvStatus env = PlayEnvDiagnostics.initPreflight(app);
+
+        // Application instance'ı bul ve provider'ı ayarla
+        Application real = (Application) app.getApplicationContext();
+        if (real instanceof AppCheckTokenProvider) {
+            ((AppCheckTokenProvider) real).configureAppCheckProvider(env);
+            ((AppCheckTokenProvider) real).safeInstallProviderIfNeeded(app);
+        } else {
+            // Yine de en azından PlayIntegrity provider'ını kuralım
+            try {
+                FirebaseAppCheck.getInstance()
+                        .installAppCheckProviderFactory(PlayIntegrityAppCheckProviderFactory.getInstance());
+                Log.i(TAG, "AppCheck provider installed via static install(): PlayIntegrity");
+            } catch (Throwable t) {
+                Log.e(TAG, "Static install(): provider install FAILED", t);
+            }
+        }
+
+        // Hızlı warm-up (bloklamaz)
+        try {
+            FirebaseAppCheck.getInstance().getAppCheckToken(false)
+                    .addOnSuccessListener(t -> Log.d(TAG, "static warm-up AppCheck OK"))
+                    .addOnFailureListener(e -> FirebaseAppCheck.getInstance().getAppCheckToken(true));
+        } catch (Throwable ignore) {}
+
+        sInstalled = true;
+    }
 
     /* ------------------------------------------------------------------------
      * ÖRNEK: AppCheck + Auth ile HTTP çağrı

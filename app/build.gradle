@@ -15,7 +15,7 @@ android {
         minSdk 23
         //noinspection EditedTargetSdkVersion
         targetSdk 36
-        versionCode 26
+        versionCode 27
         versionName "Wolf"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
@@ -26,7 +26,8 @@ android {
         buildConfigField "String", "CF_URL_ENSURECLAIMS",   "\"https://ensureclaims-...a.run.app\""
         buildConfigField "String", "CF_URL_UID",            "\"https://uid-...a.run.app\""
         buildConfigField "String", "CF_URL_APP_SEND",       "\"https://us-central1-iyesi-e8d4f.cloudfunctions.net/appSend\""
-
+        buildConfigField "long",   "PLAY_INTEGRITY_PROJECT_NUMBER", "\n" + "238523750447L"
+        buildConfigField "String", "INTEGRITY_VERIFY_FUNCTION", "\"verifyIntegrityPreflight\""
         // Vector → PNG türetmeyi kapatıp destek kütüphanesini aç (mergeResources OOM’u düşürür)
         vectorDrawables {
             useSupportLibrary = true
