@@ -9,6 +9,8 @@ import androidx.annotation.RequiresApi;
 
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
+import com.google.firebase.auth.GetTokenResult;
+import com.kurmez.iyesi.kurmes.social.Iyesi;
 
 import java.util.Map;
 import java.util.function.Consumer;
@@ -26,5 +28,21 @@ public class FireBaseHelper {
                 })
                 .addOnFailureListener(e -> Log.e("CustomClaims", "Token alınamadı", e));
     }
-
+    public static Object customClaims(FirebaseUser user){
+        if (user != null) {
+            // true => token’ı yenile, claim güncellemeleri hemen gelsin
+            user.getIdToken(true).addOnCompleteListener(task -> {
+                if (task.isSuccessful()) {
+                    GetTokenResult tok = task.getResult();
+                    Map<String, Object> claims = tok.getClaims();
+                    Object role = claims.get("role");   // örn. "Iye", "Ulgen" vb.
+                    // ... kullan
+                } else {
+                    Exception e = task.getException();
+                    // hata ele al
+                }
+            });
+        }
+        return null;
+    }
 }

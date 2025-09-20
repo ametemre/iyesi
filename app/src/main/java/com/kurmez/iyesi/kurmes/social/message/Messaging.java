@@ -30,7 +30,6 @@ import com.kurmez.iyesi.Login;
 import com.kurmez.iyesi.ProfileActivity;
 import com.kurmez.iyesi.R;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -38,21 +37,13 @@ import java.util.Map;
 import java.util.Objects;
 
 import com.google.firebase.functions.FirebaseFunctions;
-import com.kurmez.iyesi.kurmes.social.Profile;
 import com.kurmez.iyesi.kurmes.utilities.Helpers;
 import com.kurmez.iyesi.kurmes.utilities.PrivateCom;
 import com.kurmez.iyesi.kurmes.utilities.helper.CFHelper;
 import com.kurmez.iyesi.kurmes.utilities.helper.HeaderHelper;
 
-import org.json.JSONException;
-
-import okhttp3.Call;
-import okhttp3.Callback;
-import okhttp3.MediaType;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
-import okhttp3.RequestBody;
-import okhttp3.Response;
 
 public class Messaging extends AppCompatActivity {
     private static final String CF_ALL_USERS = "https://us-central1-iyesi-e8d4f.cloudfunctions.net/listAllUsersHttp";

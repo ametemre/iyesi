@@ -5,25 +5,30 @@ import static com.kurmez.iyesi.kayra.Classes.data.Soul.parseSouls;
 
 import android.content.Context;
 import android.content.Intent;
-import android.graphics.Typeface;
+import android.graphics.Color;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
 import android.provider.ContactsContract;
 import android.util.Log;
-import android.view.Gravity;
+// Modern "messaging-like" swipe helper for ListView (drag-based, thresholded)
+import android.graphics.Color;
+import android.view.animation.DecelerateInterpolator;
+import android.view.MotionEvent;
 import android.view.View;
-import android.view.ViewGroup;
+import android.view.ViewConfiguration;
+import android.view.animation.DecelerateInterpolator;
 import android.widget.CheckBox;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.ListView;
-import android.widget.PopupMenu;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.recyclerview.widget.RecyclerView;
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
 import com.google.firebase.auth.FirebaseAuth;
@@ -36,50 +41,18 @@ import com.kurmez.iyesi.R;
 import com.kurmez.iyesi.kayra.Classes.data.Soul;
 import com.kurmez.iyesi.kurmes.utilities.Helpers;
 import com.kurmez.iyesi.kurmes.utilities.adapters.CompanionAdapter;
-import com.kurmez.iyesi.kurmes.utilities.adapters.ContentAdapter;
-import android.content.Context;
-import android.content.Intent;
-import android.graphics.Typeface;
-import android.graphics.drawable.GradientDrawable;
-import android.os.Bundle;
-import android.util.Log;
-import android.view.Gravity;
-import android.view.View;
-import android.view.ViewGroup;
-import android.widget.AdapterView;
-import android.widget.FrameLayout;
-import android.widget.ImageView;
-import android.widget.ListView;
-import android.widget.PopupMenu;
-import android.widget.ProgressBar;
-import android.widget.TextView;
-import android.widget.Toast;
 
-import androidx.annotation.NonNull;
-import androidx.appcompat.app.AppCompatActivity;
-import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
-
-import com.kurmez.iyesi.BuildConfig;
-import com.kurmez.iyesi.kayra.Classes.data.Soul;
-import com.kurmez.iyesi.kurmes.utilities.adapters.CompanionAdapter;
 import com.kurmez.iyesi.kurmes.utilities.helper.HeaderHelper;
 import com.kurmez.iyesi.kurmes.utilities.helper.net.CFClient;
 import com.kurmez.iyesi.umay.sahiplendirme.Companion;
-import com.kurmez.iyesi.R;
 
 import org.json.JSONObject;
 
 import java.util.ArrayList;
 import java.util.List;
-import com.kurmez.iyesi.kurmes.utilities.helper.net.CFClient;
-import com.kurmez.iyesi.umay.Welcome;
 
-import org.json.JSONObject;
-
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -130,6 +103,7 @@ public class Explore extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_explore);
         headerHelper  = new HeaderHelper(Explore.this);
+
         // 1) Auth kontrolü
         auth = FirebaseAuth.getInstance();
         user = auth.getCurrentUser();
@@ -170,7 +144,7 @@ public class Explore extends AppCompatActivity {
             });
         }
 
-        // 4) Tokenları al ve rol/kayıtları yükle
+        // 4) Tokenları al ve rol/kayıtları yükle (örnek)
         cf.getTokens((idTok, appTok) -> {
             // Örnek test endpoint (gerekmiyorsa kaldırılabilir)
             String url = "https://us-central1-iyesi-e8d4f.cloudfunctions.net/listSoulsByFields?col=Souls&where=status:eq:adoptable&limit=3";
@@ -180,62 +154,100 @@ public class Explore extends AppCompatActivity {
                 rb.addHeader("X-Firebase-AppCheck", appTok);
             }
 
-            // Rol doğrulama + veri çekme
-/*            Helpers.getRoleFunction()
-                    .addOnSuccessListener(role -> {
-                        if (role == null) {
-                            Helpers.showToastSafe(this, "Rol atanmadı!");
-                            finish();
-                            return;
-                        }
-                        userRole = role;
-                        if (!allowedRoles.contains(role)) {
-                            Toast.makeText(this, "Bu sayfaya erişim yetkiniz yok: " + role, Toast.LENGTH_SHORT).show();
-                            finish();
-                            return;
-                        }
-                        functions = FirebaseFunctions.getInstance();
-                        fetchSouls(); // ilk yükleme
-                    })
-                    .addOnFailureListener(e -> {
-                        Toast.makeText(this, "Rol sorgusu hatası: " + e.getMessage(), Toast.LENGTH_SHORT).show();
-                    });
-*/
             // Header menü/refresh
             Helpers.ConversationHeaderHelper.setupHeader(this, R.menu.menu_explore_options, item -> {
                 int id = item.getItemId();
                 if (id == R.id.action_refresh) {
-                    if (criticalMode) {
-                        // future: refreshCritical(true);
-                        refresh(true);
-                    } else {
-                        refresh(true);
-                    }
+                    refresh(true);
                     return true;
                 }
                 if (id == R.id.action_toggle_critical) {
                     criticalMode = !criticalMode;
-                    if (criticalMode) {
-                        // future: enterCriticalMode();
-                    } else {
-                        // future: exitCriticalMode();
-                    }
+                    // future: enter/exit critical mode
                     return true;
                 }
                 return false;
             });
         }, e -> Log.e(TAG, "token fail", e));
-        // 👇 Tıklanabilirlik burada eklendi
-        listView.setOnItemClickListener((parent, view, position, id) -> {
-            Soul soul = companions.get(position);
+
+        // Item tıklaması → Companion detay
+        listView.setOnItemLongClickListener((parent, view, position, id) -> {
+            if (position < 0 || position >= companions.size()) return true;
+            Soul s = companions.get(position);
             Intent intent = new Intent(this, Companion.class);
-            intent.putExtra(Companion.EXTRA_SPECIES, soul.getSpecies());
-            intent.putExtra(Companion.EXTRA_BREED, soul.getBreed());
-            intent.putExtra(Companion.EXTRA_FOUNDDATE, soul.getFoundDate());
-            // Diğer field'lar gerekiyorsa buraya ekleyebilirsin (örneğin soulId, imageUrl)
+            intent.putExtra(Companion.EXTRA_SPECIES, s.getSpecies());
+            intent.putExtra(Companion.EXTRA_BREED, s.getBreed());
+            intent.putExtra(Companion.EXTRA_FOUNDDATE, s.getFoundDate());
+            // Gerekirse id/imageUrl vb. ekleyebilirsin
             startActivity(intent);
+            return true;
+        });
+
+        // Sağ/sol kaydırma
+        listView.setOnTouchListener(new SimpleSwipeHelper(this, listView, new SimpleSwipeHelper.Callback() {
+            @Override public void onSwipedLeft(int position) {
+                if (position < 0 || position >= companions.size()) return;
+                Soul s = companions.get(position);
+                Log.d(TAG, "sola kaydı: pos=" + position + " id=" + safeSoulId(s));
+            }
+
+            @Override public void onSwipedRight(int position) {
+                if (position < 0 || position >= companions.size()) return;
+                Soul s = companions.get(position);
+                markAdoptableAndGood(s, position);
+            }
+        },null));
+    }
+
+    // Soul ID alanını sınıfına göre uyarlayın (id, docId, soulId vs.)
+    private String safeSoulId(Soul s) {
+        try {
+            if (s.getId() != null) return s.getId();
+        } catch (Throwable ignore) {}
+        return null;
+    }
+
+    // Explore.java -> markAdoptableAndGood(...) gövdesini şu şekilde değiştir
+    private void markAdoptableAndGood(Soul soul, int positionInList) {
+        String id = safeSoulId(soul);
+        if (id == null) { showToast("Kayıt ID bulunamadı."); return; }
+
+        setLoading(true);
+        ensureIo();
+        io.execute(() -> {
+            try {
+                // /updateSoulById?id=... endpoint'ine PATCH
+                org.json.JSONObject body = new org.json.JSONObject()
+                        .put("status", "adoptable")
+                        .put("health", "good");
+
+                // Base URL CFClient içinde zaten ayarlı: new CFClient(BuildConfig.CF_BASE_URL)
+                org.json.JSONObject resp = cf.patchJson("/updateSoulById?id=" + id, body);
+
+                runOnUiThread(() -> {
+                    // Listeden kaldır ve UI'ı güncelle
+                    if (positionInList >= 0 && positionInList < companions.size()) {
+                        companions.remove(positionInList);
+                    } else {
+                        for (int i = 0; i < companions.size(); i++) {
+                            String sid = safeSoulId(companions.get(i));
+                            if (id.equals(sid)) { companions.remove(i); break; }
+                        }
+                    }
+                    companionAdapter.notifyDataSetChanged();
+                    renderEmptyState();
+                    setLoading(false);
+                });
+            } catch (Throwable t) {
+                Log.e(TAG, "CF update failed", t);
+                runOnUiThread(() -> {
+                    showToast("Güncelleme başarısız: " + t.getMessage());
+                    setLoading(false);
+                });
+            }
         });
     }
+
 
     @Override
     protected void onResume() {
@@ -359,9 +371,6 @@ public class Explore extends AppCompatActivity {
         boolean empty = companions.isEmpty();
         if (emptyView != null) emptyView.setVisibility(empty ? View.VISIBLE : View.GONE);
         if (listView != null) listView.setVisibility(empty ? View.GONE : View.VISIBLE);
-
-        // ListView için emptyView zaten set edildi; parent hiyerarşisi uygunsa otomatik çalışır.
-        // Bu görünürlük yönetimi, parent hiyerarşisi uygun değilse fallback olarak kalır.
     }
 
     private void showToast(String s) {
@@ -468,3 +477,146 @@ public class Explore extends AppCompatActivity {
         }
     }
 }
+
+
+
+final class SimpleSwipeHelper implements View.OnTouchListener {
+    private final RecyclerView recyclerView;
+
+    interface Callback {
+        void onSwipedLeft(int position);
+        void onSwipedRight(int position);
+    }
+
+    private static final float SWIPE_THRESHOLD = 0.66f; // Messaging: 2/3
+    private final ListView listView;
+    private final Callback cb;
+    private final int touchSlop;
+
+    private float downX, downY;
+    private boolean swiping = false;
+    private int activePos = ListView.INVALID_POSITION;
+    private View activeChild = null;
+
+    SimpleSwipeHelper(Context ctx, @Nullable ListView lv, Callback cb, @Nullable RecyclerView rv) {
+        if (lv != null){rv=null;}
+        if (rv != null){lv=null;}
+        this.recyclerView = rv;
+        this.listView = lv;
+        this.cb = cb;
+        this.touchSlop = ViewConfiguration.get(ctx).getScaledTouchSlop();
+    }
+
+    @Override
+    public boolean onTouch(View v, MotionEvent e) {
+        switch (e.getActionMasked()) {
+            case MotionEvent.ACTION_DOWN: {
+                downX = e.getX();
+                downY = e.getY();
+                activePos = listView.pointToPosition((int) downX, (int) downY);
+                if (activePos != ListView.INVALID_POSITION) {
+                    int first = listView.getFirstVisiblePosition();
+                    int childIdx = activePos - first;
+                    if (childIdx >= 0 && childIdx < listView.getChildCount()) {
+                        activeChild = listView.getChildAt(childIdx);
+                    }
+                }
+                swiping = false;
+                break;
+            }
+            case MotionEvent.ACTION_MOVE: {
+                if (activeChild == null) break;
+                float dx = e.getX() - downX;
+                float dy = e.getY() - downY;
+
+                if (!swiping) {
+                    if (Math.abs(dx) > touchSlop && Math.abs(dx) > Math.abs(dy)) {
+                        swiping = true;
+                        listView.requestDisallowInterceptTouchEvent(true);
+                    }
+                }
+                if (swiping) {
+                    activeChild.setTranslationX(dx);
+                    // --- messaging-like color transition ---
+                    float width = Math.max(1, activeChild.getWidth());
+                    float progress = Math.min(Math.abs(dx) / width, 1f)/4;
+                    if (dx >= 0) {
+                        // beyaz -> kırmızı
+                        int red = (int) (255 * progress);
+                        int gb  = (int) (255 * (1 - progress));
+                        activeChild.setBackgroundColor(Color.rgb(red, gb, gb));
+                        if (progress >= SWIPE_THRESHOLD) activeChild.setBackgroundColor(Color.RED);
+                    } else {
+                        // beyaz -> mavi
+                        int blue = (int) (255 * progress);
+                        int rg   = (int) (255 * (1 - progress));
+                        activeChild.setBackgroundColor(Color.rgb(rg, rg, blue));
+                    }
+                    return true; // swipe sırasında liste scroll’u engelle
+                }
+                break;
+            }
+            case MotionEvent.ACTION_UP:
+            case MotionEvent.ACTION_CANCEL: {
+                finishOrReset();
+                break;
+            }
+        }
+        return false; // normal tıklama/scroll akışı
+    }
+
+    private void finishOrReset() {
+        if (activeChild == null) { resetState(); return; }
+        float dx = activeChild.getTranslationX();
+        float width = Math.max(1, activeChild.getWidth());
+        float progress = Math.min(Math.abs(dx) / width, 1f);
+
+        if (swiping && progress >= SWIPE_THRESHOLD) {
+            final int pos = activePos;
+            if (dx > 0) {
+                // sağa: messaging’deki "aksiyonu çalıştır ve resetle" davranışını,
+                // burada -> backend update + listeden çıkarma için callback'e bırakıyoruz.
+                // Küçük bir çıkış animasyonu:
+                activeChild.animate()
+                        .translationX(width)
+                        .setDuration(120)
+                        .setInterpolator(new DecelerateInterpolator())
+                        .withEndAction(() -> {
+                            if (pos != ListView.INVALID_POSITION) cb.onSwipedRight(pos);
+                            // Görünümü sıfırla (yeniden kullanıma karşı)
+//                            resetView(activeChild);
+                        }).start();
+            } else {
+                // sola: sadece logla ve resetle (Messaging’de tamamlanmayan swipe resetlenir)
+                cb.onSwipedLeft(pos);
+                animateReset(activeChild);
+            }
+        } else {
+            // eşik aşılmadı -> reset
+            animateReset(activeChild);
+        }
+        resetState();
+    }
+
+    private void animateReset(View v) {
+        v.animate()
+                .translationX(0f)
+                .setDuration(120)
+                .setInterpolator(new DecelerateInterpolator())
+                .withEndAction(() -> v.setBackgroundColor(Color.WHITE))
+                .start();
+    }
+
+    private void resetView(View v) {
+        v.setTranslationX(0f);
+        v.setBackgroundColor(Color.WHITE);
+    }
+
+    private void resetState() {
+        swiping = false;
+        activePos = ListView.INVALID_POSITION;
+        activeChild = null;
+        listView.requestDisallowInterceptTouchEvent(false);
+    }
+}
+

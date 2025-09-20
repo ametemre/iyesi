@@ -18,9 +18,8 @@ import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.functions.FirebaseFunctions;
 import com.google.firebase.functions.HttpsCallableReference;
-import com.kurmez.iyesi.AppCheckTokenProvider;
 import com.kurmez.iyesi.kayra.Classes.data.Soul;
-import com.kurmez.iyesi.kurmes.social.Profile;
+import com.kurmez.iyesi.kurmes.social.Iyesi;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -413,7 +412,7 @@ public class CFHelper {
 
     // ---------- Messaging / Users ----------
     public interface UsersCallback {
-        void onSuccess(@NonNull List<Profile> users);
+        void onSuccess(@NonNull List<Iyesi> users);
         void onError(@NonNull Throwable error);
     }
 
@@ -428,7 +427,7 @@ public class CFHelper {
         endpointAsync("/listAllUsersHttp", q, null, /*post=*/false, new EndpointCallback() {
             @Override public void onSuccess(JSONObject resp) {
                 try {
-                    List<Profile> list = parseUsers(resp); // BG
+                    List<Iyesi> list = parseUsers(resp); // BG
                     main.post(() -> cb.onSuccess(list));   // UI
                 } catch (Throwable e) {
                     main.post(() -> cb.onError(e));
@@ -438,8 +437,8 @@ public class CFHelper {
         });
     }
 
-    private ArrayList<Profile> parseUsers(@NonNull JSONObject root) throws Exception {
-        ArrayList<Profile> out = new ArrayList<>();
+    private ArrayList<Iyesi> parseUsers(@NonNull JSONObject root) throws Exception {
+        ArrayList<Iyesi> out = new ArrayList<>();
         boolean success = root.optBoolean("success", true);
         boolean ok      = root.optBoolean("ok", true);
 
@@ -478,7 +477,7 @@ public class CFHelper {
                     it.optString("photoUrl",
                             it.optString("photoURL", "")));
 
-            out.add(new Profile(uid, username, email, location, phone, role, avatarUrl));
+            out.add(new Iyesi(uid, username, email, location, phone, role, avatarUrl));
         }
         return out;
     }

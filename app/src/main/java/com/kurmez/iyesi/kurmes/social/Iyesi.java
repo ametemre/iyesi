@@ -5,7 +5,7 @@ import java.util.Map;
 /**
  * Profile model class representing a user via CustomClaims.
  */
-public class Profile {
+public class Iyesi {
     private String uid;        // DevID’den türetilip backend tarafından claims’e yazılır
     private String username;
     private String email;
@@ -14,10 +14,10 @@ public class Profile {
     private String role;
     private String avatarUrl;  // opsiyonel
 
-    public Profile() { }
+    public Iyesi() { }
 
-    public Profile(String uid, String username, String email,
-                   String location, String phone, String role, String avatarUrl) {
+    public Iyesi(String uid, String username, String email,
+                 String location, String phone, String role, String avatarUrl) {
         this.uid = uid;
         this.username = username;
         this.email = email;
@@ -28,9 +28,9 @@ public class Profile {
     }
 
     // Factory: CustomClaims’ten Profile üret
-    public static Profile fromClaims(Map<String,Object> claims) {
+    public static Iyesi fromClaims(Map<String,Object> claims) {
         if (claims == null) return null;
-        return new Profile(
+        return new Iyesi(
                 (String) claims.get("uid"),
                 (String) claims.get("username"),
                 (String) claims.get("email"),
@@ -54,6 +54,8 @@ public class Profile {
     public void setEmail(String email) { this.email = email; }
     public void setLocation(String location) { this.location = location; }
     public void setPhone(String phone) { this.phone = phone; }
+    public void setRole(String role) { this.role = role; }
+    public void setUid(String Uid) { this.uid = Uid; }
     public void setAvatarUrl(String avatarUrl) { this.avatarUrl = avatarUrl; }
 }
 final class ClaimsKeys {

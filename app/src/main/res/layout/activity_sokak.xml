@@ -37,7 +37,6 @@
       android:layout_width="wrap_content"
       android:layout_height="wrap_content"
       android:layout_gravity="top|end"
-      android:weightSum="5"
       android:layout_marginTop="36dp"
       android:orientation="vertical"
       android:padding="8dp">
@@ -46,10 +45,9 @@
     <LinearLayout
         android:id="@+id/row_spinner_1"
         android:layout_width="match_parent"
-        android:layout_height="16dp"
+        android:layout_height="wrap_content"
         android:visibility="visible"
         android:orientation="horizontal"
-        android:layout_weight="1"
         android:gravity="center_vertical">
 
       <!-- Sağdan haritayı temizleyecek silme ikonu -->
@@ -82,7 +80,8 @@
           android:id="@+id/spinner_level_1"
           android:layout_width="wrap_content"
           android:layout_height="wrap_content"
-          android:spinnerMode="dropdown" android:layout_marginEnd="16dp"
+          android:spinnerMode="dropdown"
+          android:layout_marginEnd="16dp"
           android:layout_gravity="top|end"
           android:backgroundTint="@android:color/white"
           android:popupBackground="@android:color/white"  />
@@ -91,13 +90,12 @@
     <!-- 2. Satır: İleride içerik eklenecek ikinci Spinner -->
     <LinearLayout
         android:id="@+id/row_spinner_2"
-
         android:layout_width="match_parent"
-        android:layout_height="16dp"
-        android:visibility="gone"
+        android:layout_height="wrap_content"
+        android:visibility="visible"
         android:orientation="horizontal"
-        android:layout_weight="1"
         android:gravity="center_vertical">
+
 
       <ImageButton
           android:id="@+id/btn_clear_2"
@@ -126,55 +124,54 @@
           android:id="@+id/spinner_level_2"
           android:layout_width="wrap_content"
           android:layout_height="wrap_content"
-          android:spinnerMode="dropdown"
           android:layout_marginEnd="16dp"
           android:layout_gravity="top|end"
           android:backgroundTint="@android:color/white"
-          android:popupBackground="@android:color/white" />
+          android:popupBackground="@android:color/white"
+          android:spinnerMode="dropdown" />
     </LinearLayout>
 
     <!-- 3. Satır -->
     <LinearLayout
         android:id="@+id/row_spinner_3"
         android:layout_width="match_parent"
-        android:layout_height="16dp"
-        android:visibility="gone"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
         android:orientation="horizontal"
-        android:layout_weight="1"
-        android:gravity="center_vertical">
+        android:visibility="visible">
 
       <ImageButton
           android:id="@+id/btn_clear_3"
           android:layout_width="18dp"
           android:layout_height="18dp"
-          android:layout_marginRight="9dp"
           android:layout_gravity="bottom"
-          android:scaleType="centerCrop"
+          android:layout_marginRight="9dp"
           android:background="?attr/selectableItemBackgroundBorderless"
-          android:src="@drawable/ic_delete_24dp"
-          android:contentDescription="Temizle" />
+          android:contentDescription="Temizle"
+          android:scaleType="centerCrop"
+          android:src="@drawable/ic_delete_24dp" />
 
       <ImageButton
           android:id="@+id/btn_toggle_3"
           android:layout_width="18dp"
           android:layout_height="18dp"
-          android:layout_marginRight="9dp"
           android:layout_gravity="bottom"
-          android:scaleType="centerCrop"
           android:layout_marginStart="8dp"
+          android:layout_marginRight="9dp"
           android:background="?attr/selectableItemBackgroundBorderless"
-          android:src="@drawable/ic_eye_open_24dp"
-          android:contentDescription="Görünür/Gizle" />
+          android:contentDescription="Görünür/Gizle"
+          android:scaleType="centerCrop"
+          android:src="@drawable/ic_eye_open_24dp" />
 
       <Spinner
           android:id="@+id/spinner_level_3"
           android:layout_width="wrap_content"
           android:layout_height="wrap_content"
-          android:spinnerMode="dropdown"
-          android:layout_marginEnd="16dp"
           android:layout_gravity="top|end"
+          android:layout_marginEnd="16dp"
           android:backgroundTint="@android:color/white"
-          android:popupBackground="@android:color/white" />
+          android:popupBackground="@android:color/white"
+          android:spinnerMode="dropdown" />
     </LinearLayout>
 
     <!-- 4. Satır -->
@@ -182,43 +179,43 @@
         android:id="@+id/row_spinner_4"
         android:layout_width="match_parent"
         android:layout_height="16dp"
-        android:visibility="gone"
-        android:orientation="horizontal"
         android:layout_weight="1"
-        android:gravity="center_vertical">
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:visibility="visible">
 
       <ImageButton
           android:id="@+id/btn_clear_4"
           android:layout_width="18dp"
           android:layout_height="18dp"
-          android:layout_marginRight="9dp"
           android:layout_gravity="bottom"
-          android:scaleType="centerCrop"
+          android:layout_marginRight="9dp"
           android:background="?attr/selectableItemBackgroundBorderless"
-          android:src="@drawable/ic_delete_24dp"
-          android:contentDescription="Temizle" />
+          android:contentDescription="Temizle"
+          android:scaleType="centerCrop"
+          android:src="@drawable/ic_delete_24dp" />
 
       <ImageButton
           android:id="@+id/btn_toggle_4"
           android:layout_width="18dp"
           android:layout_height="18dp"
-          android:layout_marginRight="9dp"
           android:layout_gravity="bottom"
-          android:scaleType="centerCrop"
           android:layout_marginStart="8dp"
+          android:layout_marginRight="9dp"
           android:background="?attr/selectableItemBackgroundBorderless"
-          android:src="@drawable/ic_eye_open_24dp"
-          android:contentDescription="Görünür/Gizle" />
+          android:contentDescription="Görünür/Gizle"
+          android:scaleType="centerCrop"
+          android:src="@drawable/ic_eye_open_24dp" />
 
       <Spinner
           android:id="@+id/spinner_level_4"
           android:layout_width="wrap_content"
           android:layout_height="wrap_content"
-          android:spinnerMode="dropdown"
-          android:layout_marginEnd="16dp"
           android:layout_gravity="top|end"
+          android:layout_marginEnd="16dp"
           android:backgroundTint="@android:color/white"
-          android:popupBackground="@android:color/white"  />
+          android:popupBackground="@android:color/white"
+          android:spinnerMode="dropdown" />
     </LinearLayout>
 
     <!-- 5. Satır -->
@@ -226,44 +223,44 @@
         android:id="@+id/row_spinner_5"
         android:layout_width="match_parent"
         android:layout_height="16dp"
-        android:visibility="gone"
-        android:orientation="horizontal"
-        android:layout_weight="1"
         android:layout_gravity="top|end"
-        android:gravity="center_vertical">
+        android:layout_weight="1"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:visibility="visible">
 
       <ImageButton
           android:id="@+id/btn_clear_5"
           android:layout_width="18dp"
           android:layout_height="18dp"
-          android:layout_marginRight="9dp"
           android:layout_gravity="bottom"
-          android:scaleType="centerCrop"
+          android:layout_marginRight="9dp"
           android:background="?attr/selectableItemBackgroundBorderless"
-          android:src="@drawable/ic_delete_24dp"
-          android:contentDescription="Temizle" />
+          android:contentDescription="Temizle"
+          android:scaleType="centerCrop"
+          android:src="@drawable/ic_delete_24dp" />
 
       <ImageButton
           android:id="@+id/btn_toggle_5"
           android:layout_width="18dp"
           android:layout_height="18dp"
-          android:layout_marginRight="9dp"
           android:layout_gravity="bottom"
-          android:scaleType="centerCrop"
           android:layout_marginStart="8dp"
+          android:layout_marginRight="9dp"
           android:background="?attr/selectableItemBackgroundBorderless"
-          android:src="@drawable/ic_eye_open_24dp"
-          android:contentDescription="Görünür/Gizle" />
+          android:contentDescription="Görünür/Gizle"
+          android:scaleType="centerCrop"
+          android:src="@drawable/ic_eye_open_24dp" />
 
       <Spinner
           android:id="@+id/spinner_level_5"
           android:layout_width="wrap_content"
           android:layout_height="wrap_content"
-          android:spinnerMode="dropdown"
-          android:layout_marginEnd="16dp"
           android:layout_gravity="top|end"
+          android:layout_marginEnd="16dp"
           android:backgroundTint="@android:color/white"
-          android:popupBackground="@android:color/white" />
+          android:popupBackground="@android:color/white"
+          android:spinnerMode="dropdown" />
     </LinearLayout>
 
   </LinearLayout>
@@ -273,15 +270,14 @@
       android:id="@+id/shelterInfoPanel"
       android:layout_width="230dp"
       android:layout_height="wrap_content"
-      android:orientation="vertical"
       android:layout_gravity="top"
-      android:background="@color/black_overlay"
-      android:elevation="8dp"
       android:layout_margin="16dp"
+      android:background="@color/black_overlay"
       android:clipToPadding="false"
-      android:visibility="gone"
-      android:padding="20dp">
-
+      android:elevation="8dp"
+      android:orientation="vertical"
+      android:padding="20dp"
+      android:visibility="visible">
 
 
     <!-- 2) Popülasyon Satırı -->
@@ -344,36 +340,33 @@
         android:id="@+id/tvPanelTitle"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Barınak Bilgileri"
-        android:textSize="20sp"
-        android:textStyle="bold"
         android:paddingBottom="12dp"
-        android:textColor="@android:color/black" />
+        android:text="Barınak Bilgileri"
+        android:textColor="@android:color/black"
+        android:textSize="20sp"
+        android:textStyle="bold" />
     <!-- 4) Kedi Spinner Satırı -->
     <LinearLayout
         android:id="@+id/row_cat"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:gravity="center_vertical"
         android:orientation="horizontal"
-        android:paddingVertical="6dp"
-        android:gravity="center_vertical">
+        android:paddingVertical="6dp">
 
       <TextView
           android:id="@+id/tvCatLabel"
           android:layout_width="wrap_content"
           android:layout_height="wrap_content"
           android:text="Kedi:"
-          android:textSize="16sp"
-          android:textColor="@android:color/black" />
+          android:textColor="@android:color/black"
+          android:textSize="16sp" />
 
-      <Spinner
+      <TextView
           android:id="@+id/spinnerCat"
           android:layout_width="wrap_content"
           android:layout_height="wrap_content"
-          android:layout_marginStart="8dp"
-          android:spinnerMode="dropdown"
-          android:background="@drawable/spinner_background"
-          android:popupBackground="@android:color/white" />
+          android:layout_marginStart="8dp" />
     </LinearLayout>
 
     <!-- 5) Köpek Spinner Satırı -->
@@ -381,26 +374,23 @@
         android:id="@+id/row_dog"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:gravity="center_vertical"
         android:orientation="horizontal"
-        android:paddingVertical="6dp"
-        android:gravity="center_vertical">
+        android:paddingVertical="6dp">
 
       <TextView
           android:id="@+id/tvDogLabel"
           android:layout_width="wrap_content"
           android:layout_height="wrap_content"
           android:text="Köpek:"
-          android:textSize="16sp"
-          android:textColor="@android:color/black" />
+          android:textColor="@android:color/black"
+          android:textSize="16sp" />
 
-      <Spinner
+      <TextView
           android:id="@+id/spinnerDog"
           android:layout_width="wrap_content"
           android:layout_height="wrap_content"
-          android:layout_marginStart="8dp"
-          android:spinnerMode="dropdown"
-          android:background="@drawable/spinner_background"
-          android:popupBackground="@android:color/white" />
+          android:layout_marginStart="8dp"/>
     </LinearLayout>
 
     <!-- 6) Körmez Spinner Satırı -->
@@ -408,26 +398,22 @@
         android:id="@+id/row_blind"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:gravity="center_vertical"
         android:orientation="horizontal"
-        android:paddingVertical="6dp"
-        android:gravity="center_vertical">
+        android:paddingVertical="6dp">
 
       <TextView
           android:id="@+id/tvBlindLabel"
           android:layout_width="wrap_content"
           android:layout_height="wrap_content"
           android:text="Körmez:"
-          android:textSize="16sp"
-          android:textColor="@android:color/black" />
+          android:textSize="16sp" />
 
-      <Spinner
+      <TextView
           android:id="@+id/spinnerBlind"
           android:layout_width="wrap_content"
           android:layout_height="wrap_content"
-          android:layout_marginStart="8dp"
-          android:spinnerMode="dropdown"
-          android:background="@drawable/spinner_background"
-          android:popupBackground="@android:color/white" />
+          android:layout_marginStart="8dp" />
     </LinearLayout>
 
 

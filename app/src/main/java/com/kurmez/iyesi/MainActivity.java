@@ -46,6 +46,7 @@ import com.google.firebase.appcheck.AppCheckProviderFactory;
 import com.google.firebase.appcheck.playintegrity.PlayIntegrityAppCheckProviderFactory;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
+import com.google.firebase.auth.GetTokenResult;
 import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.firebase.functions.FirebaseFunctions;
 import com.google.firebase.functions.HttpsCallableResult;
@@ -55,11 +56,14 @@ import com.google.zxing.WriterException;
 import com.journeyapps.barcodescanner.BarcodeEncoder;
 
 import com.kurmez.iyesi.kurmes.Kurmes;
+import com.kurmez.iyesi.kurmes.social.Iyesi;
+import com.kurmez.iyesi.kurmes.social.content.Explore;
 import com.kurmez.iyesi.kurmes.ui.SoulsManagerActivity;
 import com.kurmez.iyesi.kurmes.utilities.Helpers;
 import com.kurmez.iyesi.kurmes.utilities.PrivateCom;
 import com.kurmez.iyesi.kurmes.utilities.handler.NonceUtils;
 import com.kurmez.iyesi.kurmes.utilities.helper.PermissionHelper;
+import com.kurmez.iyesi.umay.SokakActivity;
 import com.kurmez.iyesi.umay.Welcome;
 
 import java.io.IOException;
@@ -88,7 +92,8 @@ public class MainActivity extends AppCompatActivity {
     private FirebaseFirestore db;
     private FirebaseAuth mAuth;
     private FirebaseUser user;
-
+    private Iyesi iyesi = new Iyesi();
+    private String role = null;
     private String idToken;
     private String generatedQRCode;
     private boolean isRegistered = false;
@@ -135,6 +140,30 @@ public class MainActivity extends AppCompatActivity {
         permissionHelper.initialize();
 
         preflightIntegrityOrPrompt();
+        mAuth = FirebaseAuth.getInstance();
+        user = mAuth.getCurrentUser();
+        if (user != null) {
+            user.getIdToken(true).addOnCompleteListener(task -> {
+                if (task.isSuccessful()) {
+                    GetTokenResult tok = task.getResult();
+                    Map<String, Object> claims = tok.getClaims();
+
+                    iyesi.setEmail(claims.get("email").toString());
+                    iyesi.setRole(claims.get("roles").toString());
+                    iyesi.setUid(claims.get("user_id").toString());
+
+                    //Object role = claims.get("role");   // örn. "Iye", "Ulgen" vb.
+
+                    role = iyesi.getRole();
+                    Log.d("Iyesi çağırıldı :" , iyesi.getEmail() + iyesi.getUid() + iyesi.getRole());
+
+                    // ... kullan
+                } else {
+                    Exception e = task.getException();
+                    // hata ele al
+                }
+            });
+        }
     }
 
     @Override
@@ -319,8 +348,7 @@ public class MainActivity extends AppCompatActivity {
                     Log.d(TAG, "AppCheck warm-up OK? " + hasAppCheckToken +
                             " exp=" + (appCheckToken != null ? appCheckToken.getExpireTimeMillis() : -1));
 
-                    mAuth = FirebaseAuth.getInstance();
-                    user = mAuth.getCurrentUser();
+
 
                     if (user != null) {
                         user.reload()
@@ -517,6 +545,7 @@ public class MainActivity extends AppCompatActivity {
 
     private void openQRScannerForRegistration() {
         Intent intent = new Intent(this, QRScannerActivity.class);
+
         startActivityForResult(intent, SCAN_QR_REQUEST_CODE);
     }
 
@@ -558,7 +587,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void openCameraWithDelay() {
-        if (isRegistered) {
+        if (!isRegistered) {
             navigateToWelcome();
         } else {
             navigateToKurmes();
@@ -621,14 +650,34 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void navigateToWelcome() {
-        startActivity(new Intent(this, Welcome.class));
+        if(user == null) {
+            navigateToKurmes();
+        }else {
+            Log.d("Role : ", role + "Ülgen");
+            if (role != null){
+                Log.d("Role : ", role + "Ülgen");
+                if (role.contains("Ülgen")) {
+                    Log.d("Role : ", role + "Ülgen");
+                    startActivity(new Intent(this, SokakActivity.class));
+                }else {
+                    startActivity(new Intent(this, Explore.class));
+                }
+
+            }else {
+                startActivity(new Intent(this, Welcome.class));
+            }
+        }
         finish();
     }
-
+    private void navigateToUlgen() {
+        startActivity(new Intent(this, SokakActivity.class));
+        finish();
+    }
     private void navigateToKurmes() {
         Intent intent = isRegistered
                 ? new Intent(this, SoulsManagerActivity.class)
                 : new Intent(this, Kurmes.class);
+
         startActivity(intent);
         finish();
     }

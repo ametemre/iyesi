@@ -1039,6 +1039,147 @@ public class Harita implements OnMapReadyCallback {
             default:        return "Nokta";
         }
     }
+    public interface SoulsJsonCallback {
+        void onSuccess(@NonNull String rawJson,
+                       @NonNull org.json.JSONArray souls,
+                       @NonNull String adminPath);
+        void onError(@NonNull String message);
+    }
+
+    // Harita.java — drop-in replacement
+    public void fetchNearbySouls(int limit, @Nullable SoulsJsonCallback cb) {
+        // Logging & robust center resolution
+        try {
+            Log.d(TAG, "fetchNearbySouls() called, limit=" + limit
+                    + " mapReady=" + mapReady
+                    + " centerPoint=" + (centerPoint == null ? "null" : (centerPoint.latitude + "," + centerPoint.longitude)));
+
+            // Prefer existing centerPoint; otherwise fallback to camera target
+            LatLng center = centerPoint;
+            if (center == null && mMap != null) {
+                center = mMap.getCameraPosition().target;
+                Log.d(TAG, "fetchNearbySouls() using camera target as center: " + center.latitude + "," + center.longitude);
+            }
+
+            // If still null, try last known location asynchronously and retry
+            if (center == null) {
+                boolean fine = ActivityCompat.checkSelfPermission(activity, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED;
+                boolean coarse = ActivityCompat.checkSelfPermission(activity, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED;
+                if (!fine && !coarse) {
+                    Log.w(TAG, "fetchNearbySouls() no location permission; aborting");
+                    if (cb != null) cb.onError("Konum izni gerekli");
+                    Toast.makeText(activity, "Konum izni gerekli", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                Log.d(TAG, "fetchNearbySouls() center null → requesting last location...");
+                locationClient.getLastLocation()
+                        .addOnSuccessListener(loc -> {
+                            if (loc != null) {
+                                centerPoint = new LatLng(loc.getLatitude(), loc.getLongitude());
+                                Log.d(TAG, "fetchNearbySouls() last location acquired: " + centerPoint.latitude + "," + centerPoint.longitude + " → recalling");
+                                fetchNearbySouls(limit, cb);
+                            } else {
+                                Log.w(TAG, "fetchNearbySouls() last location is null");
+                                if (cb != null) cb.onError("Konum hazır değil");
+                                Toast.makeText(activity, "Konum hazır değil", Toast.LENGTH_SHORT).show();
+                            }
+                        })
+                        .addOnFailureListener(e -> {
+                            Log.e(TAG, "fetchNearbySouls() last location error: " + e.getMessage(), e);
+                            if (cb != null) cb.onError("Konum alınamadı: " + e.getMessage());
+                        });
+                return; // async path
+            }
+
+            final LatLng c = center;
+            Log.d(TAG, "fetchNearbySouls() resolved center → " + c.latitude + "," + c.longitude);
+
+            ensureAdminPathAsync(activity, c.latitude, c.longitude, ap -> {
+                Log.d(TAG, "fetchNearbySouls() ensureAdminPathAsync returned: " + ap);
+                if (ap == null || ap.isEmpty()) {
+                    if (cb != null) cb.onError("Şehir çözümlenemedi");
+                    Toast.makeText(activity, "Şehir çözümlenemedi", Toast.LENGTH_LONG).show();
+                    return;
+                }
+
+                HttpUrl.Builder ub = HttpUrl.parse(CF_BASE + "/listSoulsByFields").newBuilder()
+                        .addQueryParameter("adminPath", ap)
+                        .addQueryParameter(// YENİ (doğru biçim: [["adminPath","==","<değer>"]])
+                                "where",
+                                new org.json.JSONArray()
+                                        .put(new org.json.JSONArray().put("adminPath").put("==").put(ap))
+                                        .toString()
+                        )
+                        .addQueryParameter("limit", String.valueOf(Math.min(300, Math.max(1, limit))));
+
+                final String url = ub.build().toString();
+                Log.d(TAG, "fetchNearbySouls() GET " + url);
+
+                Helpers.authorizedGetJson(activity, url, null, true, new okhttp3.Callback() {
+                    @Override public void onFailure(okhttp3.Call call, java.io.IOException e) {
+                        Log.e(TAG, "fetchNearbySouls() request failed: " + e.getMessage(), e);
+                        activity.runOnUiThread(() -> {
+                            if (cb != null) cb.onError(e.getMessage());
+                            Toast.makeText(activity, "CF hata: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                        });
+                    }
+
+                    @Override public void onResponse(okhttp3.Call call, okhttp3.Response response) throws java.io.IOException {
+                        final int code = response.code();
+                        final String body = response.body() != null ? response.body().string() : "";
+                        Log.d(TAG, "fetchNearbySouls() response code=" + code + " length=" + (body == null ? -1 : body.length()));
+                        if (code >= 400) Log.w(TAG, "fetchNearbySouls() 4xx body=" + body);
+                        try {
+                            JSONArray arr = new JSONArray(body);
+                            Log.d(TAG, "fetchNearbySouls() parsed JSON array, count=" + arr.length());
+                            final JSONArray finalArr = arr;
+                            activity.runOnUiThread(() -> { if (cb != null) cb.onSuccess(body, finalArr, ap); });
+                        } catch (JSONException ex) {
+                            try {
+                                JSONObject obj = new JSONObject(body);
+                                boolean success = obj.optBoolean("success", true);
+                                String message = obj.optString("message", obj.optString("error", "Yanıt parse hatası"));
+                                Log.w(TAG, "fetchNearbySouls() server JSON object (success=" + success + "): " + message);
+
+                                if (!success) {
+                                    activity.runOnUiThread(() -> {
+                                        if (cb != null) cb.onError(message);
+                                        Toast.makeText(activity, message, Toast.LENGTH_LONG).show();
+                                    });
+                                } else if (obj.has("data")) {
+                                    JSONArray arr = obj.optJSONArray("data");
+                                    if (arr != null) {
+                                        final JSONArray finalArr = arr;
+                                        activity.runOnUiThread(() -> { if (cb != null) cb.onSuccess(arr.toString(), finalArr, ap); });
+                                    } else {
+                                        activity.runOnUiThread(() -> {
+                                            if (cb != null) cb.onError("Beklenen dizi alanı yok");
+                                            Toast.makeText(activity, "Beklenen dizi alanı yok", Toast.LENGTH_LONG).show();
+                                        });
+                                    }
+                                } else {
+                                    activity.runOnUiThread(() -> {
+                                        if (cb != null) cb.onError(message);
+                                        Toast.makeText(activity, message, Toast.LENGTH_LONG).show();
+                                    });
+                                }
+                            } catch (JSONException ex2) {
+                                Log.e(TAG, "fetchNearbySouls() JSON parse error: " + ex.getMessage(), ex);
+                                activity.runOnUiThread(() -> {
+                                    if (cb != null) cb.onError("Yanıt parse hatası");
+                                    Toast.makeText(activity, "Yanıt parse hatası", Toast.LENGTH_LONG).show();
+                                });
+                            }
+                        }
+                    }
+                });
+            });
+        } catch (Throwable t) {
+            Log.e(TAG, "fetchNearbySouls() unexpected error", t);
+            if (cb != null) cb.onError("Beklenmeyen hata: " + t.getMessage());
+        }
+    }
+
 
     public void fetchMarkersNearby(@androidx.annotation.Nullable String type, int radiusM, int limit) {
         FirebaseUser u = FirebaseAuth.getInstance().getCurrentUser();
@@ -1183,9 +1324,7 @@ public class Harita implements OnMapReadyCallback {
         if (highlightedMarker == marker) return;
         if (highlightedMarker != null) clearMarkerHighlight();
         String uiKey = markerTypeMap.getOrDefault(marker, "default");
-        marker.setIcon(
-                MarkerIconFactory.getSelectedIcon(activity, uiKey)
-        );
+        marker.setIcon(MarkerIconFactory.getSelectedIcon(activity, uiKey));
         highlightedMarker = marker;
     }
 
@@ -1426,5 +1565,71 @@ public class Harita implements OnMapReadyCallback {
     @androidx.annotation.Nullable
     public LatLng getCurrentLocation() {
         return centerPoint; // getUserLocationAndLoadInitial() ile atanıyor
+    }
+
+
+    // === Centralized map/admin helpers ===
+    public interface AdminPathCb { void onReady(@androidx.annotation.Nullable String adminPath); }
+
+    /** Formats latitude/longitude as a user-friendly string. */
+    public static String formatLatLng(double lat, double lng) {
+        return String.format(java.util.Locale.US, "%f, %f", lat, lng);
+    }
+
+    /** Builds an adminPath like "TR/ANKARA" from Geocoder results. */
+    public static @androidx.annotation.Nullable String extractAdminPath(@androidx.annotation.Nullable java.util.List<android.location.Address> res) {
+        if (res == null || res.isEmpty()) return null;
+        android.location.Address a = res.get(0);
+        String admin = a.getAdminArea();            // e.g., Ankara
+        String countryCode = a.getCountryCode();    // e.g., TR
+        if (admin == null || countryCode == null) return null;
+        String ap = (countryCode + "/" + admin).toUpperCase(new java.util.Locale("tr", "TR")); // TR/ANKARA
+        android.util.Log.d("Harita", "extractAdminPath → " + ap + " (locality=" + a.getLocality() + ", subAdmin=" + a.getSubAdminArea() + ")");
+        return ap;
+    }
+
+    /**
+     * Reverse-geocodes the given lat/lng to an adminPath (e.g., TR/ANKARA).
+     * Calls back on the main thread.
+     */
+    public static void ensureAdminPathAsync(@androidx.annotation.NonNull android.content.Context ctx,
+                                            double lat, double lng,
+                                            @androidx.annotation.NonNull AdminPathCb cb) {
+        android.util.Log.d("Harita", "ensureAdminPathAsync() → lat=" + lat + " lng=" + lng);
+        java.util.Locale tr = new java.util.Locale("tr", "TR");
+        android.location.Geocoder geocoder = new android.location.Geocoder(ctx, tr);
+
+        if (android.os.Build.VERSION.SDK_INT >= 33) {
+            final android.os.Handler h =
+                    new android.os.Handler(android.os.Looper.getMainLooper());geocoder.getFromLocation(lat, lng, 5,
+                    new android.location.Geocoder.GeocodeListener() {
+                        @Override public void onGeocode(java.util.List<android.location.Address> results) {
+                            String ap = extractAdminPath(results);
+                            h.post(() -> cb.onReady(ap));
+                        }
+                        @Override public void onError(String errorMessage) {
+                            // Fallback: return null on error
+                            h.post(() -> cb.onReady(null));
+                        }
+                    });
+        } else {
+            new Thread(() -> {
+                String ap = null;
+                try {
+                    java.util.List<android.location.Address> results = geocoder.getFromLocation(lat, lng, 5);
+                    ap = extractAdminPath(results);
+                } catch (Exception e) {
+                    // ignore
+                }
+                android.os.Handler h = new android.os.Handler(android.os.Looper.getMainLooper());
+                final String adminPath = ap;
+                h.post(() -> cb.onReady(adminPath));
+            }).start();
+        }
+    }
+
+    /** Converts an Android Location to a Google Maps LatLng. */
+    public static com.google.android.gms.maps.model.LatLng toLatLng(@androidx.annotation.NonNull android.location.Location loc) {
+        return new com.google.android.gms.maps.model.LatLng(loc.getLatitude(), loc.getLongitude());
     }
 }

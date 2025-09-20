@@ -49,6 +49,7 @@ import com.kurmez.iyesi.kayra.Classes.data.Soul;
 import com.kurmez.iyesi.kurmes.utilities.adapters.ImageSliderAdapter;
 import com.kurmez.iyesi.kurmes.utilities.helper.CFObligations;
 import com.kurmez.iyesi.AppCheckTokenProvider;
+import com.kurmez.iyesi.kurmes.utilities.helper.FireBaseHelper;
 
 import org.json.JSONObject;
 
@@ -927,6 +928,7 @@ public class Founded extends AppCompatActivity {
                         Log.d(L, "lastLocation ok lat=" + lastLat + " lng=" + lastLng);
                         ensureAdminPathAsync(lastLat, lastLng, adminPath -> {
                             if (adminPath != null) placeView.setText(adminPath);
+                            //Object object = FireBaseHelper.customClaims(user);
                         });
                     } else {
                         Log.d(L, "lastLocation is null");

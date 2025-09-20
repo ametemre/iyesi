@@ -171,7 +171,7 @@ public final class PlayEnvDiagnostics {
         final boolean[] ok = { false };
 
         IntegrityTokenRequest req = IntegrityTokenRequest.builder()
-                .setNonce("ping") // Yanıtı kullanmıyoruz; sadece servis erişimi testi.
+                .setNonce(NonceUtil.nextNonce(null)) // Yanıtı kullanmıyoruz; sadece servis erişimi testi.
                 .build();
 
         im.requestIntegrityToken(req)

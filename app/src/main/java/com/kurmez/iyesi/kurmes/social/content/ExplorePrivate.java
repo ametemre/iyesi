@@ -29,12 +29,11 @@ import com.google.firebase.database.FirebaseDatabase;
 import com.google.firebase.database.ValueEventListener;
 import com.kurmez.iyesi.R;
 import com.kurmez.iyesi.kayra.Classes.data.Soul;
-import com.kurmez.iyesi.kurmes.social.Profile;
+import com.kurmez.iyesi.kurmes.social.Iyesi;
 import com.kurmez.iyesi.kurmes.utilities.Helpers;
 import com.kurmez.iyesi.kurmes.utilities.adapters.ContentAdapter;
 import com.kurmez.iyesi.kurmes.utilities.helper.CFHelper;
 import com.kurmez.iyesi.kurmes.utilities.helper.HeaderHelper;
-import com.kurmez.iyesi.umay.sahiplendirme.Companion;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -124,7 +123,7 @@ public class ExplorePrivate extends AppCompatActivity {
         if (header != null) {
             header.setOnClickListener(v -> {
                 Log.d(L, "Header click → Profile");
-                startActivity(new Intent(this, Profile.class));
+                startActivity(new Intent(this, Iyesi.class));
             });
         }
 
@@ -431,6 +430,19 @@ public class ExplorePrivate extends AppCompatActivity {
                 return false;
             }
         });
+        recyclerView.setOnTouchListener(new SimpleSwipeHelper(this, null, new SimpleSwipeHelper.Callback() {
+            @Override public void onSwipedLeft(int position) {
+                if (position < 0 || position >= souls.size()) return;
+                Soul s = souls.get(position);
+                Log.d("ExplorePrivate", "sola kaydı: pos=" + position + " id=" + s.getId());
+            }
+
+            @Override public void onSwipedRight(int position) {
+                if (position < 0 || position >= souls.size()) return;
+                Soul s = souls.get(position);
+                //markApproved(s, position);
+            }
+        },recyclerView));
     }
 
     private void openEditor(int position) {

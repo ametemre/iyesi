@@ -3,6 +3,7 @@ package com.kurmez.iyesi.umay;
 import android.annotation.SuppressLint;
 import android.content.Intent;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.GestureDetector;
 import android.view.MotionEvent;
 import android.view.VelocityTracker;
@@ -14,8 +15,10 @@ import android.widget.ArrayAdapter;
 import android.widget.ImageButton;
 import android.widget.LinearLayout;
 import android.widget.Spinner;
+import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.annotation.NonNull;
 import androidx.fragment.app.FragmentActivity;
 
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
@@ -30,8 +33,12 @@ import com.kurmez.iyesi.kurmes.Kurmes;
 import com.kurmez.iyesi.kurmes.utilities.MiniFabs;
 import com.kurmez.iyesi.kurmes.utilities.helper.Actions;
 
-public class SokakActivity extends FragmentActivity implements MarkerDetailsBottomSheet.Host {
+import org.json.JSONArray;
+import org.json.JSONObject;
 
+public class SokakActivity extends FragmentActivity implements MarkerDetailsBottomSheet.Host {
+    private JSONObject catsJson,dogsJson,criticalJson;
+    private JSONArray catsArr,dogsArr,criticalArr,allSoulsAround;
     private FloatingActionButton selectedFab = null; // Track the selected FAB
     public Kurmes kurmes;
     private boolean isMarkerModeActive = false;
@@ -48,7 +55,9 @@ public class SokakActivity extends FragmentActivity implements MarkerDetailsBott
     private MiniFabs miniFabs;
     private FloatingActionButton mainFab, beslemeFab, bolgeFab, nakilFab, soundFab;
     private GestureDetector gestureDetector;
-    private View touchOverlay;    private Spinner spinner1, spinner2, spinner3, spinner4, spinner5;
+    private View touchOverlay;
+    private TextView populasyon,kayip,kedi,kopek,kormez;
+    private Spinner spinner1, spinner2, spinner3, spinner4, spinner5;
     private ImageButton clear1, clear2, clear3, clear4, clear5;
     private ImageButton toggle1, toggle2, toggle3, toggle4, toggle5;
     private GeoJsonLayer layerCountry, layerProvince, layerDistrict;
@@ -65,13 +74,81 @@ public class SokakActivity extends FragmentActivity implements MarkerDetailsBott
         setContentView(R.layout.activity_sokak);
         // 1) Animasyonları yükle
         if (!ensureLoggedInOrGoLogin()) return;
-
+        initializeViews();
         initializeSpinners();
         initializeFABs();
+
+        // 1) Kümeleri hazırla
+        catsArr = new org.json.JSONArray();
+        dogsArr = new org.json.JSONArray();
+        criticalArr = new org.json.JSONArray();
+        allSoulsAround = new org.json.JSONArray();
+
         // Yalnızca harita ile ilgili başlatmayı Harita sınıfına devret
         harita = new Harita(this);
         harita.fetchMarkersNearby(null, 2500, 150);
         harita.initGesture(this);  // YENİ: Harita kendi gesture’ını kurar
+        harita.fetchNearbySouls(100, new Harita.SoulsJsonCallback() {
+            @Override public void onSuccess(@NonNull String rawJson,
+                                            @NonNull org.json.JSONArray souls,
+                                            @NonNull String adminPath) {
+                allSoulsAround = souls;
+                // 2) Tüm Soul kayıtlarını tara ve ilgili kümelere ekle
+                for (int i = 0; i < souls.length(); i++) {
+                    org.json.JSONObject s = souls.optJSONObject(i);
+                    if (s == null) continue;
+
+                    String species = norm(optMulti(s, "species", "type", "kind", "animal"));
+                    if (species.isEmpty()) {
+                        org.json.JSONObject meta = s.optJSONObject("meta");
+                        if (meta != null) species = norm(meta.optString("species", ""));
+                    }
+                    String status = norm(optMulti(s, "status", "health", "state"));
+                    // health içinden de kritik sinyalleri yakala
+                    org.json.JSONObject health = s.optJSONObject("health");
+                    if (status.isEmpty() && health != null) {
+                        status = norm(health.optString("level", health.optString("state", "")));
+                    }
+
+                    boolean isCat  = isCat(species);
+                    boolean isDog  = isDog(species);
+                    boolean isCrit = isCritical(status, health, s);
+
+                    if (isCat)  catsArr.put(s);
+                    if (isDog)  dogsArr.put(s);
+                    if (isCrit) criticalArr.put(s);
+                }
+
+                // 3) Her biri kendi verisini içeren JSON objeleri
+                catsJson = new org.json.JSONObject();
+                dogsJson = new org.json.JSONObject();
+                criticalJson = new org.json.JSONObject();
+                try {
+                    catsJson.put("adminPath", adminPath).put("count", catsArr.length()).put("souls", catsArr);
+                    dogsJson.put("adminPath", adminPath).put("count", dogsArr.length()).put("souls", dogsArr);
+                    criticalJson.put("adminPath", adminPath).put("count", criticalArr.length()).put("souls", criticalArr);
+                } catch (org.json.JSONException ignore) {}
+
+                // 4) İstediğin şekilde devret/kullan
+                String catsJsonStr = catsJson.toString();
+                String dogsJsonStr = dogsJson.toString();
+                String criticalJsonStr = criticalJson.toString();
+                populasyon.setText(allSoulsAround.length());
+                kedi.setText(catsArr.length());
+                kopek.setText(dogsArr.length());
+                kormez.setText(criticalArr.length());
+                Log.d("SoulsJSON", "cats="+catsArr.length()+" dogs="+dogsArr.length()+" critical="+criticalArr.length());
+                // ör: telemetryUpload(catsJsonStr, dogsJsonStr, criticalJsonStr);
+                // ör: showToast/istatistik
+                Toast.makeText(SokakActivity.this, "Kedi: "+catsArr.length()+" • Köpek: "+dogsArr.length()+" • Critical: "+criticalArr.length(), Toast.LENGTH_LONG).show();
+            }
+
+            @Override public void onError(@NonNull String message) {
+                Toast.makeText(SokakActivity.this, message, Toast.LENGTH_SHORT).show();
+            }
+
+        });
+
 
 // Overlay kur
         touchOverlay = findViewById(R.id.map_overlay);
@@ -83,6 +160,54 @@ public class SokakActivity extends FragmentActivity implements MarkerDetailsBott
         }
 
     }
+
+    private void initializeViews() {
+        populasyon = findViewById(R.id.tvPopulationValue);
+        kayip = findViewById(R.id.tvMissingValue);
+        kedi = findViewById(R.id.spinnerCat);
+        kopek = findViewById(R.id.spinnerDog);
+        kormez = findViewById(R.id.spinnerBlind);
+//        populasyon.setText(allSoulsAround.length());
+    }
+
+    private static String norm(String s) {
+        return s == null ? "" : s.trim().toLowerCase(java.util.Locale.ROOT);
+    }
+    private static String optMulti(org.json.JSONObject o, String... keys) {
+        for (String k : keys) {
+            String v = o.optString(k, "");
+            if (!v.isEmpty()) return v;
+        }
+        return "";
+    }
+    private static boolean isCat(String sp) {
+        sp = norm(sp);
+        return sp.equals("cat") || sp.contains("kedi") || sp.contains("felis");
+    }
+    private static boolean isDog(String sp) {
+        sp = norm(sp);
+        return sp.equals("dog") || sp.contains("köpek") || sp.contains("canis");
+    }
+    private static boolean isCritical(String status, org.json.JSONObject health, org.json.JSONObject root) {
+        String st = norm(status);
+        if (st.equals("critical") || st.equals("acil") || st.equals("urgent")) return true;
+
+        if (health != null) {
+            int sev = health.optInt("severity", -1);
+            if (sev >= 3) return true;
+            String lvl = norm(health.optString("level", ""));
+            if (lvl.equals("critical")) return true;
+        }
+        org.json.JSONArray tags = root.optJSONArray("tags");
+        if (tags != null) {
+            for (int j = 0; j < tags.length(); j++) {
+                String t = norm(tags.optString(j, ""));
+                if (t.equals("critical") || t.equals("acil") || t.equals("urgent")) return true;
+            }
+        }
+        return false;
+    }
+
     private boolean ensureLoggedInOrGoLogin() {
         FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
         if (user == null || user.isAnonymous()) {
@@ -121,14 +246,14 @@ public class SokakActivity extends FragmentActivity implements MarkerDetailsBott
                 findViewById(R.id.spinner_level_4),
                 findViewById(R.id.spinner_level_5)
         };
-/*
+
         // 1. Spinner (Ülke/ADM seviyesi)
         String[] levelOptions = {"ADM0", "OSM"};
         ArrayAdapter<String> adapterCountry = new ArrayAdapter<>(
                 this, android.R.layout.simple_spinner_dropdown_item, levelOptions
         );
         spinners[0].setAdapter(adapterCountry);
-*/
+
         // 2. Spinner (Tür seçimi)
         String[] speciesOptions = {"Kedi", "Köpek", "Kuş", "Vahşi", "İstenmeyen"};
         ArrayAdapter<String> adapterSpecies = new ArrayAdapter<>(
@@ -213,7 +338,6 @@ public class SokakActivity extends FragmentActivity implements MarkerDetailsBott
         soundFab.setOnClickListener(v -> {
             if (miniFabs.getSelectedFab() != null) {
                 actions.performSelectedAction(miniFabs.getSelectedFab());
-                animateFAB();
             } else {
                 Toast.makeText(this, "Önce bir miniFAB seçin", Toast.LENGTH_SHORT).show();
             }
@@ -240,57 +364,6 @@ public class SokakActivity extends FragmentActivity implements MarkerDetailsBott
                 // Your existing FAB-action logic:
                 //actions.onFabClick((FloatingActionButton) v);   /* Burdaki aksyon yapısı daha sonra "Harita.java" dosyasını sadeleştirmede kullanılmalı */
             });
-        }
-    }
-    private void animateFAB() {
-        if (isFabOpen) {
-            if (touchOverlay != null) touchOverlay.setClickable(false);
-
-            // Menü zaten açıksa: kapatma animasyonları
-            mainFab.startAnimation(rotateBackwardAnim);
-            beslemeFab.startAnimation(fabCloseAnim);
-            bolgeFab.startAnimation(fabCloseAnim);
-            nakilFab.startAnimation(fabCloseAnim);
-            soundFab.startAnimation(fabCloseAnim);
-
-            // Hepsini tıklanamaz ve görünmez yap
-            beslemeFab.setClickable(false);
-            bolgeFab.setClickable(false);
-            nakilFab.setClickable(false);
-            soundFab.setClickable(false);
-
-            // Görünürlüğü GONE yap
-            beslemeFab.setVisibility(View.GONE);
-            bolgeFab.setVisibility(View.GONE);
-            nakilFab.setVisibility(View.GONE);
-            soundFab.setVisibility(View.GONE);
-                  // Menü kapandı → placement modu kapansın → overlay tünel modunda kalır
-            harita.setMode(Harita.MapMode.DEFAULT);
-            isFabOpen = false;
-        } else {
-            // Menü kapalıysa: açma animasyonları
-            mainFab.startAnimation(rotateForwardAnim);
-
-            // Önce görünür yap, sonra fab_open animasyonu çalışsın
-            beslemeFab.setVisibility(View.VISIBLE);
-            bolgeFab.setVisibility(View.VISIBLE);
-            nakilFab.setVisibility(View.VISIBLE);
-            soundFab.setVisibility(View.VISIBLE);
-
-            beslemeFab.startAnimation(fabOpenAnim);
-            bolgeFab.startAnimation(fabOpenAnim);
-            nakilFab.startAnimation(fabOpenAnim);
-            soundFab.startAnimation(fabOpenAnim);
-
-            // Tıklanabilir olsunlar
-            beslemeFab.setClickable(true);
-            bolgeFab.setClickable(true);
-            nakilFab.setClickable(true);
-            soundFab.setClickable(true);
-
-            isFabOpen = true;
-            // menü kapanırken (animateFAB() içinde kapatma dalında) en sona ekle:
-            //harita.setMode(Harita.MapMode.DEFAULT);
         }
     }    // 3.2. animateFAB() metodu: aç/kapa mantığı
     @Override
