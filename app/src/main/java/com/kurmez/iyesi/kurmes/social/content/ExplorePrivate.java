@@ -283,7 +283,7 @@ public class ExplorePrivate extends AppCompatActivity {
                     + "\nKonum: " + safe(s.getFoundLocation());
 
             int sc = computeAttentionScore(s);
-            long ts = s.getTimestamp();
+            long ts = s.getTimestamp(   );
 
             Row r = new Row();
             r.key = key;

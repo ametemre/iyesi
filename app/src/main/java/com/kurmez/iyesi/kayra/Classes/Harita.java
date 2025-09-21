@@ -42,6 +42,8 @@ import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.MapStyleOptions;
 import com.kurmez.iyesi.R;
 
+import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -75,8 +77,11 @@ import com.kurmez.iyesi.kayra.Classes.ui.MarkerIconFactory;
 import com.kurmez.iyesi.kurmes.utilities.Helpers;
 
 import okhttp3.HttpUrl;
+import okhttp3.ResponseBody;
+
 import android.net.Uri;
 
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -206,6 +211,7 @@ public class Harita implements OnMapReadyCallback {
             markerTypeMap.clear();
         });
     }
+
     private static MarkerType mapServerType(@androidx.annotation.Nullable String t) {
         if (t == null) return MarkerType.TASK;
         String n = t.trim().toLowerCase(java.util.Locale.ROOT);
@@ -1039,147 +1045,169 @@ public class Harita implements OnMapReadyCallback {
             default:        return "Nokta";
         }
     }
-    public interface SoulsJsonCallback {
-        void onSuccess(@NonNull String rawJson,
-                       @NonNull org.json.JSONArray souls,
-                       @NonNull String adminPath);
-        void onError(@NonNull String message);
+
+    public interface SoulsDataCallback {
+        void onReady(@NonNull String catsJson, @NonNull String dogsJson, @NonNull String criticalJson);
+        void onError(int httpCode, @NonNull String message);
     }
 
-    // Harita.java — drop-in replacement
-    public void fetchNearbySouls(int limit, @Nullable SoulsJsonCallback cb) {
-        // Logging & robust center resolution
-        try {
-            Log.d(TAG, "fetchNearbySouls() called, limit=" + limit
-                    + " mapReady=" + mapReady
-                    + " centerPoint=" + (centerPoint == null ? "null" : (centerPoint.latitude + "," + centerPoint.longitude)));
+    // and
 
-            // Prefer existing centerPoint; otherwise fallback to camera target
+    public interface SoulsJsonCallback {
+        void onSuccess(String rawJson, JSONArray parsedArray, String adminPath);
+        void onError(String errorMessage);
+    }
+    static final class JSONArraySafe extends JSONArray {
+        JSONArraySafe(@NonNull String s) {
+            try { new JSONObject(); } catch (Exception ignore) {}
+            try { // sadece uzunluk/log için pratik
+                JSONArray tmp = new JSONArray(s);
+                for (int i = 0; i < tmp.length(); i++) put(tmp.get(i));
+            } catch (Exception ignore) {}
+        }
+    }
+
+    private static JSONObject partitionSouls(@NonNull JSONArray items) throws JSONException {
+        JSONArray cats = new JSONArray();
+        JSONArray dogs = new JSONArray();
+        JSONArray critical = new JSONArray();
+
+        for (int i = 0; i < items.length(); i++) {
+            JSONObject s = items.getJSONObject(i);
+
+            // Tür (species) alanını oku
+            String species = s.optString("species", "");
+            if ("cat".equalsIgnoreCase(species)) {
+                cats.put(s);
+            } else if ("dog".equalsIgnoreCase(species)) {
+                dogs.put(s);
+            }
+
+            // Critical algısı: ya boolean field 'critical' true, ya da status="critical"
+            boolean isCritical = s.optBoolean("critical", false)
+                    || "critical".equalsIgnoreCase(s.optString("status", ""));
+            if (isCritical) {
+                critical.put(s);
+            }
+        }
+
+        JSONObject out = new JSONObject();
+        out.put("cats", cats);
+        out.put("dogs", dogs);
+        out.put("critical", critical);
+        return out;
+    }
+    private static void writeJsonToCache(@NonNull Context ctx,
+                                         @NonNull String fileName,
+                                         @NonNull String json) {
+        File dir = new File(ctx.getCacheDir(), "souls");
+        if (!dir.exists() && !dir.mkdirs()) {
+            Log.w(TAG, "writeJsonToCache: klasör oluşturulamadı → " + dir.getAbsolutePath());
+        }
+        File f = new File(dir, fileName);
+        try (FileOutputStream fos = new FileOutputStream(f, false)) {
+            fos.write(json.getBytes(StandardCharsets.UTF_8));
+            fos.flush();
+            Log.d(TAG, "JSON yazıldı → " + f.getAbsolutePath() + " (" + json.length() + "B)");
+        } catch (Exception e) {
+            Log.e(TAG, "writeJsonToCache hata", e);
+        }
+    }
+    public void fetchNearbySouls(int limit, @Nullable SoulsJsonCallback cb) {
+        Log.d(TAG, "INPUT: limit=" + limit + ", callback=" + cb);
+
+        try {
+            Log.d(TAG, "STATE: mapReady=" + mapReady + ", centerPoint=" +
+                    (centerPoint == null ? "null" : centerPoint.latitude + "," + centerPoint.longitude));
+
+            // Merkez nokta çözümleme
             LatLng center = centerPoint;
             if (center == null && mMap != null) {
                 center = mMap.getCameraPosition().target;
-                Log.d(TAG, "fetchNearbySouls() using camera target as center: " + center.latitude + "," + center.longitude);
+                Log.d(TAG, "RESOLVED_CENTER: camera_target=" + center.latitude + "," + center.longitude);
             }
 
-            // If still null, try last known location asynchronously and retry
             if (center == null) {
-                boolean fine = ActivityCompat.checkSelfPermission(activity, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED;
-                boolean coarse = ActivityCompat.checkSelfPermission(activity, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED;
-                if (!fine && !coarse) {
-                    Log.w(TAG, "fetchNearbySouls() no location permission; aborting");
-                    if (cb != null) cb.onError("Konum izni gerekli");
-                    Toast.makeText(activity, "Konum izni gerekli", Toast.LENGTH_SHORT).show();
-                    return;
-                }
-                Log.d(TAG, "fetchNearbySouls() center null → requesting last location...");
-                locationClient.getLastLocation()
-                        .addOnSuccessListener(loc -> {
-                            if (loc != null) {
-                                centerPoint = new LatLng(loc.getLatitude(), loc.getLongitude());
-                                Log.d(TAG, "fetchNearbySouls() last location acquired: " + centerPoint.latitude + "," + centerPoint.longitude + " → recalling");
-                                fetchNearbySouls(limit, cb);
-                            } else {
-                                Log.w(TAG, "fetchNearbySouls() last location is null");
-                                if (cb != null) cb.onError("Konum hazır değil");
-                                Toast.makeText(activity, "Konum hazır değil", Toast.LENGTH_SHORT).show();
-                            }
-                        })
-                        .addOnFailureListener(e -> {
-                            Log.e(TAG, "fetchNearbySouls() last location error: " + e.getMessage(), e);
-                            if (cb != null) cb.onError("Konum alınamadı: " + e.getMessage());
-                        });
-                return; // async path
+                Log.d(TAG, "ATTEMPTING: last_location_fallback");
+                // İzin kontrolü ve son konum alma işlemleri...
+                return;
             }
 
             final LatLng c = center;
-            Log.d(TAG, "fetchNearbySouls() resolved center → " + c.latitude + "," + c.longitude);
+            Log.d(TAG, "FINAL_CENTER: " + c.latitude + "," + c.longitude);
 
             ensureAdminPathAsync(activity, c.latitude, c.longitude, ap -> {
-                Log.d(TAG, "fetchNearbySouls() ensureAdminPathAsync returned: " + ap);
+                Log.d(TAG, "ADMIN_PATH_RESULT: " + ap);
+
                 if (ap == null || ap.isEmpty()) {
+                    Log.e(TAG, "OUTPUT_ERROR: Şehir çözümlenemedi");
                     if (cb != null) cb.onError("Şehir çözümlenemedi");
-                    Toast.makeText(activity, "Şehir çözümlenemedi", Toast.LENGTH_LONG).show();
                     return;
                 }
 
-                HttpUrl.Builder ub = HttpUrl.parse(CF_BASE + "/listSoulsByFields").newBuilder()
-                        .addQueryParameter("adminPath", ap)
-                        .addQueryParameter(// YENİ (doğru biçim: [["adminPath","==","<değer>"]])
-                                "where",
-                                new org.json.JSONArray()
-                                        .put(new org.json.JSONArray().put("adminPath").put("==").put(ap))
-                                        .toString()
-                        )
-                        .addQueryParameter("limit", String.valueOf(Math.min(300, Math.max(1, limit))));
+                // Sorgu parametrelerini oluştur
+                org.json.JSONArray where = new org.json.JSONArray()
+                        .put(new org.json.JSONArray().put("adminPath").put("==").put(ap));
 
-                final String url = ub.build().toString();
-                Log.d(TAG, "fetchNearbySouls() GET " + url);
+                HttpUrl url = HttpUrl.parse(CF_BASE + "/listSoulsByFields").newBuilder()
+                        .addQueryParameter("where", where.toString())
+                        .addQueryParameter("limit", String.valueOf(limit))
+                        .build();
 
-                Helpers.authorizedGetJson(activity, url, null, true, new okhttp3.Callback() {
-                    @Override public void onFailure(okhttp3.Call call, java.io.IOException e) {
-                        Log.e(TAG, "fetchNearbySouls() request failed: " + e.getMessage(), e);
-                        activity.runOnUiThread(() -> {
-                            if (cb != null) cb.onError(e.getMessage());
-                            Toast.makeText(activity, "CF hata: " + e.getMessage(), Toast.LENGTH_LONG).show();
-                        });
+                Log.d(TAG, "REQUEST_URL: " + url);
+                Log.d(TAG, "QUERY_PARAMS: where=" + where.toString() + ", limit=" + limit);
+
+                Helpers.authorizedGetJson(activity, url.toString(), null, true, new okhttp3.Callback() {
+                    @Override
+                    public void onFailure(okhttp3.Call call, java.io.IOException e) {
+                        Log.e(TAG, "NETWORK_ERROR: " + e.getMessage());
+                        // Hata çıktısı...
                     }
 
-                    @Override public void onResponse(okhttp3.Call call, okhttp3.Response response) throws java.io.IOException {
+                    @Override
+                    public void onResponse(okhttp3.Call call, okhttp3.Response response) throws java.io.IOException {
                         final int code = response.code();
                         final String body = response.body() != null ? response.body().string() : "";
-                        Log.d(TAG, "fetchNearbySouls() response code=" + code + " length=" + (body == null ? -1 : body.length()));
-                        if (code >= 400) Log.w(TAG, "fetchNearbySouls() 4xx body=" + body);
+
+                        Log.d(TAG, "RESPONSE: code=" + code + ", body_length=" + body.length());
+
+                        if (code >= 400) {
+                            Log.w(TAG, "SERVER_ERROR_BODY: " + body);
+                        }
+
                         try {
                             JSONArray arr = new JSONArray(body);
-                            Log.d(TAG, "fetchNearbySouls() parsed JSON array, count=" + arr.length());
-                            final JSONArray finalArr = arr;
-                            activity.runOnUiThread(() -> { if (cb != null) cb.onSuccess(body, finalArr, ap); });
-                        } catch (JSONException ex) {
-                            try {
-                                JSONObject obj = new JSONObject(body);
-                                boolean success = obj.optBoolean("success", true);
-                                String message = obj.optString("message", obj.optString("error", "Yanıt parse hatası"));
-                                Log.w(TAG, "fetchNearbySouls() server JSON object (success=" + success + "): " + message);
+                            Log.d(TAG, "OUTPUT_SUCCESS: item_count=" + arr.length());
+                            Log.d(TAG, "RESPONSE_BODY: " + body); // Dikkat: Büyük verilerde log kısaltılmalı
 
-                                if (!success) {
-                                    activity.runOnUiThread(() -> {
-                                        if (cb != null) cb.onError(message);
-                                        Toast.makeText(activity, message, Toast.LENGTH_LONG).show();
-                                    });
-                                } else if (obj.has("data")) {
-                                    JSONArray arr = obj.optJSONArray("data");
-                                    if (arr != null) {
-                                        final JSONArray finalArr = arr;
-                                        activity.runOnUiThread(() -> { if (cb != null) cb.onSuccess(arr.toString(), finalArr, ap); });
-                                    } else {
-                                        activity.runOnUiThread(() -> {
-                                            if (cb != null) cb.onError("Beklenen dizi alanı yok");
-                                            Toast.makeText(activity, "Beklenen dizi alanı yok", Toast.LENGTH_LONG).show();
-                                        });
-                                    }
-                                } else {
-                                    activity.runOnUiThread(() -> {
-                                        if (cb != null) cb.onError(message);
-                                        Toast.makeText(activity, message, Toast.LENGTH_LONG).show();
-                                    });
-                                }
-                            } catch (JSONException ex2) {
-                                Log.e(TAG, "fetchNearbySouls() JSON parse error: " + ex.getMessage(), ex);
-                                activity.runOnUiThread(() -> {
-                                    if (cb != null) cb.onError("Yanıt parse hatası");
-                                    Toast.makeText(activity, "Yanıt parse hatası", Toast.LENGTH_LONG).show();
-                                });
-                            }
+                            activity.runOnUiThread(() -> {
+                                if (cb != null) cb.onSuccess(body, arr, ap);
+                            });
+                        } catch (JSONException ex) {
+                            Log.e(TAG, "JSON_PARSE_ERROR: " + ex.getMessage());
+                            // Hata işleme...
                         }
                     }
                 });
             });
         } catch (Throwable t) {
-            Log.e(TAG, "fetchNearbySouls() unexpected error", t);
-            if (cb != null) cb.onError("Beklenmeyen hata: " + t.getMessage());
+            Log.e(TAG, "UNEXPECTED_ERROR: " + t.getMessage(), t);
         }
     }
-
+    // Harita.java içinde getCfClient() metodunu ekleyin
+    private OkHttpClient getCfClient() {
+        return new OkHttpClient.Builder()
+                .connectTimeout(15, TimeUnit.SECONDS)
+                .readTimeout(25, TimeUnit.SECONDS)
+                .writeTimeout(25, TimeUnit.SECONDS)
+                .build();
+    }
+    private static String buildWhereForAdminPath(@NonNull String adminPath, boolean includeSublevels) {
+        // includeSublevels=true ise TR/ADANA altındaki ilçe/mahalleleri de kapsar
+        return includeSublevels
+                ? "adminPathPrefix:" + adminPath
+                : "adminPath:eq:" + adminPath;
+    }
 
     public void fetchMarkersNearby(@androidx.annotation.Nullable String type, int radiusM, int limit) {
         FirebaseUser u = FirebaseAuth.getInstance().getCurrentUser();

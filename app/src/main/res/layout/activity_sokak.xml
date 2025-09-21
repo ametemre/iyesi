@@ -301,7 +301,7 @@
           android:layout_width="wrap_content"
           android:layout_height="wrap_content"
           android:layout_marginStart="8dp"
-          android:text="—"
+          android:text=" : 0"
           android:textColor="@color/white"
           android:textSize="16sp"
           android:textStyle="bold" />
@@ -330,7 +330,7 @@
           android:layout_width="wrap_content"
           android:layout_height="wrap_content"
           android:layout_marginStart="8dp"
-          android:text="—"
+          android:text=" : 0"
           android:textColor="@color/white"
           android:textSize="16sp"
           android:textStyle="bold" />
@@ -364,6 +364,7 @@
 
       <TextView
           android:id="@+id/spinnerCat"
+          android:text=" : 0"
           android:layout_width="wrap_content"
           android:layout_height="wrap_content"
           android:layout_marginStart="8dp" />
@@ -388,6 +389,7 @@
 
       <TextView
           android:id="@+id/spinnerDog"
+          android:text=" : 0"
           android:layout_width="wrap_content"
           android:layout_height="wrap_content"
           android:layout_marginStart="8dp"/>
@@ -411,6 +413,7 @@
 
       <TextView
           android:id="@+id/spinnerBlind"
+          android:text=" : 0"
           android:layout_width="wrap_content"
           android:layout_height="wrap_content"
           android:layout_marginStart="8dp" />

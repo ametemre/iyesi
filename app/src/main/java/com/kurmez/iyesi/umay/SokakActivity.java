@@ -37,6 +37,7 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 
 public class SokakActivity extends FragmentActivity implements MarkerDetailsBottomSheet.Host {
+    private String TAG = "Sokak Activity";
     private JSONObject catsJson,dogsJson,criticalJson;
     private JSONArray catsArr,dogsArr,criticalArr,allSoulsAround;
     private FloatingActionButton selectedFab = null; // Track the selected FAB
@@ -67,6 +68,16 @@ public class SokakActivity extends FragmentActivity implements MarkerDetailsBott
     // SokakActivity içine, class-level’da:
     private boolean isFabOpen,isMarkerActive = false;
     private Animation fabOpenAnim, fabCloseAnim, rotateForwardAnim, rotateBackwardAnim;
+    static final class JSONArraySafe extends JSONArray {
+        JSONArraySafe(@NonNull String s) {
+            try { new JSONObject(); } catch (Exception ignore) {}
+            try { // sadece uzunluk/log için pratik
+                JSONArray tmp = new JSONArray(s);
+                for (int i = 0; i < tmp.length(); i++) put(tmp.get(i));
+            } catch (Exception ignore) {}
+        }
+    }
+
     @SuppressLint("ClickableViewAccessibility")
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -79,20 +90,34 @@ public class SokakActivity extends FragmentActivity implements MarkerDetailsBott
         initializeFABs();
 
         // 1) Kümeleri hazırla
-        catsArr = new org.json.JSONArray();
-        dogsArr = new org.json.JSONArray();
-        criticalArr = new org.json.JSONArray();
-        allSoulsAround = new org.json.JSONArray();
+        catsArr = new JSONArray();
+        dogsArr = new JSONArray();
+        criticalArr = new JSONArray();
+        allSoulsAround = new JSONArray();
 
         // Yalnızca harita ile ilgili başlatmayı Harita sınıfına devret
         harita = new Harita(this);
         harita.fetchMarkersNearby(null, 2500, 150);
         harita.initGesture(this);  // YENİ: Harita kendi gesture’ını kurar
         harita.fetchNearbySouls(100, new Harita.SoulsJsonCallback() {
+/*
+            @Override public void onReady(@NonNull String catsJson, @NonNull String dogsJson, @NonNull String criticalJson) {
+                Log.d(TAG, "cats count=" + new JSONArraySafe(catsJson).length());
+                Log.d(TAG, "dogs count=" + new JSONArraySafe(dogsJson).length());
+                Log.d(TAG, "critical count=" + new JSONArraySafe(criticalJson).length());
+
+                // Buradan itibaren JSON’ları istediğin modüle devredebilirsin.
+            }
+
+            @Override public void onError(int httpCode, @NonNull String message) {
+                Log.w(TAG, "Souls JSON hata http=" + httpCode + " msg=" + message);
+            }
+*/
             @Override public void onSuccess(@NonNull String rawJson,
-                                            @NonNull org.json.JSONArray souls,
+                                            @NonNull JSONArray souls,
                                             @NonNull String adminPath) {
                 allSoulsAround = souls;
+                populasyon.setText(allSoulsAround.length());
                 // 2) Tüm Soul kayıtlarını tara ve ilgili kümelere ekle
                 for (int i = 0; i < souls.length(); i++) {
                     org.json.JSONObject s = souls.optJSONObject(i);
@@ -120,20 +145,21 @@ public class SokakActivity extends FragmentActivity implements MarkerDetailsBott
                 }
 
                 // 3) Her biri kendi verisini içeren JSON objeleri
-                catsJson = new org.json.JSONObject();
-                dogsJson = new org.json.JSONObject();
-                criticalJson = new org.json.JSONObject();
+                catsJson = new JSONObject();
+                dogsJson = new JSONObject();
+                criticalJson = new JSONObject();
                 try {
                     catsJson.put("adminPath", adminPath).put("count", catsArr.length()).put("souls", catsArr);
                     dogsJson.put("adminPath", adminPath).put("count", dogsArr.length()).put("souls", dogsArr);
                     criticalJson.put("adminPath", adminPath).put("count", criticalArr.length()).put("souls", criticalArr);
+
                 } catch (org.json.JSONException ignore) {}
 
                 // 4) İstediğin şekilde devret/kullan
                 String catsJsonStr = catsJson.toString();
                 String dogsJsonStr = dogsJson.toString();
                 String criticalJsonStr = criticalJson.toString();
-                populasyon.setText(allSoulsAround.length());
+
                 kedi.setText(catsArr.length());
                 kopek.setText(dogsArr.length());
                 kormez.setText(criticalArr.length());
