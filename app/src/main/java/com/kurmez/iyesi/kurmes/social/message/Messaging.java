@@ -5,6 +5,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.graphics.Canvas;
 import android.graphics.Color;
+import android.os.Build;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.LayoutInflater;
@@ -18,6 +19,7 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.RequiresApi;
 import androidx.annotation.RequiresPermission;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.recyclerview.widget.ItemTouchHelper;
@@ -44,7 +46,7 @@ import com.kurmez.iyesi.kurmes.utilities.helper.HeaderHelper;
 
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
-
+@RequiresApi(api = Build.VERSION_CODES.N)
 public class Messaging extends AppCompatActivity {
     private static final String CF_ALL_USERS = "https://us-central1-iyesi-e8d4f.cloudfunctions.net/listAllUsersHttp";
     private ProfileActivity profileActivity;

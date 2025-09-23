@@ -11,6 +11,7 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
 import com.google.firebase.firestore.GeoPoint;
+import com.kurmez.iyesi.kurmes.utilities.helper.net.CFClient;
 
 import org.json.JSONObject;
 
@@ -595,5 +596,4 @@ public class Soul implements Parcelable {
         }
         return out;
     }
-
 }

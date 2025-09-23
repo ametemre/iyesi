@@ -135,7 +135,7 @@ public class PrivateCom {
     }
 
     // Kullanışlı toast fonksiyonu
-    private static void showToast(Activity activity, String msg) {
+    public static void showToast(Activity activity, String msg) {
         handler.post(() -> Toast.makeText(activity, msg, Toast.LENGTH_SHORT).show());
     }
 }

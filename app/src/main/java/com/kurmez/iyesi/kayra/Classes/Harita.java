@@ -9,6 +9,7 @@ import android.graphics.Canvas;
 import android.graphics.drawable.Drawable;
 import android.location.Address;
 import android.location.Geocoder;
+import android.os.Build;
 import android.util.Log;
 import android.view.MotionEvent;
 import android.view.View;
@@ -104,7 +105,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * - Çizim işlemi GeoSon.filterAndDraw metoduna devredilmiştir.
  */
 public class Harita implements OnMapReadyCallback {
-    private boolean isMarking = false;
+    private static final String TAG = "Harita";
     // Harita.java (diğer alanların yanına)
     private com.google.android.gms.maps.model.Marker myLocMarker = null;
     private com.google.android.gms.maps.model.Circle  myAccCircle = null;
@@ -115,20 +116,17 @@ public class Harita implements OnMapReadyCallback {
     private static final float ICON_DP          = 20f;
     private static final float ICON_OFFSET_Y_DP = 13f;   // yukarı kaydırma
     private static final float ICON_OFFSET_X_DP = 1f;   // sağa kaydırma
-    private static final String TAG = "Harita";
+
     private String currentCountryCode2,currentCountryCode3;
     private final List<String> levelOptions = Arrays.asList("ADM5", "ADM4", "ADM3", "ADM2", "ADM1", "ADM0", "OSM");
     private static final String GITHUB_BASE =""; //"https://github.com/wmgeolab/geoBoundaries/raw/refs/heads/main/releaseData/gbOpen/";// “main” branch altındaki releaseData klasörü (raw GitHub URL)
     private Marker draggableMarker;
-    private GestureDetector gestureDetector;
     private GoogleMap mMap;
     public enum MapMode { DEFAULT, FEEDING, NEST, SHELTER, TASK, REPOSITION }  // Görev=TASK
     // Harita sınıfı içinde (field olarak)
     private final Map<String, com.google.android.gms.maps.model.Marker> markerById = new ConcurrentHashMap<>();
-
-    private GeoJsonLayer layerCountry,layerProvince,layerDistrict;
+    private JSONArray arr;
     private final FragmentActivity activity;
-    private Marker tempMarker;
     private final FusedLocationProviderClient locationClient;
     private final ActivityResultLauncher<String[]> permissionLauncher;
     private Spinner spinnerLevels;
@@ -146,6 +144,7 @@ public class Harita implements OnMapReadyCallback {
     private MapMode mode = MapMode.DEFAULT;
     private boolean isPlacing = false;
     private GestureDetector placementDetector;
+    private GestureDetector gestureDetector;
 
     private static final double NEARBY_CHECKIN_THRESHOLD_M = 50.0;
     // son check-in’leri kısa süreli engellemek için (çifte tıklama/vs)
@@ -157,6 +156,36 @@ public class Harita implements OnMapReadyCallback {
     private Marker  repositionMarker = null;
     private LatLng  originalPos = null;
 
+    public Harita(FragmentActivity activity) {
+        this.activity = activity;
+
+        // 1. Harita fragment’i başlat
+        SupportMapFragment mapFragment = (SupportMapFragment)
+                activity.getSupportFragmentManager().findFragmentById(R.id.map);
+        if (mapFragment != null) {
+            mapFragment.getMapAsync(this);
+        }
+
+        // 2. Konum istemcisi
+        locationClient = LocationServices.getFusedLocationProviderClient(activity);
+
+        // 3. İzin launcher’ı
+        permissionLauncher = activity.registerForActivityResult(
+                new ActivityResultContracts.RequestMultiplePermissions(),
+                result -> {
+                    Boolean fine = result.getOrDefault(Manifest.permission.ACCESS_FINE_LOCATION, false);
+                    Boolean coarse = result.getOrDefault(Manifest.permission.ACCESS_COARSE_LOCATION, false);
+                    if ((fine != null && fine) || (coarse != null && coarse)) {
+                        getUserLocationAndLoadInitial();
+                    } else {
+                        Toast.makeText(activity, "Konum izni verilmedi.", Toast.LENGTH_LONG).show();
+                    }
+                }
+        );
+
+        // 4. Spinner’ı bul ve adapter’ı ayarla
+        initSpinner();
+    }
 
     @SuppressLint("PotentialBehaviorOverride")
     @Override
@@ -194,7 +223,7 @@ public class Harita implements OnMapReadyCallback {
         }
         // Harita.onMapReady(...) sonunda
         mMap.setOnMarkerClickListener(marker -> {
-            highlightMarker(marker);
+            //highlightMarker(marker);
             checkInIfNearby(marker);          // ← 50 m içindeyse CF’ye "visit" gönder
             Object tag = marker.getTag();
             if (tag instanceof String) {
@@ -205,11 +234,16 @@ public class Harita implements OnMapReadyCallback {
 
         mMap.setOnMapClickListener(latLng -> {
             // Haritanın boş bir yerine dokunulursa seçim kalksın
-            clearMarkerHighlight();
+            //clearMarkerHighlight();
             for (Marker m : renderedMarkers) m.remove();
             renderedMarkers.clear();
             markerTypeMap.clear();
         });
+    }
+
+    @Nullable
+    public LatLng getCurrentLocation() {
+        return centerPoint; // getUserLocationAndLoadInitial() ile atanıyor
     }
 
     private static MarkerType mapServerType(@androidx.annotation.Nullable String t) {
@@ -228,7 +262,6 @@ public class Harita implements OnMapReadyCallback {
             default:        return MarkerType.TASK;
         }
     }
-    // basit haversine
     private static double haversineMeters(double lat1, double lon1, double lat2, double lon2) {
         final double R = 6371000.0;
         double dLat = Math.toRadians(lat2 - lat1);
@@ -239,6 +272,7 @@ public class Harita implements OnMapReadyCallback {
         double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
         return R * c;
     }
+
     private void openMarkerDetails(String markerId) {
         // 0) Login guard
         FirebaseUser u = FirebaseAuth.getInstance().getCurrentUser();
@@ -334,7 +368,6 @@ public class Harita implements OnMapReadyCallback {
                     }
                 });
     }
-
     public void confirmMarkerLocation() {
         if (draggableMarker != null) {
             draggableMarker.setDraggable(false);
@@ -342,6 +375,7 @@ public class Harita implements OnMapReadyCallback {
             // draggableMarker = null;  // ← KALDIR (iş tamamlanınca temizle)
         }
     }
+
     private void openMarkerTypeSelectionDialog(Marker marker) {
         // "Default" yerine "Görev"
         final String[] types = {"Besleme", "Yuva", "Barınak", "Görev"};
@@ -419,38 +453,6 @@ public class Harita implements OnMapReadyCallback {
                 .setCancelable(false)
                 .show();
     }
-
-
-    public Harita(FragmentActivity activity) {
-        this.activity = activity;
-
-        // 1. Harita fragment’i başlat
-        SupportMapFragment mapFragment = (SupportMapFragment)
-                activity.getSupportFragmentManager().findFragmentById(R.id.map);
-        if (mapFragment != null) {
-            mapFragment.getMapAsync(this);
-        }
-
-        // 2. Konum istemcisi
-        locationClient = LocationServices.getFusedLocationProviderClient(activity);
-
-        // 3. İzin launcher’ı
-        permissionLauncher = activity.registerForActivityResult(
-                new ActivityResultContracts.RequestMultiplePermissions(),
-                result -> {
-                    Boolean fine = result.getOrDefault(Manifest.permission.ACCESS_FINE_LOCATION, false);
-                    Boolean coarse = result.getOrDefault(Manifest.permission.ACCESS_COARSE_LOCATION, false);
-                    if ((fine != null && fine) || (coarse != null && coarse)) {
-                        getUserLocationAndLoadInitial();
-                    } else {
-                        Toast.makeText(activity, "Konum izni verilmedi.", Toast.LENGTH_LONG).show();
-                    }
-                }
-        );
-
-        // 4. Spinner’ı bul ve adapter’ı ayarla
-        initSpinner();
-    }
     private boolean hasLocalGeoJson(String fileName) {
         try {
             // assets/maps klasöründeki dosyaları listeliyoruz
@@ -519,9 +521,6 @@ public class Harita implements OnMapReadyCallback {
             @Override public void onNothingSelected(AdapterView<?> parent) { }
         });
     }
-    /**
-     * Spinner’ı (dropdown) kullanıcı arayüzünden bulur, seçenekleri atar ve seçim olayını dinler.
-     */
     public boolean isReady() { return ready && countryResolved; }
     private void getUserLocationAndLoadInitial() {
         if (ActivityCompat.checkSelfPermission(activity, Manifest.permission.ACCESS_FINE_LOCATION)
@@ -576,10 +575,6 @@ public class Harita implements OnMapReadyCallback {
         });
         setMyLocationIconEnabled(true);
     }
-    /**
-     * Kullanıcının konumunu alır, ülke kodlarını çözer ve spinner’daki seçime göre
-     * GeoBoundaries → OSM yüklemesini tetikler.
-     */
     private void loadFromGitHub(String iso3, String admLevel) {
         String fileName = String.format("geoBoundaries-%s-%s.geojson", iso3, admLevel);
         String url = GITHUB_BASE + iso3 + "/" + admLevel + "/" + fileName;
@@ -623,10 +618,6 @@ public class Harita implements OnMapReadyCallback {
             }
         });
     }
-    /**
-     * GitHub raw üzerinden GeoBoundaries “admLevel” dosyasını çeker.
-     * Eğer 404 veya ağ hatası/düzgün JSON dönmezse fallbackToNext ile bir sonraki adıma geçer.
-     */
     private void fallbackToNext(String iso3, String currentAdm) {
         switch (currentAdm) {
             case "ADM5":
@@ -651,9 +642,6 @@ public class Harita implements OnMapReadyCallback {
                 Toast.makeText(activity, "Sınır verisi bulunamadı.", Toast.LENGTH_SHORT).show();
         }
     }
-    /**
-     * GeoBoundaries sıralaması: ADM5 → ADM4 → ADM3 → ADM2 → ADM1 → ADM0 → OSM
-     */
     private void loadFromOSM(String countryIso2) {
         String url = "https://polygons.openstreetmap.fr/get_geojson.py?id="
                 + countryIso2 + "&params=0";
@@ -695,34 +683,9 @@ public class Harita implements OnMapReadyCallback {
                 }
             }
         });
-    }
+    }//-------------------------------------------- sıralaması: ADM5 → ADM4 → ADM3 → ADM2 → ADM1 → ADM0 → OSM
     public LatLng screenPointToLatLng(Point point) {
         return mMap.getProjection().fromScreenLocation(point);
-    }
-    // JSON yükleme
-    private JSONObject loadMarkersFromLocalJSON() {
-        try {
-            InputStream is = activity.openFileInput("markers.json");
-            int size = is.available();
-            byte[] buffer = new byte[size];
-            is.read(buffer);
-            is.close();
-            String json = new String(buffer, "UTF-8");
-            return new JSONObject(json);
-        } catch (Exception e) {
-            return new JSONObject();
-        }
-    }
-
-    // JSON Kaydetme
-    private void saveJSONToFile(JSONObject json) {
-        try {
-            OutputStream os = activity.openFileOutput("markers.json", Context.MODE_PRIVATE);
-            os.write(json.toString().getBytes("UTF-8"));
-            os.close();
-        } catch (Exception e) {
-            Log.e(TAG, "saveJSONToFile error: " + e.getMessage());
-        }
     }
     public void placeDraggableMarker(LatLng location) {
         if (draggableMarker != null) {
@@ -753,16 +716,7 @@ public class Harita implements OnMapReadyCallback {
         });
     }
     // Yeni metodlar ekle
-    public boolean isMarkerActive() {
-        return draggableMarker != null;
-    }
 
-    public void cancelMarkerPlacement() {
-        if (draggableMarker != null) {
-            draggableMarker.remove();
-            draggableMarker = null;
-        }
-    }
     private void checkInIfNearby(@NonNull Marker marker) {
         Object tag = marker.getTag();
         if (!(tag instanceof String)) return;
@@ -837,8 +791,7 @@ public class Harita implements OnMapReadyCallback {
         return bd;
     }
 
-    private BitmapDescriptor createCompositeDescriptor(@DrawableRes int bgRes,
-                                                       @DrawableRes int fgRes) {
+    private BitmapDescriptor createCompositeDescriptor(@DrawableRes int bgRes, @DrawableRes int fgRes) {
         float d = activity.getResources().getDisplayMetrics().density;
 
         // DP → PX
@@ -869,32 +822,6 @@ public class Harita implements OnMapReadyCallback {
         fg.draw(canvas);
 
         return BitmapDescriptorFactory.fromBitmap(bmp);
-    }
-    private void saveMarker(Marker marker, String type) {
-        JSONObject json = loadMarkersFromLocalJSON(); // mevcut JSON
-
-        JSONArray markersArray = json.optJSONArray("markers");
-        JSONObject newMarker = null;
-        try {
-            if (markersArray == null) {
-                markersArray = new JSONArray();
-                json.put("markers", markersArray);
-            }
-
-            newMarker = new JSONObject();
-            newMarker.put("type", type);
-            newMarker.put("lat", marker.getPosition().latitude);
-            newMarker.put("lng", marker.getPosition().longitude);
-            newMarker.put("title", marker.getTitle());
-        } catch (JSONException e) {
-            Log.e(TAG, "Marker kaydı sırasında hata: " + e.getMessage());
-            Toast.makeText(activity, "Marker kaydedilemedi.", Toast.LENGTH_SHORT).show();
-            return;
-        }
-
-        markersArray.put(newMarker);
-
-        saveJSONToFile(json);
     }
 
     public void initGesture(Context ctx) {
@@ -952,263 +879,105 @@ public class Harita implements OnMapReadyCallback {
     private boolean isPlacementMode() {
         return mode == MapMode.FEEDING || mode == MapMode.NEST || mode == MapMode.SHELTER || mode == MapMode.TASK;
     }
-
-    public void setMode(MapMode newMode) {
-        mode = newMode;
-        if (mode == MapMode.DEFAULT && isMarkerActive()) {
-            cancelMarkerPlacement();
-        }
-        isPlacing = false;
+    public boolean isMarkerActive() {
+        return draggableMarker != null;
     }
-
-    /** Overlay dokunuşlarını tek noktadan yönet */
-
-    public void fetchMarkersNearbyOld(@androidx.annotation.Nullable String type, int radiusM, int limit) {
-        if (!mapReady || centerPoint == null) {
-            Toast.makeText(activity, "Konum hazır değil", Toast.LENGTH_SHORT).show();
+    public void cancelMarkerPlacement() {
+        if (draggableMarker != null) {
+            draggableMarker.remove();
+            draggableMarker = null;
+        }
+    }
+    @SuppressLint("MissingPermission")
+    private void startMyLocationPuck() {
+        // İzin kontrolü
+        if (ActivityCompat.checkSelfPermission(activity, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED &&
+                ActivityCompat.checkSelfPermission(activity, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            toast("Konum izni gerekli");
             return;
         }
-        HttpUrl.Builder ub = HttpUrl.parse(CF_BASE + "/markersNearby").newBuilder()
-                .addQueryParameter("lat", String.valueOf(centerPoint.latitude))
-                .addQueryParameter("lng", String.valueOf(centerPoint.longitude))
-                .addQueryParameter("radiusM", String.valueOf(Math.max(300, radiusM)))
-                .addQueryParameter("limit", String.valueOf(Math.min(300, Math.max(1, limit))));
-        if (type != null) ub.addQueryParameter("type", type);
+        // Zaten çalışıyorsa tekrar kurma
+        if (myLocCallback != null) return;
 
-        Helpers.authorizedGetJson(activity, ub.build().toString(), /*deviceId*/ null, /*AppCheck*/ true,
-                new okhttp3.Callback() {
-                    @Override public void onFailure(okhttp3.Call call, java.io.IOException e) {
-                        activity.runOnUiThread(() ->
-                                Toast.makeText(activity, "CF hata: " + e.getMessage(), Toast.LENGTH_LONG).show());
-                    }
-                    @Override public void onResponse(okhttp3.Call call, okhttp3.Response response) throws java.io.IOException {
-                        String body = response.body()!=null? response.body().string() : "{}";
-                        if (!response.isSuccessful()) {
-                            activity.runOnUiThread(() ->
-                                    Toast.makeText(activity, "HTTP " + response.code(), Toast.LENGTH_LONG).show());
-                            return;
-                        }
-                        try {
-                            JSONObject json = new JSONObject(body);
-                            org.json.JSONArray arr = json.optJSONArray("markers");
-                            if (arr == null) arr = new org.json.JSONArray();
+        // İlk fix’te kamerayı yumuşakça ortala
+        myLocFirstFixCentered = false;
 
-                            activity.runOnUiThread(() -> {
-                                // Eski render’ları temizle
-                                for (com.google.android.gms.maps.model.Marker m : renderedMarkers) m.remove();
-                                renderedMarkers.clear();
-                            });
+        // LocationRequest
+        com.google.android.gms.location.LocationRequest req =
+                com.google.android.gms.location.LocationRequest.create()
+                        .setInterval(2000L)
+                        .setFastestInterval(1000L)
+                        .setPriority(com.google.android.gms.location.Priority.PRIORITY_HIGH_ACCURACY);
 
-                            for (int i = 0; i < arr.length(); i++) {
-                                JSONObject m = arr.getJSONObject(i);
-                                final double lat = m.optDouble("lat");
-                                final double lng = m.optDouble("lng");
-                                final String mtype = m.optString("type", "Default");
-                                final String id = m.optString("id", null);
+        myLocCallback = new com.google.android.gms.location.LocationCallback() {
+            @Override
+            public void onLocationResult(com.google.android.gms.location.LocationResult result) {
+                if (result == null || result.getLastLocation() == null) return;
+                android.location.Location loc = result.getLastLocation();
+                LatLng p = new LatLng(loc.getLatitude(), loc.getLongitude());
 
-                                activity.runOnUiThread(() -> {
-                                    com.google.android.gms.maps.model.Marker mm =
-                                            mMap.addMarker(new com.google.android.gms.maps.model.MarkerOptions()
-                                                    .position(new com.google.android.gms.maps.model.LatLng(lat, lng))
-                                                    .icon(getCustomIcon(mtype))
-                                                    .title(mtype));
-                                    if (mm != null) {
-                                        if (id != null) mm.setTag(id);
-                                        renderedMarkers.add(mm);
-                                    }
-                                });
-                            }
-                        } catch (org.json.JSONException ex) {
-                            activity.runOnUiThread(() ->
-                                    Toast.makeText(activity, "Yanıt parse hatası", Toast.LENGTH_LONG).show());
-                        }
-                    }
-                });
-    }
-    private String normalizeUiType(@Nullable String raw) {
-        if (raw == null) return "default";
-        String n = raw.trim().toLowerCase(Locale.ROOT);
-        switch (n) {
-            case "feeding": case "besleme": return "besleme";
-            case "nest":    case "yuva":    return "yuva";
-            case "shelter": case "barınak": case "barinak": return "barınak";
-            case "task":    case "görev":   case "gorev":   return "gorev";
-            default: return "default";
-        }
-    }
-    private String titleFor(String uiKey) {
-        switch (uiKey) {
-            case "besleme": return "Besleme";
-            case "yuva":    return "Yuva";
-            case "barınak": return "Barınak";
-            case "gorev":   return "Görev";
-            default:        return "Nokta";
-        }
-    }
-
-    public interface SoulsDataCallback {
-        void onReady(@NonNull String catsJson, @NonNull String dogsJson, @NonNull String criticalJson);
-        void onError(int httpCode, @NonNull String message);
-    }
-
-    // and
-
-    public interface SoulsJsonCallback {
-        void onSuccess(String rawJson, JSONArray parsedArray, String adminPath);
-        void onError(String errorMessage);
-    }
-    static final class JSONArraySafe extends JSONArray {
-        JSONArraySafe(@NonNull String s) {
-            try { new JSONObject(); } catch (Exception ignore) {}
-            try { // sadece uzunluk/log için pratik
-                JSONArray tmp = new JSONArray(s);
-                for (int i = 0; i < tmp.length(); i++) put(tmp.get(i));
-            } catch (Exception ignore) {}
-        }
-    }
-
-    private static JSONObject partitionSouls(@NonNull JSONArray items) throws JSONException {
-        JSONArray cats = new JSONArray();
-        JSONArray dogs = new JSONArray();
-        JSONArray critical = new JSONArray();
-
-        for (int i = 0; i < items.length(); i++) {
-            JSONObject s = items.getJSONObject(i);
-
-            // Tür (species) alanını oku
-            String species = s.optString("species", "");
-            if ("cat".equalsIgnoreCase(species)) {
-                cats.put(s);
-            } else if ("dog".equalsIgnoreCase(species)) {
-                dogs.put(s);
-            }
-
-            // Critical algısı: ya boolean field 'critical' true, ya da status="critical"
-            boolean isCritical = s.optBoolean("critical", false)
-                    || "critical".equalsIgnoreCase(s.optString("status", ""));
-            if (isCritical) {
-                critical.put(s);
-            }
-        }
-
-        JSONObject out = new JSONObject();
-        out.put("cats", cats);
-        out.put("dogs", dogs);
-        out.put("critical", critical);
-        return out;
-    }
-    private static void writeJsonToCache(@NonNull Context ctx,
-                                         @NonNull String fileName,
-                                         @NonNull String json) {
-        File dir = new File(ctx.getCacheDir(), "souls");
-        if (!dir.exists() && !dir.mkdirs()) {
-            Log.w(TAG, "writeJsonToCache: klasör oluşturulamadı → " + dir.getAbsolutePath());
-        }
-        File f = new File(dir, fileName);
-        try (FileOutputStream fos = new FileOutputStream(f, false)) {
-            fos.write(json.getBytes(StandardCharsets.UTF_8));
-            fos.flush();
-            Log.d(TAG, "JSON yazıldı → " + f.getAbsolutePath() + " (" + json.length() + "B)");
-        } catch (Exception e) {
-            Log.e(TAG, "writeJsonToCache hata", e);
-        }
-    }
-    public void fetchNearbySouls(int limit, @Nullable SoulsJsonCallback cb) {
-        Log.d(TAG, "INPUT: limit=" + limit + ", callback=" + cb);
-
-        try {
-            Log.d(TAG, "STATE: mapReady=" + mapReady + ", centerPoint=" +
-                    (centerPoint == null ? "null" : centerPoint.latitude + "," + centerPoint.longitude));
-
-            // Merkez nokta çözümleme
-            LatLng center = centerPoint;
-            if (center == null && mMap != null) {
-                center = mMap.getCameraPosition().target;
-                Log.d(TAG, "RESOLVED_CENTER: camera_target=" + center.latitude + "," + center.longitude);
-            }
-
-            if (center == null) {
-                Log.d(TAG, "ATTEMPTING: last_location_fallback");
-                // İzin kontrolü ve son konum alma işlemleri...
-                return;
-            }
-
-            final LatLng c = center;
-            Log.d(TAG, "FINAL_CENTER: " + c.latitude + "," + c.longitude);
-
-            ensureAdminPathAsync(activity, c.latitude, c.longitude, ap -> {
-                Log.d(TAG, "ADMIN_PATH_RESULT: " + ap);
-
-                if (ap == null || ap.isEmpty()) {
-                    Log.e(TAG, "OUTPUT_ERROR: Şehir çözümlenemedi");
-                    if (cb != null) cb.onError("Şehir çözümlenemedi");
-                    return;
+                // Marker yoksa oluştur
+                if (myLocMarker == null) {
+                    myLocMarker = mMap.addMarker(new MarkerOptions()
+                            .position(p)
+                            .anchor(0.5f, 0.5f)
+                            .zIndex(1000f) // üste dursun
+                            .icon(myLocationIcon()));
+                } else {
+                    myLocMarker.setPosition(p);
                 }
 
-                // Sorgu parametrelerini oluştur
-                org.json.JSONArray where = new org.json.JSONArray()
-                        .put(new org.json.JSONArray().put("adminPath").put("==").put(ap));
-
-                HttpUrl url = HttpUrl.parse(CF_BASE + "/listSoulsByFields").newBuilder()
-                        .addQueryParameter("where", where.toString())
-                        .addQueryParameter("limit", String.valueOf(limit))
-                        .build();
-
-                Log.d(TAG, "REQUEST_URL: " + url);
-                Log.d(TAG, "QUERY_PARAMS: where=" + where.toString() + ", limit=" + limit);
-
-                Helpers.authorizedGetJson(activity, url.toString(), null, true, new okhttp3.Callback() {
-                    @Override
-                    public void onFailure(okhttp3.Call call, java.io.IOException e) {
-                        Log.e(TAG, "NETWORK_ERROR: " + e.getMessage());
-                        // Hata çıktısı...
+                // Accuracy çemberi
+                float acc = (loc.hasAccuracy() ? loc.getAccuracy() : 0f);
+                if (acc > 0f) {
+                    if (myAccCircle == null) {
+                        myAccCircle = mMap.addCircle(new com.google.android.gms.maps.model.CircleOptions()
+                                .center(p)
+                                .radius(acc) // metre
+                                .strokeWidth(2f)
+                                .strokeColor(0x662196F3) // yarı saydam mavi
+                                .fillColor(0x332196F3));
+                    } else {
+                        myAccCircle.setCenter(p);
+                        myAccCircle.setRadius(acc);
                     }
+                }
 
-                    @Override
-                    public void onResponse(okhttp3.Call call, okhttp3.Response response) throws java.io.IOException {
-                        final int code = response.code();
-                        final String body = response.body() != null ? response.body().string() : "";
+                // İlk konumda kamerayı tatlı bir animasyonla yakınlaştır
+                if (!myLocFirstFixCentered) {
+                    myLocFirstFixCentered = true;
+                    mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(p, 15.5f));
+                }
+            }
+        };
 
-                        Log.d(TAG, "RESPONSE: code=" + code + ", body_length=" + body.length());
-
-                        if (code >= 400) {
-                            Log.w(TAG, "SERVER_ERROR_BODY: " + body);
-                        }
-
-                        try {
-                            JSONArray arr = new JSONArray(body);
-                            Log.d(TAG, "OUTPUT_SUCCESS: item_count=" + arr.length());
-                            Log.d(TAG, "RESPONSE_BODY: " + body); // Dikkat: Büyük verilerde log kısaltılmalı
-
-                            activity.runOnUiThread(() -> {
-                                if (cb != null) cb.onSuccess(body, arr, ap);
-                            });
-                        } catch (JSONException ex) {
-                            Log.e(TAG, "JSON_PARSE_ERROR: " + ex.getMessage());
-                            // Hata işleme...
-                        }
-                    }
-                });
-            });
-        } catch (Throwable t) {
-            Log.e(TAG, "UNEXPECTED_ERROR: " + t.getMessage(), t);
+        // Abone ol
+        locationClient.requestLocationUpdates(req, myLocCallback, activity.getMainLooper());
+    }
+    private void stopMyLocationPuck() {
+        if (myLocCallback != null) {
+            locationClient.removeLocationUpdates(myLocCallback);
+            myLocCallback = null;
         }
+        if (myLocMarker != null) { myLocMarker.remove(); myLocMarker = null; }
+        if (myAccCircle != null) { myAccCircle.remove(); myAccCircle = null; }
     }
-    // Harita.java içinde getCfClient() metodunu ekleyin
-    private OkHttpClient getCfClient() {
-        return new OkHttpClient.Builder()
-                .connectTimeout(15, TimeUnit.SECONDS)
-                .readTimeout(25, TimeUnit.SECONDS)
-                .writeTimeout(25, TimeUnit.SECONDS)
-                .build();
+    private BitmapDescriptor myLocationIcon() {
+        try {
+            // varsa kendi ikonunuz (örn: res/drawable/ic_my_location.xml)
+            Drawable d = ContextCompat.getDrawable(activity, R.drawable.ic_map_marker);
+            if (d != null) {
+                int sz = (int) (24 * activity.getResources().getDisplayMetrics().density + 0.5f);
+                Bitmap bmp = Bitmap.createBitmap(sz, sz, Bitmap.Config.ARGB_8888);
+                Canvas c = new Canvas(bmp);
+                d.setBounds(0, 0, sz, sz);
+                d.draw(c);
+                return BitmapDescriptorFactory.fromBitmap(bmp);
+            }
+        } catch (Throwable ignore) {}
+        // fallback: mavi marker
+        return BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE);
     }
-    private static String buildWhereForAdminPath(@NonNull String adminPath, boolean includeSublevels) {
-        // includeSublevels=true ise TR/ADANA altındaki ilçe/mahalleleri de kapsar
-        return includeSublevels
-                ? "adminPathPrefix:" + adminPath
-                : "adminPath:eq:" + adminPath;
-    }
-
     public void fetchMarkersNearby(@androidx.annotation.Nullable String type, int radiusM, int limit) {
         FirebaseUser u = FirebaseAuth.getInstance().getCurrentUser();
         if (u == null) {
@@ -1288,72 +1057,39 @@ public class Harita implements OnMapReadyCallback {
                     }
                 });
     }
-    public void fetchMarkersByKey(String level, String key, @androidx.annotation.Nullable String type, int limit) {
-        HttpUrl.Builder ub = HttpUrl.parse(CF_BASE + "/markersByKeys").newBuilder()
-                .addQueryParameter("level", level)
-                .addQueryParameter("key", key)
-                .addQueryParameter("limit", String.valueOf(Math.min(500, Math.max(1, limit))));
-        if (type != null) ub.addQueryParameter("type", type);
-
-        Helpers.authorizedGetJson(activity, ub.build().toString(), null, true, new okhttp3.Callback() {
-            @Override public void onFailure(okhttp3.Call call, java.io.IOException e) {
-                activity.runOnUiThread(() ->
-                        Toast.makeText(activity, "CF hata: " + e.getMessage(), Toast.LENGTH_LONG).show());
-            }
-            @Override public void onResponse(okhttp3.Call call, okhttp3.Response response) throws java.io.IOException {
-                String body = response.body()!=null? response.body().string() : "{}";
-                if (!response.isSuccessful()) {
-                    activity.runOnUiThread(() ->
-                            Toast.makeText(activity, "HTTP " + response.code(), Toast.LENGTH_LONG).show());
-                    return;
-                }
-                try {
-                    JSONObject json = new JSONObject(body);
-                    org.json.JSONArray arr = json.optJSONArray("markers");
-                    if (arr == null) arr = new org.json.JSONArray();
-
-                    activity.runOnUiThread(() -> {
-                        for (com.google.android.gms.maps.model.Marker m : renderedMarkers) m.remove();
-                        renderedMarkers.clear();
-                    });
-
-                    for (int i = 0; i < arr.length(); i++) {
-                        JSONObject m = arr.getJSONObject(i);
-                        final double lat = m.optDouble("lat");
-                        final double lng = m.optDouble("lng");
-                        final String mtype = m.optString("type", "Default");
-                        final String id = m.optString("id", null);
-                        activity.runOnUiThread(() -> {
-                            com.google.android.gms.maps.model.Marker mm =
-                                    mMap.addMarker(new com.google.android.gms.maps.model.MarkerOptions()
-                                            .position(new com.google.android.gms.maps.model.LatLng(lat, lng))
-                                            .icon(getCustomIcon(mtype))
-                                            .title(mtype));
-                            if (mm != null) {
-                                if (id != null) mm.setTag(id);
-                                renderedMarkers.add(mm);
-                            }
-                        });
-                    }
-                } catch (org.json.JSONException ignored) { }
-            }
-        });
+    public void registerMarker(@androidx.annotation.NonNull String markerId, @androidx.annotation.NonNull com.google.android.gms.maps.model.Marker marker) {
+        marker.setTag(markerId);
+        markerById.put(markerId, marker);
     }
-    private void clearMarkerHighlight() {
-        if (highlightedMarker != null) {
-            String uiKey = markerTypeMap.getOrDefault(highlightedMarker, "default");
-            highlightedMarker.setIcon(
-                    MarkerIconFactory.getDefaultIcon(activity, uiKey)
-            );
-            highlightedMarker = null;
+
+    public void setMode(MapMode newMode) {
+        mode = newMode;
+        if (mode == MapMode.DEFAULT && isMarkerActive()) {
+            cancelMarkerPlacement();
+        }
+        isPlacing = false;
+    }
+
+
+    private String normalizeUiType(@Nullable String raw) {
+        if (raw == null) return "default";
+        String n = raw.trim().toLowerCase(Locale.ROOT);
+        switch (n) {
+            case "feeding": case "besleme": return "besleme";
+            case "nest":    case "yuva":    return "yuva";
+            case "shelter": case "barınak": case "barinak": return "barınak";
+            case "task":    case "görev":   case "gorev":   return "gorev";
+            default: return "default";
         }
     }
-    private void highlightMarker(@NonNull Marker marker) {
-        if (highlightedMarker == marker) return;
-        if (highlightedMarker != null) clearMarkerHighlight();
-        String uiKey = markerTypeMap.getOrDefault(marker, "default");
-        marker.setIcon(MarkerIconFactory.getSelectedIcon(activity, uiKey));
-        highlightedMarker = marker;
+    private String titleFor(String uiKey) {
+        switch (uiKey) {
+            case "besleme": return "Besleme";
+            case "yuva":    return "Yuva";
+            case "barınak": return "Barınak";
+            case "gorev":   return "Görev";
+            default:        return "Nokta";
+        }
     }
 
     public void startRepositionMode(@NonNull String markerId) {
@@ -1377,33 +1113,6 @@ public class Harita implements OnMapReadyCallback {
 
         toast("Sürükleyin, çift dokunarak onaylayın. Tek dokunma: iptal");
     }
-    // Yerleştirme (placement) ve yeniden konumlandırma (reposition) dokunmalarını tek yerden yönet
-    public boolean handleOverlayTouch(@NonNull MotionEvent e) {
-        // 1) YENİ NOKTA YERLEŞTİRME modu aktifse → placementDetector devrede
-        if (isPlacementMode()) {
-            if (placementDetector != null) placementDetector.onTouchEvent(e);
-            // Bu modda haritanın pan/zoom almasını istemiyoruz → olayı tüket
-            return true;
-        }
-
-        // 2) MEVCUT MARKER'I YENİDEN KONUMLANDIRMA (REPOSITION) modu aktifse
-        if (isReposition) {
-            if (gestureDetector != null) gestureDetector.onTouchEvent(e);
-
-            // (İsteğe bağlı) ekstra akışlar:
-            switch (e.getActionMasked()) {
-                case MotionEvent.ACTION_UP:
-                    // no-op; doubleTap/singleTap confirm/cancel için gestureDetector zaten bakıyor
-                    break;
-            }
-            // Reposition sırasında da haritayı kilitle → olayı tüket
-            return true;
-        }
-
-        // 3) Hiçbiri aktif değilse: harita serbest (pan/zoom/marker tıklamaları çalışsın)
-        return false;
-    }
-
     private void confirmReposition() {
         if (!isReposition || repositionMarker == null || repositionMarkerId == null) return;
         LatLng p = repositionMarker.getPosition();
@@ -1441,13 +1150,11 @@ public class Harita implements OnMapReadyCallback {
             toast("İstek hazırlanamıyor");
         }
     }
-
     private void cancelReposition() {
         if (!isReposition) return;
         // geri al ve çık
         exitReposition(false);
     }
-
     private void exitReposition(boolean keepNewPos) {
         if (repositionMarker != null) {
             repositionMarker.setDraggable(false);
@@ -1463,201 +1170,67 @@ public class Harita implements OnMapReadyCallback {
         originalPos = null;
         setMode(MapMode.DEFAULT);
     }
-    private com.google.android.gms.maps.model.Marker findMarkerById(@androidx.annotation.NonNull String markerId) {
+
+    private Marker findMarkerById(@androidx.annotation.NonNull String markerId) {
         return markerById.get(markerId);
     }
 
     // Harita içindeki marker’ı id’den bulmak için (sizde farklıysa uyarlayın)
 
-
     private void toast(String s) {
         android.widget.Toast.makeText(activity, s, android.widget.Toast.LENGTH_SHORT).show();
     }
-    // Bir marker’ı map’e kaydet (tag’i de ayarla)
-    public void registerMarker(@androidx.annotation.NonNull String markerId,
-                               @androidx.annotation.NonNull com.google.android.gms.maps.model.Marker marker) {
-        marker.setTag(markerId);
-        markerById.put(markerId, marker);
+    /** Geocoder ile TR/İL metni üretir. Başarısız olursa callback'e null gönderir. */
+    public interface AdminPathCb { void onReady(@Nullable String adminPath); }
+
+    public static void ensureAdminPathAsync(double lat, double lng, @NonNull AdminPathCb cb, Context context) {
+        Log.d(TAG, "ensureAdminPathAsync() → GİRİŞ lat=" + lat + " lng=" + lng);
+        final Locale tr = new Locale("tr", "TR");
+        final Geocoder geocoder = new Geocoder(context, tr);
+
+        if (Build.VERSION.SDK_INT >= 33) {
+            geocoder.getFromLocation(lat, lng, 1, new Geocoder.GeocodeListener() {
+                @Override public void onGeocode(@NonNull List<Address> results) {
+                    String ap = extractAdminPath(results);
+                   // Log.d(L, "ensureAdminPathAsync() API33 onGeocode → " + ap);
+                    //runOnUiThread(() -> cb.onReady(ap));
+                }
+                @Override public void onError(@Nullable String errorMessage) {
+                    Log.w(TAG, "Geocoder onError: " + errorMessage);
+                    //runOnUiThread(() -> cb.onReady(null));
+                }
+            });
+        } else {
+            new Thread(() -> {
+                try {
+                    List<Address> res = geocoder.getFromLocation(lat, lng, 1);
+                    String ap = extractAdminPath(res);
+                    Log.d(TAG, "ensureAdminPathAsync() legacy → " + ap);
+                    //runOnUiThread(() -> cb.onReady(ap));
+                } catch (Exception e) {
+                    Log.w(TAG, "Geocoder error: " + e.getMessage());
+                    //runOnUiThread(() -> cb.onReady(null));
+                }
+            }).start();
+        }
     }
 
-    // Marker’ı map’ten çıkar (istenirse haritadan da sil)
-    public void unregisterMarker(@androidx.annotation.NonNull String markerId, boolean removeFromMap) {
-        com.google.android.gms.maps.model.Marker m = markerById.remove(markerId);
-        if (removeFromMap && m != null) m.remove();
+    @Nullable
+    public static String extractAdminPath(@Nullable List<Address> res) {
+        if (res == null || res.isEmpty()) return null;
+        Address a = res.get(0);
+        String admin = a.getAdminArea();            // örn: Ankara
+        String countryCode = a.getCountryCode();    // örn: TR
+        if (admin == null || countryCode == null) return null;
+        String ap = (countryCode + "/" + admin).toUpperCase(new Locale("tr", "TR")); // TR/ANKARA
+        Log.d(TAG, "extractAdminPath → " + ap + " (locality=" + a.getLocality() + ", subAdmin=" + a.getSubAdminArea() + ")");
+        return ap;
     }
 
-    // Pozisyon güncelleme yardımcı (UI tarafında gerektiğinde kullanılır)
-    public void updateMarkerPosition(@androidx.annotation.NonNull String markerId,
-                                     @androidx.annotation.NonNull com.google.android.gms.maps.model.LatLng pos) {
-        com.google.android.gms.maps.model.Marker m = markerById.get(markerId);
-        if (m != null) m.setPosition(pos);
-    }
-    // İkonu başlat
     public void setMyLocationIconEnabled(boolean enable) {
         if (enable) startMyLocationPuck();
         else        stopMyLocationPuck();
     }
 
-    @SuppressLint("MissingPermission")
-    private void startMyLocationPuck() {
-        // İzin kontrolü
-        if (ActivityCompat.checkSelfPermission(activity, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED &&
-                ActivityCompat.checkSelfPermission(activity, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-            toast("Konum izni gerekli");
-            return;
-        }
-        // Zaten çalışıyorsa tekrar kurma
-        if (myLocCallback != null) return;
 
-        // İlk fix’te kamerayı yumuşakça ortala
-        myLocFirstFixCentered = false;
-
-        // LocationRequest
-        com.google.android.gms.location.LocationRequest req =
-                com.google.android.gms.location.LocationRequest.create()
-                        .setInterval(2000L)
-                        .setFastestInterval(1000L)
-                        .setPriority(com.google.android.gms.location.Priority.PRIORITY_HIGH_ACCURACY);
-
-        myLocCallback = new com.google.android.gms.location.LocationCallback() {
-            @Override
-            public void onLocationResult(com.google.android.gms.location.LocationResult result) {
-                if (result == null || result.getLastLocation() == null) return;
-                android.location.Location loc = result.getLastLocation();
-                LatLng p = new LatLng(loc.getLatitude(), loc.getLongitude());
-
-                // Marker yoksa oluştur
-                if (myLocMarker == null) {
-                    myLocMarker = mMap.addMarker(new MarkerOptions()
-                            .position(p)
-                            .anchor(0.5f, 0.5f)
-                            .zIndex(1000f) // üste dursun
-                            .icon(myLocationIcon()));
-                } else {
-                    myLocMarker.setPosition(p);
-                }
-
-                // Accuracy çemberi
-                float acc = (loc.hasAccuracy() ? loc.getAccuracy() : 0f);
-                if (acc > 0f) {
-                    if (myAccCircle == null) {
-                        myAccCircle = mMap.addCircle(new com.google.android.gms.maps.model.CircleOptions()
-                                .center(p)
-                                .radius(acc) // metre
-                                .strokeWidth(2f)
-                                .strokeColor(0x662196F3) // yarı saydam mavi
-                                .fillColor(0x332196F3));
-                    } else {
-                        myAccCircle.setCenter(p);
-                        myAccCircle.setRadius(acc);
-                    }
-                }
-
-                // İlk konumda kamerayı tatlı bir animasyonla yakınlaştır
-                if (!myLocFirstFixCentered) {
-                    myLocFirstFixCentered = true;
-                    mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(p, 15.5f));
-                }
-            }
-        };
-
-        // Abone ol
-        locationClient.requestLocationUpdates(req, myLocCallback, activity.getMainLooper());
-    }
-
-    private void stopMyLocationPuck() {
-        if (myLocCallback != null) {
-            locationClient.removeLocationUpdates(myLocCallback);
-            myLocCallback = null;
-        }
-        if (myLocMarker != null) { myLocMarker.remove(); myLocMarker = null; }
-        if (myAccCircle != null) { myAccCircle.remove(); myAccCircle = null; }
-    }
-    private BitmapDescriptor myLocationIcon() {
-        try {
-            // varsa kendi ikonunuz (örn: res/drawable/ic_my_location.xml)
-            Drawable d = ContextCompat.getDrawable(activity, R.drawable.ic_map_marker);
-            if (d != null) {
-                int sz = (int) (24 * activity.getResources().getDisplayMetrics().density + 0.5f);
-                Bitmap bmp = Bitmap.createBitmap(sz, sz, Bitmap.Config.ARGB_8888);
-                Canvas c = new Canvas(bmp);
-                d.setBounds(0, 0, sz, sz);
-                d.draw(c);
-                return BitmapDescriptorFactory.fromBitmap(bmp);
-            }
-        } catch (Throwable ignore) {}
-        // fallback: mavi marker
-        return BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE);
-    }
-
-    @androidx.annotation.Nullable
-    public LatLng getCurrentLocation() {
-        return centerPoint; // getUserLocationAndLoadInitial() ile atanıyor
-    }
-
-
-    // === Centralized map/admin helpers ===
-    public interface AdminPathCb { void onReady(@androidx.annotation.Nullable String adminPath); }
-
-    /** Formats latitude/longitude as a user-friendly string. */
-    public static String formatLatLng(double lat, double lng) {
-        return String.format(java.util.Locale.US, "%f, %f", lat, lng);
-    }
-
-    /** Builds an adminPath like "TR/ANKARA" from Geocoder results. */
-    public static @androidx.annotation.Nullable String extractAdminPath(@androidx.annotation.Nullable java.util.List<android.location.Address> res) {
-        if (res == null || res.isEmpty()) return null;
-        android.location.Address a = res.get(0);
-        String admin = a.getAdminArea();            // e.g., Ankara
-        String countryCode = a.getCountryCode();    // e.g., TR
-        if (admin == null || countryCode == null) return null;
-        String ap = (countryCode + "/" + admin).toUpperCase(new java.util.Locale("tr", "TR")); // TR/ANKARA
-        android.util.Log.d("Harita", "extractAdminPath → " + ap + " (locality=" + a.getLocality() + ", subAdmin=" + a.getSubAdminArea() + ")");
-        return ap;
-    }
-
-    /**
-     * Reverse-geocodes the given lat/lng to an adminPath (e.g., TR/ANKARA).
-     * Calls back on the main thread.
-     */
-    public static void ensureAdminPathAsync(@androidx.annotation.NonNull android.content.Context ctx,
-                                            double lat, double lng,
-                                            @androidx.annotation.NonNull AdminPathCb cb) {
-        android.util.Log.d("Harita", "ensureAdminPathAsync() → lat=" + lat + " lng=" + lng);
-        java.util.Locale tr = new java.util.Locale("tr", "TR");
-        android.location.Geocoder geocoder = new android.location.Geocoder(ctx, tr);
-
-        if (android.os.Build.VERSION.SDK_INT >= 33) {
-            final android.os.Handler h =
-                    new android.os.Handler(android.os.Looper.getMainLooper());geocoder.getFromLocation(lat, lng, 5,
-                    new android.location.Geocoder.GeocodeListener() {
-                        @Override public void onGeocode(java.util.List<android.location.Address> results) {
-                            String ap = extractAdminPath(results);
-                            h.post(() -> cb.onReady(ap));
-                        }
-                        @Override public void onError(String errorMessage) {
-                            // Fallback: return null on error
-                            h.post(() -> cb.onReady(null));
-                        }
-                    });
-        } else {
-            new Thread(() -> {
-                String ap = null;
-                try {
-                    java.util.List<android.location.Address> results = geocoder.getFromLocation(lat, lng, 5);
-                    ap = extractAdminPath(results);
-                } catch (Exception e) {
-                    // ignore
-                }
-                android.os.Handler h = new android.os.Handler(android.os.Looper.getMainLooper());
-                final String adminPath = ap;
-                h.post(() -> cb.onReady(adminPath));
-            }).start();
-        }
-    }
-
-    /** Converts an Android Location to a Google Maps LatLng. */
-    public static com.google.android.gms.maps.model.LatLng toLatLng(@androidx.annotation.NonNull android.location.Location loc) {
-        return new com.google.android.gms.maps.model.LatLng(loc.getLatitude(), loc.getLongitude());
-    }
 }

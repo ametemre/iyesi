@@ -1,5 +1,7 @@
 package com.kurmez.iyesi.kurmes.ui;
 
+import static com.kurmez.iyesi.kurmes.utilities.helper.FireBaseHelper.getTokens;
+
 import android.content.Intent;
 import android.os.Bundle;
 import android.text.TextUtils;
@@ -104,7 +106,7 @@ public class SoulsManagerActivity extends AppCompatActivity {
 
     private void loadMySouls() {
         progress.setVisibility(View.VISIBLE);
-        cf.getTokens((idToken, appToken) -> new Thread(() -> {
+        getTokens((idToken, appToken) -> new Thread(() -> {
             List<Soul> souls = new ArrayList<>();
             String err = null;
             try (Response resp = cf.get(PATH_LIST_MY, idToken, appToken)) {
@@ -168,7 +170,7 @@ public class SoulsManagerActivity extends AppCompatActivity {
 
     private void createSoulJson(String name, String species, String health) {
         progress.setVisibility(View.VISIBLE);
-        cf.getTokens((idToken, appToken) -> new Thread(() -> {
+        getTokens((idToken, appToken) -> new Thread(() -> {
             String err = null;
             try {
                 JSONObject payload = new JSONObject();
@@ -215,7 +217,7 @@ public class SoulsManagerActivity extends AppCompatActivity {
     private void updateSoul(String id, String name, String species, String health) {
         if (TextUtils.isEmpty(id)) { Toast.makeText(this, "ID yok", Toast.LENGTH_SHORT).show(); return; }
         progress.setVisibility(View.VISIBLE);
-        cf.getTokens((idToken, appToken) -> new Thread(() -> {
+        getTokens((idToken, appToken) -> new Thread(() -> {
             String err = null;
             try {
                 JSONObject payload = new JSONObject();
@@ -245,7 +247,7 @@ public class SoulsManagerActivity extends AppCompatActivity {
             .setMessage("Silmek istiyor musun?")
             .setPositiveButton("Evet", (d, w) -> {
                 progress.setVisibility(View.VISIBLE);
-                cf.getTokens((idToken, appToken) -> new Thread(() -> {
+                getTokens((idToken, appToken) -> new Thread(() -> {
                     String err = null;
                     try (Response resp = cf.delete(PATH_DELETE_ID + id, idToken, appToken)) {
                         if (!resp.isSuccessful()) err = resp.code() + " " + resp.message();

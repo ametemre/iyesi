@@ -1,13 +1,19 @@
 package com.kurmez.iyesi.kurmes.utilities.helper;
 
+import static com.kurmez.iyesi.kurmes.utilities.helper.JsonHelper.callFunction;
+import static com.kurmez.iyesi.kurmes.utilities.helper.JsonHelper.endpointAsync;
+
 import android.content.Context;
+import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.Base64;
 import android.util.Log;
+import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.annotation.RequiresApi;
 
 import com.google.android.gms.tasks.Tasks;
 import com.google.firebase.appcheck.AppCheckToken;
@@ -18,8 +24,11 @@ import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.functions.FirebaseFunctions;
 import com.google.firebase.functions.HttpsCallableReference;
+import com.kurmez.iyesi.kayra.Classes.Harita;
 import com.kurmez.iyesi.kayra.Classes.data.Soul;
 import com.kurmez.iyesi.kurmes.social.Iyesi;
+import com.kurmez.iyesi.kurmes.utilities.helper.net.CFClient;
+import com.kurmez.iyesi.umay.SokakActivity;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -55,29 +64,16 @@ import okhttp3.Response;
  * NOT: Bu sınıf UI bağımlılığı içermez. Activity/Toast/Context’e özel işler
  *      bu sınıf DIŞINDA (ör. Founded.java) yapılmalıdır.
  */
+@RequiresApi(api = Build.VERSION_CODES.N)
 public class CFHelper {
-
-    // ------------------------------------------------------------
-    // Listener (UI geri bildirimleri için) — JENERİK
-    // ------------------------------------------------------------
     public interface Listener<T> {
         default void onRoleRefreshed(@Nullable String role) {}
         default void onCallFailed(@NonNull String apiName, @NonNull Throwable error) {}
         default void onPriorityPets(@NonNull List<T> pets) {}
-    }
+    }//------------------------------------------------------------ Listener (UI geri bildirimleri için) — JENERİK
 
-    // ------------------------------------------------------------
-    // Alanlar
-    // ------------------------------------------------------------
     private static final String TAG = "CFHelper";
     private static final MediaType JSON = MediaType.parse("application/json; charset=utf-8");
-
-    // (Bazı eski UI bağımlılıkları için muhafaza edilen alanlar — kullanılmıyorsa zararsız)
-    @Nullable private android.widget.Spinner dbPathSpinner;
-    @Nullable private android.widget.ArrayAdapter<String> pathAdapter;
-    @NonNull  private final List<String> pathItems = new ArrayList<>();
-    @NonNull  private final Deque<String> pathStack = new ArrayDeque<>();
-    @Nullable private DatabaseReference browseRef; // gezginin o anki referansı
 
     private final Context appContext;
     private final OkHttpClient http;
@@ -86,29 +82,18 @@ public class CFHelper {
     private final FirebaseFunctions functions;
     private final Handler main = new Handler(Looper.getMainLooper());
 
-    private String baseHttpUrl; // örn: https://us-central1-<PROJECT_ID>.cloudfunctions.net
+    public static String baseHttpUrl; // örn: https://us-central1-<PROJECT_ID>.cloudfunctions.net
     private final String region;
-    private String pathPrefix = ""; // ops. /v1 gibi
 
-    /** İstemci tarafında saklanan rol bilgisi (sunucudan getRole ile çekilir). */
-    private volatile @Nullable String userRole;
-
-    /** Opsiyonel cihaz kimliği — header olarak iletilir. */
-    private volatile @Nullable String deviceId;
-
-    /** Uygulamaya dönecek callback — bu sınıfta Soul için tipledik. */
-    private final @Nullable Listener<Soul> listener;
-
-    /** Son çağrının (GET) URL’ini debug için tutmak istersen */
-    public @Nullable String urlStr;
+    private volatile @Nullable String userRole;//--------------------------------------------------- İstemci tarafında saklanan rol bilgisi (sunucudan getRole ile çekilir).
+    private volatile @Nullable String deviceId;//--------------------------------------------------- Opsiyonel cihaz kimliği — header olarak iletilir.
+    private final @Nullable Listener<Soul> listener;//---------------------------------------------- Uygulamaya dönecek callback — bu sınıfta Soul için tipledik
+    public @Nullable String urlStr;//--------------------------------------------------------------- Son çağrının (GET) URL’ini debug için tutmak istersen
 
     // ------------------------------------------------------------
     // Yapıcılar
     // ------------------------------------------------------------
-    public CFHelper(@NonNull Context ctx,
-                    @NonNull String projectId,
-                    @NonNull String region,
-                    @Nullable Listener<Soul> listener) {
+    public CFHelper(@NonNull Context ctx, @NonNull String projectId, @NonNull String region, @Nullable Listener<Soul> listener) {
         this.appContext = ctx.getApplicationContext();
         this.listener = listener;
         this.auth = FirebaseAuth.getInstance();
@@ -123,212 +108,12 @@ public class CFHelper {
         this.region = region;
         this.baseHttpUrl = "https://" + region + "-" + projectId + ".cloudfunctions.net";
     }
-
-    // eski ctor’u geriye dönük koru (region=us-central1)
-    public CFHelper(@NonNull Context ctx,
-                    @NonNull String projectId,
-                    @Nullable Listener<Soul> listener) {
+    public CFHelper(@NonNull Context ctx, @NonNull String projectId, @Nullable Listener<Soul> listener) {
         this(ctx, projectId, "us-central1", listener);
-    }
-
-    // ------------------------------------------------------------
-    // Opsiyonel ayarlar
-    // ------------------------------------------------------------
-    /** /v1 gibi bir prefix istiyorsan ayarla. Boş veya null ise kaldırır. */
-    public void setPathPrefix(@Nullable String prefix) {
-        if (prefix == null) prefix = "";
-        this.pathPrefix = prefix.isEmpty() ? "" : (prefix.startsWith("/") ? prefix : "/" + prefix);
-    }
-
-    /** Prod/Emu/Proxy ortamları için taban URL’i override et. */
-    public void overrideBaseHttpUrl(@NonNull String absoluteBase) {
-        this.baseHttpUrl = absoluteBase;
-    }
-
-    /** Cihaz kimliği header’ı için (X-Device-Id). */
-    public void setDeviceId(@Nullable String deviceId) {
-        this.deviceId = (deviceId == null || deviceId.trim().isEmpty()) ? null : deviceId.trim();
-    }
-
-    // ------------------------------------------------------------
-    // Kimlik / Token
-    // ------------------------------------------------------------
-    private static class Tokens {
-        final String idToken;
-        @Nullable final String appCheckToken;
-        Tokens(String idToken, @Nullable String appCheckToken) {
-            this.idToken = idToken; this.appCheckToken = appCheckToken;
-        }
-    }
-
-    /** Her çağrıda taze ID token ve (varsa) App Check token al. */
-    private Tokens refreshTokensBlocking() throws Exception {
-        FirebaseUser user = auth.getCurrentUser();
-        if (user == null) throw new IllegalStateException("Not authenticated");
-
-        // Force refresh for every call
-        String idTok = Tasks.await(user.getIdToken(true)).getToken();
-        if (idTok == null || idTok.isEmpty()) throw new IllegalStateException("Empty ID token");
-
-        String appCheckTok = null;
-        try {
-            AppCheckToken t = Tasks.await(appCheck.getAppCheckToken(false));
-            if (t != null && t.getToken() != null && !t.getToken().isEmpty()) {
-                appCheckTok = t.getToken();
-            }
-        } catch (Exception ignore) {
-            // App Check zorunlu değilse sessiz geç
-        }
-        return new Tokens(idTok, appCheckTok);
-    }
-
-    private Headers buildAuthHeaders(@NonNull Tokens t) {
-        Headers.Builder hb = new Headers.Builder()
-                // Sunucu çoğunlukla Authorization: Bearer <ID_TOKEN> bekler
-                .add("Authorization", "Bearer " + t.idToken)
-                // Bazı yardımcılar X-Firebase-Authorization da kabul ediyor
-                .add("X-Firebase-Authorization", "Bearer " + t.idToken);
-
-        if (t.appCheckToken != null) {
-            hb.add("X-Firebase-AppCheck", t.appCheckToken);
-        }
-
-        // İstemci tarafı gözlem için rol header’ı (ASCII zorunluluğu!)
-        if (userRole != null && !userRole.isEmpty()) {
-            String asciiRole = toAsciiRole(userRole);
-            if (asciiRole != null) hb.add("X-User-Role", asciiRole);
-        }
-
-        if (deviceId != null && !deviceId.isEmpty()) {
-            hb.add("X-Device-Id", deviceId);
-        }
-
-        return hb.build();
-    }
-
-    // ------------------------------------------------------------
-    // URL yardımcıları
-    // ------------------------------------------------------------
-    private String buildUrl(@NonNull String path, @Nullable Map<String,String> query) {
-        StringBuilder url = new StringBuilder(baseHttpUrl);
-        if (!pathPrefix.isEmpty()) url.append(pathPrefix);
-        url.append(path);
-        if (query != null && !query.isEmpty()) {
-            url.append("?");
-            boolean first = true;
-            for (Map.Entry<String, String> e : query.entrySet()) {
-                if (!first) url.append("&");
-                first = false;
-                url.append(e.getKey()).append("=").append(Util.urlEncode(e.getValue()));
-            }
-        }
-        return url.toString();
-    }
-
-    // ------------------------------------------------------------
-    // HTTP yardımcıları
-    // ------------------------------------------------------------
-    private JSONObject doGetJson(String path, @Nullable Map<String, String> query) throws Exception {
-        Tokens t = refreshTokensBlocking();
-        String url = buildUrl(path, query);
-        this.urlStr = url;
-        Log.d(TAG, "GET  " + url);
-
-        Request req = new Request.Builder()
-                .url(url)
-                .headers(buildAuthHeaders(t))
-                .get()
-                .build();
-        if (BuildConfig.DEBUG) {
-            boolean hasAC = req.header("X-Firebase-AppCheck") != null;
-            boolean hasAuth = req.header("Authorization") != null;
-            Log.d(TAG, "[POST] " + url + " | AppCheck=" + (hasAC?"yes":"no") + " Auth=" + (hasAuth?"yes":"no"));
-        }
-        try (Response resp = http.newCall(req).execute()) {
-            String body = resp.body() != null ? resp.body().string() : "";
-            if (!resp.isSuccessful()) throw new HttpException(resp.code(), body);
-            return toJson(body);
-        } catch (IOException | JSONException e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    private JSONObject doPostJson(String path, @Nullable JSONObject json) throws Exception {
-        Tokens t = refreshTokensBlocking();
-        String url = buildUrl(path, null);
-        String payload = (json == null ? "{}" : json.toString());
-        RequestBody body = RequestBody.create(JSON, payload);
-
-        Request req = new Request.Builder()
-                .url(url)
-                .headers(buildAuthHeaders(t))
-                .post(body)
-                .build();
-
-        Log.d(TAG, "POST " + url);
-        try (Response resp = http.newCall(req).execute()) {
-            String respBody = resp.body() != null ? resp.body().string() : "";
-            if (!resp.isSuccessful()) throw new HttpException(resp.code(), respBody);
-            return toJson(respBody);
-        }
-    }
-
-    // ------------------------------------------------------------
-    // Callable yardımcıları
-    // ------------------------------------------------------------
-    private JSONObject callFunction(String name, @Nullable JSONObject data) throws Exception {
-        // Callable tarafında SDK token’ı taşır; yine de force refresh yapıyoruz
-        refreshTokensBlocking();
-        HttpsCallableReference ref = functions.getHttpsCallable(name);
-        Map<String, Object> map = (data == null) ? Collections.emptyMap() : Util.jsonToMap(data);
-        Object result = Tasks.await(ref.call(map)).getData();
-        return toJsonFromObject(result);
-    }
-
-    // ------------------------------------------------------------
-    // Genel endpoint yürütücüsü (async)
-    // ------------------------------------------------------------
-    public interface EndpointCallback {
-        void onSuccess(JSONObject resp);
-        void onError(Throwable error);
-    }
-
-    private void endpointAsync(@NonNull String path,
-                               @Nullable Map<String,String> query,
-                               @Nullable JSONObject body,
-                               boolean post,
-                               @NonNull EndpointCallback cb) {
-        new Thread(() -> {
-            try {
-                JSONObject resp = post ? doPostJson(path, body) : doGetJson(path, query);
-                cb.onSuccess(resp);
-            } catch (Throwable t) {
-                cb.onError(t);
-            }
-        }).start();
-    }
-
-    // ------------------------------------------------------------
-    // Dış API’ler
-    // ------------------------------------------------------------
-    private static String getCustomClaims(String idToken) {
-        try {
-            String[] parts = idToken.split("\\.");
-            if (parts.length >= 2) {
-                String payload = parts[1];
-                byte[] decoded = Base64.decode(payload, Base64.URL_SAFE);
-                return new String(decoded, StandardCharsets.UTF_8);
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-        return null;
-    }
-
+    }// eski ctor’u geriye dönük koru (region=us-central1)
     public interface RoleCallback {
         void onRoleFetched(@Nullable String role);
     }
-
     private @Nullable String extractRoleFromJson(@Nullable JSONObject src) {
         if (src == null) return null;
 
@@ -373,16 +158,39 @@ public class CFHelper {
         return null;
     }
 
-    public void refreshRole(@NonNull RoleCallback callback) {
+    public interface UsersCallback {
+        void onSuccess(@NonNull List<Iyesi> users);
+        void onError(@NonNull Throwable error);
+    }    // ----------------------------------------------------- Messaging / Users ----------
+
+    /** /listAllUsersHttp (GET) → List<Profile> */
+    public void listAllUsers(@Nullable Integer limit, @Nullable String pageToken, @NonNull UsersCallback cb) {
+        Map<String, String> q = new HashMap<>();
+        if (limit != null) q.put("limit", String.valueOf(limit));
+        if (pageToken != null) q.put("pageToken", pageToken);
+
+        endpointAsync("/listAllUsersHttp", q, null, /*post=*/false, new JsonHelper.EndpointCallback() {
+            @Override public void onSuccess(JSONObject resp) {
+                try {
+                    List<Iyesi> list = parseUsers(resp); // BG
+                    main.post(() -> cb.onSuccess(list));   // UI
+                } catch (Throwable e) {
+                    main.post(() -> cb.onError(e));
+                }
+            }
+            @Override public void onError(Throwable error) { main.post(() -> cb.onError(error)); }
+        });
+    }
+    public void refreshRole(@NonNull CFHelper.RoleCallback callback) {
         new Thread(() -> {
             try {
                 JSONObject r = null;
                 try {
-                    r = doGetJson("/getRole", null); // bazı projelerde çalışır
+                    r = JsonHelper.doGetJson("/getRole", null); // bazı projelerde çalışır
                 } catch (Throwable getErr) {
                     // GET 405 vs. durumunda POST fallback
                     try {
-                        r = doPostJson("/getRole", new JSONObject());
+                        r = JsonHelper.doPostJson("/getRole", new JSONObject());
                     } catch (Throwable postErr) {
                         throw postErr; // ikisi de patlarsa dış yakalama çalışır
                     }
@@ -409,34 +217,6 @@ public class CFHelper {
             }
         }).start();
     }
-
-    // ---------- Messaging / Users ----------
-    public interface UsersCallback {
-        void onSuccess(@NonNull List<Iyesi> users);
-        void onError(@NonNull Throwable error);
-    }
-
-    /** /listAllUsersHttp (GET) → List<Profile> */
-    public void listAllUsers(@Nullable Integer limit,
-                             @Nullable String pageToken,
-                             @NonNull UsersCallback cb) {
-        Map<String, String> q = new HashMap<>();
-        if (limit != null) q.put("limit", String.valueOf(limit));
-        if (pageToken != null) q.put("pageToken", pageToken);
-
-        endpointAsync("/listAllUsersHttp", q, null, /*post=*/false, new EndpointCallback() {
-            @Override public void onSuccess(JSONObject resp) {
-                try {
-                    List<Iyesi> list = parseUsers(resp); // BG
-                    main.post(() -> cb.onSuccess(list));   // UI
-                } catch (Throwable e) {
-                    main.post(() -> cb.onError(e));
-                }
-            }
-            @Override public void onError(Throwable error) { main.post(() -> cb.onError(error)); }
-        });
-    }
-
     private ArrayList<Iyesi> parseUsers(@NonNull JSONObject root) throws Exception {
         ArrayList<Iyesi> out = new ArrayList<>();
         boolean success = root.optBoolean("success", true);
@@ -483,9 +263,9 @@ public class CFHelper {
     }
 
     // ---------- Sahiplendirme / Priority Pets ----------
-    /** GET /getPriorityPets ve sonucu Listener’a List<Soul> olarak aktarır. */
+    /**  */
     public void fetchPriorityPets() {
-        endpointAsync("/getPriorityPets", null, null, /*post=*/false, new EndpointCallback() {
+        endpointAsync("/getPriorityPets", null, null, /*post=*/false, new JsonHelper.EndpointCallback() {
             @Override public void onSuccess(JSONObject resp) {
                 try {
                     List<Soul> list = parsePriorityPets(resp); // BG
@@ -498,13 +278,7 @@ public class CFHelper {
                 if (listener != null) main.post(() -> listener.onCallFailed("getPriorityPets", error));
             }
         });
-    }
-
-    /** İstersen ham JSON’a da erişmek için. */
-    public JSONObject getPriorityPets() throws Exception {
-        return doGetJson("/getPriorityPets", null);
-    }
-
+    }// -------------------------------------------------------- GET /getPriorityPets ve sonucu Listener’a List<Soul> olarak aktarır.
     private ArrayList<Soul> parsePriorityPets(@NonNull JSONObject root) throws Exception {
         ArrayList<Soul> out = new ArrayList<>();
         if (!root.optBoolean("success", false)) {
@@ -543,10 +317,8 @@ public class CFHelper {
         }
         return out;
     }
-
-    /** POST /submitSoulInNeed — 404’te callable fallback dener. */
-    public void submitSoulInNeed(@NonNull JSONObject payload, @NonNull EndpointCallback cb) {
-        endpointAsync("/submitSoulInNeed", null, payload, /*post=*/true, new EndpointCallback() {
+    public void submitSoulInNeed(@NonNull JSONObject payload, @NonNull JsonHelper.EndpointCallback cb) {
+        endpointAsync("/submitSoulInNeed", null, payload, /*post=*/true, new JsonHelper.EndpointCallback() {
             @Override public void onSuccess(JSONObject resp) { main.post(() -> cb.onSuccess(resp)); }
 
             @Override public void onError(Throwable error) {
@@ -566,93 +338,17 @@ public class CFHelper {
                 main.post(() -> cb.onError(error));
             }
         });
-    }
-
-    // ---------- Marker uçları (örnek sarmalayıcılar) ----------
-    public JSONObject markersNearby(double lat, double lng, int radiusM, int limit,
-                                    @Nullable String type, @Nullable String cityKey) throws Exception {
-        Map<String, String> q = new HashMap<>();
-        q.put("lat", String.valueOf(lat));
-        q.put("lng", String.valueOf(lng));
-        q.put("radiusM", String.valueOf(radiusM));
-        q.put("limit", String.valueOf(limit));
-        if (type != null) q.put("type", type);
-        if (cityKey != null) q.put("cityKey", cityKey);
-        return doGetJson("/markersNearby", q);
-    }
-
-    public JSONObject markerCreate(@NonNull JSONObject body) throws Exception {
-        return doPostJson("/markerCreate", body);
-    }
-
-    public JSONObject listPendingCompanions(double lat, double lng, int radiusM, int limit) throws Exception {
-        Map<String, String> q = new HashMap<>();
-        q.put("lat", String.valueOf(lat));
-        q.put("lng", String.valueOf(lng));
-        q.put("radiusM", String.valueOf(radiusM));
-        q.put("limit", String.valueOf(limit));
-        return doGetJson("/listPendingCompanions", q);
-    }
-
-    public JSONObject markerDetails(@NonNull String id) throws Exception {
-        Map<String, String> q = new HashMap<>();
-        q.put("id", id);
-        return doGetJson("/markerDetails", q);
-    }
-
-    public JSONObject markerSouls(@NonNull String id, int limit) throws Exception {
-        Map<String, String> q = new HashMap<>();
-        q.put("id", id);
-        q.put("limit", String.valueOf(limit));
-        return doGetJson("/markerSouls", q);
-    }
-
-    public JSONObject markerInteract(@NonNull JSONObject body) throws Exception {
-        return doPostJson("/markerInteract", body);
-    }
-
-    // ---------- Mesajlaşma (HTTP) ----------
-    public JSONObject appSend(@NonNull JSONObject body) throws Exception {
-        return doPostJson("/appSend", body);
-    }
-
-    public JSONObject appGet(@NonNull String withUid, int limit, @Nullable String beforeMsgId) throws Exception {
-        Map<String, String> q = new HashMap<>();
-        q.put("withUid", withUid);
-        q.put("limit", String.valueOf(limit));
-        if (beforeMsgId != null) q.put("before", beforeMsgId);
-        return doGetJson("/appGet", q);
-    }
-
-    // ---------- Callable örnekleri ----------
-    public JSONObject callCreateUser(@NonNull JSONObject data) throws Exception {
-        return callFunction("createUser", data);
-    }
-
-    public JSONObject callAssignRole(@NonNull JSONObject data) throws Exception {
-        return callFunction("assignRole", data);
-    }
-
-    public JSONObject callUpdateClaims(@NonNull JSONObject data) throws Exception {
-        return callFunction("updateClaims", data);
-    }
-
-    public JSONObject callEchoMe() throws Exception {
-        return callFunction("echoMe", new JSONObject());
-    }
-
-    // ---------- Pending companion (deviceId ile) ----------
+    }// POST /submitSoulInNeed — 404’te callable fallback dener.
     public interface PendingCallback {
         /** companion = null → pending yok demektir. */
         void onResult(@Nullable JSONObject companion);
         void onError(@NonNull Throwable error);
-    }
-
+    }    // --------------------------------------------------- Pending companion (deviceId ile) ----------
     public void checkPendingCompanion(@NonNull String deviceId, @NonNull PendingCallback cb) {
         Map<String, String> q = new HashMap<>();
         q.put("deviceId", deviceId);
 
-        endpointAsync("/checkPendingCompanion", q, null, /*post=*/false, new EndpointCallback() {
+        endpointAsync("/checkPendingCompanion", q, null, /*post=*/false, new JsonHelper.EndpointCallback() {
             @Override
             public void onSuccess(JSONObject resp) {
                 try {
@@ -678,6 +374,14 @@ public class CFHelper {
             }
         });
     }
+    public JSONObject listPendingCompanions(double lat, double lng, int radiusM, int limit) throws Exception {
+        Map<String, String> q = new HashMap<>();
+        q.put("lat", String.valueOf(lat));
+        q.put("lng", String.valueOf(lng));
+        q.put("radiusM", String.valueOf(radiusM));
+        q.put("limit", String.valueOf(limit));
+        return JsonHelper.doGetJson("/listPendingCompanions", q);
+    }
 
     // ------------------------------------------------------------
     // Getter/Setter
@@ -686,7 +390,6 @@ public class CFHelper {
     public void setUserRole(@Nullable String role) { this.userRole = role; }
     public @NonNull  String getRegion() { return region; }
     public @NonNull  String getBaseHttpUrl() { return baseHttpUrl; }
-
     // ------------------------------------------------------------
     // Hatalar
     // ------------------------------------------------------------
@@ -697,71 +400,6 @@ public class CFHelper {
         public HttpException(int code, String body) {
             super("HTTP " + code + " — " + body);
             this.code = code; this.body = body;
-        }
-    }
-
-    // ------------------------------------------------------------
-    // Yardımcılar
-    // ------------------------------------------------------------
-    @Nullable
-    private static String toAsciiRole(@NonNull String s) {
-        // Türkçe karakterleri indirger; ASCII dışı kalırsa null döner
-        String mapped = s
-                .replace('Ç','C').replace('ç','c')
-                .replace('Ğ','G').replace('ğ','g')
-                .replace('İ','I').replace('ı','i')
-                .replace('Ö','O').replace('ö','o')
-                .replace('Ş','S').replace('ş','s')
-                .replace('Ü','U').replace('ü','u');
-        for (int i = 0; i < mapped.length(); i++) {
-            char c = mapped.charAt(i);
-            if (c < 0x20 || c > 0x7E) return null; // ASCII dışı varsa header eklemeyelim
-        }
-        return mapped;
-    }
-
-    private static JSONObject toJson(String s) throws JSONException {
-        if (s == null || s.isEmpty()) return new JSONObject();
-        String trimmed = s.trim();
-        if (trimmed.isEmpty()) return new JSONObject();
-        char c = trimmed.charAt(0);
-        if (c == '[') {
-            JSONArray arr = new JSONArray(s);
-            JSONObject out = new JSONObject();
-            out.put("_", arr);
-            return out;
-        }
-        return new JSONObject(s);
-    }
-
-    private static JSONObject toJsonFromObject(Object o) throws JSONException {
-        if (o == null) return new JSONObject();
-        if (o instanceof Map) return new JSONObject((Map<?, ?>) o);
-        if (o instanceof String) return toJson((String) o);
-        JSONObject out = new JSONObject();
-        out.put("data", String.valueOf(o));
-        return out;
-    }
-
-    private static class Util {
-        static String urlEncode(String s) {
-            try {
-                return java.net.URLEncoder.encode(s, StandardCharsets.UTF_8.name());
-            } catch (Exception e) {
-                return s;
-            }
-        }
-        static Map<String, Object> jsonToMap(JSONObject json) {
-            Map<String, Object> map = new HashMap<>();
-            if (json == null) return map;
-            JSONArray names = json.names();
-            if (names == null) return map;
-            for (int i = 0; i < names.length(); i++) {
-                String k = names.optString(i);
-                Object v = json.opt(k);
-                map.put(k, v);
-            }
-            return map;
         }
     }
 }

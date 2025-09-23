@@ -2,7 +2,9 @@
 package com.kurmez.iyesi.kurmes.social.content;
 
 import static com.kurmez.iyesi.kayra.Classes.data.Soul.parseSouls;
+import static com.kurmez.iyesi.kurmes.utilities.helper.FireBaseHelper.getTokens;
 
+import android.annotation.SuppressLint;
 import android.content.Context;
 import android.content.Intent;
 import android.graphics.Color;
@@ -95,9 +97,10 @@ public class Explore extends AppCompatActivity {
     private CompanionAdapter companionAdapter; // ListView adaptörü (Base/Array)
 
     // Ağ/CF
-    private CFClient cf;
-    private ExecutorService io;
+    public CFClient cf;
+    public ExecutorService io;
 
+    @SuppressLint("ClickableViewAccessibility")
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -145,7 +148,7 @@ public class Explore extends AppCompatActivity {
         }
 
         // 4) Tokenları al ve rol/kayıtları yükle (örnek)
-        cf.getTokens((idTok, appTok) -> {
+        getTokens((idTok, appTok) -> {
             // Örnek test endpoint (gerekmiyorsa kaldırılabilir)
             String url = "https://us-central1-iyesi-e8d4f.cloudfunctions.net/listSoulsByFields?col=Souls&where=status:eq:adoptable&limit=3";
             Request.Builder rb = new Request.Builder().url(url).get()
@@ -210,7 +213,7 @@ public class Explore extends AppCompatActivity {
     // Explore.java -> markAdoptableAndGood(...) gövdesini şu şekilde değiştir
     private void markAdoptableAndGood(Soul soul, int positionInList) {
         String id = safeSoulId(soul);
-        if (id == null) { showToast("Kayıt ID bulunamadı."); return; }
+        if (id == null) { Helpers.showToastSafe(Explore.this,"Kayıt ID bulunamadı."); return; }
 
         setLoading(true);
         ensureIo();
@@ -241,7 +244,7 @@ public class Explore extends AppCompatActivity {
             } catch (Throwable t) {
                 Log.e(TAG, "CF update failed", t);
                 runOnUiThread(() -> {
-                    showToast("Güncelleme başarısız: " + t.getMessage());
+                    Helpers.showToastSafe(Explore.this,"Güncelleme başarısız: " + t.getMessage());
                     setLoading(false);
                 });
             }
@@ -260,97 +263,14 @@ public class Explore extends AppCompatActivity {
         refresh(false);
     }
 
-    /** health="critical" sabit, needsCare opsiyonel (cbNeedsCare). Limit=20. */
-    private void fetchSouls() {
-        setLoading(true);
 
-        final boolean needsCare = cbNeedsCare != null && cbNeedsCare.isChecked();
-        final CFClient.WhereBuilder wb = new CFClient.WhereBuilder().eq("health", "critical");
-        if (needsCare) wb.eq("needsCare", "true");
-
-        ensureIo();
-        io.execute(() -> cf.listSoulsByFields(wb, 20, new CFClient.JsonCallback() {
-
-            private void logChunked(String prefix, String text) {
-                if (text == null) { Log.d(TAG, prefix + " <null>"); return; }
-                final int MAX = 1000;
-                for (int i = 0; i < text.length(); i += MAX) {
-                    Log.d(TAG, prefix + " " + text.substring(i, Math.min(i + MAX, text.length())));
-                }
-            }
-
-            @Override
-            public void onSuccess(@NonNull JSONObject json) {
-                try {
-                    String pretty;
-                    try { pretty = json.toString(2); } catch (Exception e) { pretty = json.toString(); }
-                    logChunked("raw json:", pretty);
-
-                    // Souls'u parse et
-                    List<Soul> parsed = parseSouls(json);
-                    if (parsed == null) parsed = java.util.Collections.emptyList();
-                    Log.d(TAG, "parsed.size=" + parsed.size());
-
-                    if (parsed.isEmpty()) {
-                        String keys = (json.names() != null) ? json.names().toString() : "<no-keys>";
-                        Log.w(TAG, "Empty parsed. Keys=" + keys);
-                        int dataLen = json.optJSONArray("data") != null ? json.optJSONArray("data").length() : -1;
-                        int itemsLen = json.optJSONArray("items") != null ? json.optJSONArray("items").length() : -1;
-                        int soulsLen = json.optJSONArray("souls") != null ? json.optJSONArray("Souls").length() : -1;
-                        Log.w(TAG, "ok=" + json.optBoolean("ok")
-                                + " total=" + json.optInt("total", -1)
-                                + " data.length=" + dataLen
-                                + " items.length=" + itemsLen
-                                + " Souls.length=" + soulsLen);
-
-                        org.json.JSONArray probe = json.optJSONArray("data");
-                        if (probe == null) probe = json.optJSONArray("items");
-                        if (probe == null) probe = json.optJSONArray("souls");
-                        if (probe != null && probe.length() > 0) {
-                            org.json.JSONObject first = probe.optJSONObject(0);
-                            Log.d(TAG, "first item probe=" + (first != null ? first.toString() : "null"));
-                        }
-                        showToast("Boş liste döndü");
-                    }
-
-                    final List<Soul> finalParsed = parsed;
-                    runOnUiThread(() -> {
-                        companions.clear();
-                        companions.addAll(finalParsed);
-                        Log.d(TAG, "UI companions.size=" + companions.size());
-                        companionAdapter.notifyDataSetChanged();
-                        setLoading(false);
-                        renderEmptyState();
-                    });
-
-                } catch (Throwable e) {
-                    Log.e(TAG, "parse error", e);
-                    showToast("Veri çözümlenirken hata.");
-                    runOnUiThread(() -> {
-                        setLoading(false);
-                        renderEmptyState();
-                    });
-                }
-            }
-
-            @Override
-            public void onError(@NonNull Throwable t) {
-                Log.e(TAG, "listSoulsByFields", t);
-                showToast("Veri alınamadı: " + t.getMessage());
-                runOnUiThread(() -> {
-                    setLoading(false);
-                    renderEmptyState();
-                });
-            }
-        }));
-    }
 
     private void bindUser(String name, android.graphics.Bitmap avatarBmp) {
         if (tvUserName != null && name != null && !name.isEmpty()) tvUserName.setText(name);
         if (ivAvatar != null && avatarBmp != null) ivAvatar.setImageBitmap(avatarBmp);
     }
 
-    private void ensureIo() {
+    public void ensureIo() {
         if (io == null || io.isShutdown()) io = Executors.newFixedThreadPool(2);
     }
 
@@ -373,9 +293,7 @@ public class Explore extends AppCompatActivity {
         if (listView != null) listView.setVisibility(empty ? View.GONE : View.VISIBLE);
     }
 
-    private void showToast(String s) {
-        runOnUiThread(() -> Toast.makeText(this, s, Toast.LENGTH_SHORT).show());
-    }
+
 
     private static int dp(Context c, int d) {
         float den = c.getResources().getDisplayMetrics().density;
@@ -450,12 +368,123 @@ public class Explore extends AppCompatActivity {
     // =============================================================================================
     // Data flow
     // =============================================================================================
+    // Sınıf alanları:
+
+
+    private void ensureCf() {
+        if (cf == null) {
+            cf = new CFClient(BuildConfig.CF_BASE_URL);
+            Log.d(TAG, "CFClient init (lazy)");
+        }
+    }
+
     private void refresh(boolean fromUser) {
-        if (fromUser) showToast("Yenileniyor…");
+        if (fromUser) Helpers.showToastSafe(this,"Yenileniyor…");
         companions.clear();
         contentList.clear();
         companionAdapter.notifyDataSetChanged();
-        fetchSouls();
+        fetchSouls(null);//fetchSouls("health","critical");
+    }
+    /** health="critical" sabit, needsCare opsiyonel (cbNeedsCare). Limit=20. */
+    public List<Soul> fetchSouls(@Nullable String myAdminPath) {
+        ensureCf(); // ← DAİMA önce
+        try {
+            var ref = new Object() {
+                List<Soul> finalParsed;
+            };
+            setLoading(true);
+            if (myAdminPath == null ) {
+                myAdminPath = "TR" + "/" + "Yalova"; // ya da proje içindeki mevcut değerin
+            }
+            Log.i(TAG, "myAdminPath=" + String.valueOf(myAdminPath));
+            List<Soul> parsed;
+            final boolean needsCare = cbNeedsCare != null && cbNeedsCare.isChecked();
+            final CFClient.WhereBuilder wb = new CFClient.WhereBuilder().eq("adminPath", myAdminPath);
+            if (needsCare) wb.eq("needsCare", "true");
+
+            ensureIo();
+            io.execute(() -> {
+                ensureCf(); // iş parçacığında da tedbir
+                cf.listSoulsByFields(wb, 20, new CFClient.JsonCallback() {
+
+                    private void logChunked(String prefix, String text) {
+                        if (text == null) { Log.d(TAG, prefix + " <null>"); return; }
+                        final int MAX = 1000;
+                        for (int i = 0; i < text.length(); i += MAX) {
+                            Log.d(TAG, prefix + " " + text.substring(i, Math.min(i + MAX, text.length())));
+                        }
+                    }
+
+                    @Override
+                    public void onSuccess(@NonNull JSONObject json) {
+                        try {
+                            String pretty;
+                            try { pretty = json.toString(2); } catch (Exception e) { pretty = json.toString(); }
+                            //logChunked("raw json:", pretty);
+
+                            // Souls'u parse et
+                            List<Soul> parsed = parseSouls(json);
+                            if (parsed == null) parsed = java.util.Collections.emptyList();
+                            Log.d(TAG, "parsed.size=" + parsed.size());
+
+                            if (parsed.isEmpty()) {
+                                String keys = (json.names() != null) ? json.names().toString() : "<no-keys>";
+                                Log.w(TAG, "Empty parsed. Keys=" + keys);
+                                int dataLen = json.optJSONArray("data") != null ? json.optJSONArray("data").length() : -1;
+                                int itemsLen = json.optJSONArray("items") != null ? json.optJSONArray("items").length() : -1;
+                                int soulsLen = json.optJSONArray("souls") != null ? json.optJSONArray("Souls").length() : -1;
+                                Log.w(TAG, "ok=" + json.optBoolean("ok")
+                                        + " total=" + json.optInt("total", -1)
+                                        + " data.length=" + dataLen
+                                        + " items.length=" + itemsLen
+                                        + " Souls.length=" + soulsLen);
+
+                                org.json.JSONArray probe = json.optJSONArray("data");
+                                if (probe == null) probe = json.optJSONArray("items");
+                                if (probe == null) probe = json.optJSONArray("souls");
+                                if (probe != null && probe.length() > 0) {
+                                    JSONObject first = probe.optJSONObject(0);
+                                    Log.d(TAG, "first item probe=" + (first != null ? first.toString() : "null"));
+                                }
+                                Helpers.showToastSafe(Explore.this,"Boş liste döndü");
+                            }
+
+                            ref.finalParsed = parsed;
+                            runOnUiThread(() -> {
+                                companions.clear();
+                                companions.addAll(ref.finalParsed);
+                                Log.d(TAG, "UI companions.size=" + companions.size());
+                                if (companionAdapter != null) {companionAdapter.notifyDataSetChanged();}
+                                setLoading(false);
+                                renderEmptyState();
+                            });
+
+                        } catch (Throwable e) {
+                            Log.e(TAG, "parse error", e);
+                            Helpers.showToastSafe(Explore.this,"Veri çözümlenirken hata.");
+                            runOnUiThread(() -> {
+                                setLoading(false);
+                                renderEmptyState();
+                            });
+                        }
+                    }
+
+                    @Override
+                    public void onError(@NonNull Throwable t) {
+                        Log.e(TAG, "listSoulsByFields", t);
+                        Helpers.showToastSafe(Explore.this,"Veri alınamadı: " + t.getMessage());
+                        runOnUiThread(() -> {
+                            setLoading(false);
+                            renderEmptyState();
+                        });
+                    }
+                });
+            });
+            return ref.finalParsed;
+        } catch (Exception e) {
+            Log.e(TAG + "Error :", e.getMessage());
+            return null;
+        }
     }
 
     // ----------------------------------------------------------------------

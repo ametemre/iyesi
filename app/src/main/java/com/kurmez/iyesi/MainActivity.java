@@ -659,12 +659,18 @@ public class MainActivity extends AppCompatActivity {
                 if (role.contains("Ülgen")) {
                     Log.d("Role : ", role + "Ülgen");
                     startActivity(new Intent(this, SokakActivity.class));
-                }else {
+                    finish();
+                }else if(role.contains("Iye")) {
                     startActivity(new Intent(this, Explore.class));
+                    finish();
+                }else{
+                    startActivity(new Intent(this, Kurmes.class));
+                    finish();
                 }
 
             }else {
                 startActivity(new Intent(this, Welcome.class));
+                finish();
             }
         }
         finish();

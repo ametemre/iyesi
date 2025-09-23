@@ -1,12 +1,11 @@
 package com.kurmez.iyesi.umay;
 
 import static com.kurmez.iyesi.kayra.Classes.data.Soul.parseSouls;
+import static com.kurmez.iyesi.kurmes.utilities.helper.FireBaseHelper.getTokens;
 
-import com.kurmez.iyesi.kurmes.utilities.helper.CFHelper;
 import com.kurmez.iyesi.kayra.Classes.data.Soul; // tek ve doğru Soul
 import androidx.annotation.NonNull;
 
-import java.io.IOException;
 import java.util.List;
 
 
@@ -22,7 +21,6 @@ import android.widget.ListView;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.google.firebase.auth.FirebaseAuth;
@@ -35,43 +33,21 @@ import com.kurmez.iyesi.kurmes.social.message.Messaging;
 import com.kurmez.iyesi.kurmes.utilities.Helpers;
 import com.kurmez.iyesi.kurmes.utilities.adapters.CompanionAdapter;
 import com.kurmez.iyesi.kurmes.utilities.helper.net.CFClient;
-import com.kurmez.iyesi.kurmes.utilities.helper.net.FirebaseAuthenticator;
-import com.kurmez.iyesi.kurmes.utilities.helper.net.FirebaseHeadersInterceptor;
 
 import java.util.ArrayList;
-import java.util.concurrent.TimeUnit;
 
-import okhttp3.OkHttpClient;
 import okhttp3.Request;
-import okhttp3.Response;
 
 public class Welcome extends AppCompatActivity {
     private static final String TAG = "WelcomeActivity";
-    private static final String CF_GET_PRIORITY = "https://us-central1-iyesi-e8d4f.cloudfunctions.net/getPriorityPets";
-    //private CFHelper cf;
     private ImageView imgWelcome;
     private ImageButton quitButton;
     private ImageButton messageButton;
     private ImageButton notificationButton;
     private TextView username;
     private ListView listView;
-    private String idToken;
     private CompanionAdapter adapter;
     private final List<Soul> companions = new ArrayList<>();
-    private final OkHttpClient httpClient =new OkHttpClient.Builder()
-            .readTimeout(30, TimeUnit.SECONDS)
-            .connectTimeout(15, TimeUnit.SECONDS)
-            .authenticator(new FirebaseAuthenticator())
-            .addInterceptor(new FirebaseHeadersInterceptor()) // <-- ID + AppCheck header’larını ekleyen kısım
-            .addInterceptor(chain -> { // LOG için geçici
-                Request req = chain.request();
-                android.util.Log.d("HTTP", req.method()+" "+req.url());
-                android.util.Log.d("HTTP", "Authorization: " + req.header("Authorization"));
-                android.util.Log.d("HTTP", "X-Firebase-AppCheck: " + req.header("X-Firebase-AppCheck"));
-                return chain.proceed(req);
-            })
-            .build();
-
     public static String nz(String s) { return s == null ? "" : s; }
 
 
@@ -118,14 +94,13 @@ public class Welcome extends AppCompatActivity {
         CFClient.WhereBuilder wb = new CFClient.WhereBuilder().eq("status", "adoptable");
 
 
-        cf.getTokens((idTok, appTok) -> {
+        getTokens((idTok, appTok) -> {
             String url = "https://us-central1-iyesi-e8d4f.cloudfunctions.net/listSoulsByFields?col=Souls&where=status:eq:adoptable&limit=3";
             Request.Builder rb = new Request.Builder().url(url).get()
                     .addHeader("Authorization", "Bearer " + idTok);
             if (appTok != null && !appTok.isEmpty()) {
                 rb.addHeader("X-Firebase-AppCheck", appTok);
             }
-// YENİ (DOĞRU - async)
             cf.listSoulsByFields(wb, 100, new CFClient.JsonCallback() {
                 private static final String TAG = "CF";
 

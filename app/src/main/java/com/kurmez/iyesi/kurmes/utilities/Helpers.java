@@ -56,8 +56,15 @@ public class Helpers {
     }
 
     public static void showToastSafe(Context ctx, String msg) {
-        new Handler(Looper.getMainLooper()).post(() ->
-                Toast.makeText(ctx, msg, Toast.LENGTH_SHORT).show());
+        try {
+            if (ctx != null || msg != null){
+                Log.e("Birşeyler yanlış gitti",ctx.toString() + "msg:" + msg);
+            }else {
+                new Handler(Looper.getMainLooper()).post(() -> Toast.makeText(ctx, msg, Toast.LENGTH_SHORT).show());
+            }
+        } catch (Exception e) {
+            Log.e("Birşeyler yanlış gitti",e.toString());
+        }
     }
 
     /* ======================= ROLE / ACCESS FLOW ======================= */

@@ -1,5 +1,7 @@
 package com.kurmez.iyesi.kurmes.utilities.helper;
 
+import static android.os.Build.VERSION_CODES.N;
+
 import android.content.Context;
 import android.os.Handler;
 import android.os.Looper;
@@ -7,6 +9,7 @@ import android.util.Log;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.annotation.RequiresApi;
 
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -24,6 +27,7 @@ import org.json.JSONObject;
  * - UI/Toast/Activity bağımlılığı yoktur. Sonuçları caller’a callback ile verir.
  * - CFHelper’ı içeriden kurabilir ya da dışarıdan verebilirsiniz.
  */
+@RequiresApi(N)
 public class CFObligations {
 
     private static final String TAG = "CFObligations";
@@ -113,7 +117,7 @@ public class CFObligations {
         Log.i(TAG, "CF submitSoulInNeed START" + (isRetry ? " (retry)" : ""));
         if (verboseJson) logSafeJson("[SUBMIT] payload", String.valueOf(payload));
 
-        cf.submitSoulInNeed(payload, new CFHelper.EndpointCallback() {
+        cf.submitSoulInNeed(payload, new JsonHelper.EndpointCallback() {
             @Override public void onSuccess(JSONObject resp) {
                 long dt = System.currentTimeMillis() - t0;
                 Log.i(TAG, "CF submitSoulInNeed END OK (" + dt + " ms)");

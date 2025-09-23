@@ -1,5 +1,7 @@
 package com.kurmez.iyesi.kurmes.seed;
 
+import static com.kurmez.iyesi.kurmes.utilities.helper.FireBaseHelper.getTokens;
+
 import android.util.Log;
 
 import com.kurmez.iyesi.kurmes.utilities.helper.net.CFClient;
@@ -90,7 +92,7 @@ public class SeedService {
                            SeedListener listener) {
 
         // Tokenları al (Firebase ID Token + App Check)
-        CFClient.getTokens((idToken, appToken) -> {
+        getTokens((idToken, appToken) -> {
             ExecutorService ex = Executors.newFixedThreadPool(Math.max(1, concurrency));
             CompletionService<String> cs = new ExecutorCompletionService<>(ex);
 

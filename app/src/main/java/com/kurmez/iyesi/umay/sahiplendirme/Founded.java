@@ -1,5 +1,7 @@
 package com.kurmez.iyesi.umay.sahiplendirme;
 
+import static com.kurmez.iyesi.kayra.Classes.Harita.ensureAdminPathAsync;
+
 import android.Manifest;
 import android.annotation.SuppressLint;
 import android.content.ClipData;
@@ -28,6 +30,7 @@ import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts.GetMultipleContents;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.annotation.RequiresApi;
 import androidx.annotation.RequiresPermission;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
@@ -59,6 +62,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
+@RequiresApi(api = Build.VERSION_CODES.N)
 public class Founded extends AppCompatActivity {
 
     private static final String L = "Founded";
@@ -253,7 +257,7 @@ public class Founded extends AppCompatActivity {
                                 String pretty = (ap == null) ? formatLatLng(loc.getLatitude(), loc.getLongitude()) : ap;
                                 placeView.setText(pretty);
                                 Toast.makeText(this, "Bulunduğu yer güncellendi", Toast.LENGTH_SHORT).show();
-                            });
+                            },this);
                         } else {
                             Log.w(L, "currentLocation null → fallback to lastLocation");
                             fillPlaceFromLastLocationFallback();
@@ -281,7 +285,7 @@ public class Founded extends AppCompatActivity {
                             String pretty = (ap == null) ? formatLatLng(l.getLatitude(), l.getLongitude()) : ap;
                             placeView.setText(pretty);
                             Toast.makeText(this, "Bulunduğu yer güncellendi", Toast.LENGTH_SHORT).show();
-                        });
+                        },this);
                     } else {
                         Log.w(L, "lastLocation still null");
                         Toast.makeText(this, "Konum alınamadı. Lütfen GPS'i açın.", Toast.LENGTH_LONG).show();
@@ -435,7 +439,7 @@ public class Founded extends AppCompatActivity {
                             Log.d(L, "[LOC] adminPath from lastLocation = " + ap);
                             if (ap != null && !ap.isEmpty()) placeView.setText(ap);
                             runPendingAfterLocation();
-                        });
+                        },this);
                     } else {
                         Log.w(L, "[LOC] lastLocation null → runPending");
                         runPendingAfterLocation();
@@ -697,7 +701,7 @@ public class Founded extends AppCompatActivity {
                     Log.d(L, "[SUBMIT] adminPath resolved: " + ap);
                     String pretty = (ap == null ? formatLatLng(latNum, lngNum) : ap);
                     placeView.setText(pretty);
-                });
+                },this);
                 foundPlace = formatLatLng(latNum, lngNum);
             } else if (lastLat != null && lastLng != null) {
                 latNum = lastLat; lngNum = lastLng;
@@ -706,7 +710,7 @@ public class Founded extends AppCompatActivity {
                     lastAdminPath = ap;
                     Log.d(L, "[SUBMIT] adminPath from lastLatLng: " + ap);
                     if (ap != null) placeView.setText(ap);
-                });
+                },this);
             } else {
                 Log.e(L, "[SUBMIT] konum yok → abort");
                 Toast.makeText(this, "Konum alınamadı. 'lat, lng' girin veya konum izni verin.", Toast.LENGTH_LONG).show();
@@ -929,7 +933,7 @@ public class Founded extends AppCompatActivity {
                         ensureAdminPathAsync(lastLat, lastLng, adminPath -> {
                             if (adminPath != null) placeView.setText(adminPath);
                             //Object object = FireBaseHelper.customClaims(user);
-                        });
+                        },this);
                     } else {
                         Log.d(L, "lastLocation is null");
                     }
@@ -945,53 +949,6 @@ public class Founded extends AppCompatActivity {
 
     private static String formatLatLng(double lat, double lng) {
         return String.format(Locale.US, "%f, %f", lat, lng);
-    }
-
-    /** Geocoder ile TR/İL metni üretir. Başarısız olursa callback'e null gönderir. */
-    private interface AdminPathCb { void onReady(@Nullable String adminPath); }
-
-    private void ensureAdminPathAsync(double lat, double lng, @NonNull AdminPathCb cb) {
-        Log.d(L, "ensureAdminPathAsync() → GİRİŞ lat=" + lat + " lng=" + lng);
-        final Locale tr = new Locale("tr", "TR");
-        final Geocoder geocoder = new Geocoder(this, tr);
-
-        if (Build.VERSION.SDK_INT >= 33) {
-            geocoder.getFromLocation(lat, lng, 1, new Geocoder.GeocodeListener() {
-                @Override public void onGeocode(@NonNull List<Address> results) {
-                    String ap = extractAdminPath(results);
-                    Log.d(L, "ensureAdminPathAsync() API33 onGeocode → " + ap);
-                    runOnUiThread(() -> cb.onReady(ap));
-                }
-                @Override public void onError(@Nullable String errorMessage) {
-                    Log.w(L, "Geocoder onError: " + errorMessage);
-                    runOnUiThread(() -> cb.onReady(null));
-                }
-            });
-        } else {
-            new Thread(() -> {
-                try {
-                    List<Address> res = geocoder.getFromLocation(lat, lng, 1);
-                    String ap = extractAdminPath(res);
-                    Log.d(L, "ensureAdminPathAsync() legacy → " + ap);
-                    runOnUiThread(() -> cb.onReady(ap));
-                } catch (Exception e) {
-                    Log.w(L, "Geocoder error: " + e.getMessage());
-                    runOnUiThread(() -> cb.onReady(null));
-                }
-            }).start();
-        }
-    }
-
-    @Nullable
-    private String extractAdminPath(@Nullable List<Address> res) {
-        if (res == null || res.isEmpty()) return null;
-        Address a = res.get(0);
-        String admin = a.getAdminArea();            // örn: Ankara
-        String countryCode = a.getCountryCode();    // örn: TR
-        if (admin == null || countryCode == null) return null;
-        String ap = (countryCode + "/" + admin).toUpperCase(new Locale("tr", "TR")); // TR/ANKARA
-        Log.d(L, "extractAdminPath → " + ap + " (locality=" + a.getLocality() + ", subAdmin=" + a.getSubAdminArea() + ")");
-        return ap;
     }
 
     /* ================================ UTILS ================================ */
