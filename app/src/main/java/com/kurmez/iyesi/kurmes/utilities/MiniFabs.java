@@ -71,6 +71,8 @@ public class MiniFabs {
     private boolean isFabOpen = false;
     private Animation fabOpenAnim, fabCloseAnim, rotateForwardAnim, rotateBackwardAnim;
     private Handler handler = new Handler();
+    private FloatingActionButton fabOld;
+
     public MiniFabs(Activity activity,
                     FloatingActionButton mainFab,
                     FloatingActionButton soundFab,
@@ -247,12 +249,14 @@ public class MiniFabs {
         //applyDefaultColors();
         selectedFab = fab;
         fab.setBackgroundTintList(ColorStateList.valueOf(Color.RED));
+        fabOld.setBackgroundTintList(ColorStateList.valueOf(Color.CYAN));
         Drawable icon = fab.getDrawable();
         if (icon != null) {
             Drawable wIcon = icon.mutate();
             wIcon.setColorFilter(Color.WHITE, PorterDuff.Mode.SRC_ATOP);
             fab.setImageDrawable(wIcon);
         }
+        fabOld = selectedFab;
         return selectedFab;
     }
     public void resetIconColor(FloatingActionButton fab) {
