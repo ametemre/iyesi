@@ -48,6 +48,7 @@ import com.kurmez.iyesi.kurmes.utilities.helper.HeaderHelper;
 import com.kurmez.iyesi.kurmes.utilities.helper.net.CFClient;
 import com.kurmez.iyesi.umay.sahiplendirme.Companion;
 
+import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.util.ArrayList;
@@ -383,109 +384,77 @@ public class Explore extends AppCompatActivity {
         companions.clear();
         contentList.clear();
         companionAdapter.notifyDataSetChanged();
-        fetchSouls(null);//fetchSouls("health","critical");
+        //fetchSouls(null);//fetchSouls("health","critical");
     }
-    /** health="critical" sabit, needsCare opsiyonel (cbNeedsCare). Limit=20. */
-    public List<Soul> fetchSouls(@Nullable String myAdminPath) {
-        ensureCf(); // ← DAİMA önce
+    /** health="critical" sabit, needsCare opsiyonel (cbNeedsCare). Limit=220.  */
+    public void fetchSouls(@Nullable String myAdminPath, @NonNull SoulsJsonCallback cb) {
+        ensureCf();
         try {
-            var ref = new Object() {
-                List<Soul> finalParsed;
-            };
             setLoading(true);
-            if (myAdminPath == null ) {
-                myAdminPath = "TR" + "/" + "Yalova"; // ya da proje içindeki mevcut değerin
-            }
-            Log.i(TAG, "myAdminPath=" + String.valueOf(myAdminPath));
-            List<Soul> parsed;
+            if (myAdminPath == null) myAdminPath = "TR/Yalova";
+            Log.i(TAG, "myAdminPath=" + myAdminPath);
+
             final boolean needsCare = cbNeedsCare != null && cbNeedsCare.isChecked();
             final CFClient.WhereBuilder wb = new CFClient.WhereBuilder().eq("adminPath", myAdminPath);
-            if (needsCare) wb.eq("needsCare", "true");
+            if (needsCare) wb.eq("needsCare", "true"); // alan boolean ise true verin
 
             ensureIo();
             io.execute(() -> {
-                ensureCf(); // iş parçacığında da tedbir
-                cf.listSoulsByFields(wb, 20, new CFClient.JsonCallback() {
-
-                    private void logChunked(String prefix, String text) {
-                        if (text == null) { Log.d(TAG, prefix + " <null>"); return; }
-                        final int MAX = 1000;
-                        for (int i = 0; i < text.length(); i += MAX) {
-                            Log.d(TAG, prefix + " " + text.substring(i, Math.min(i + MAX, text.length())));
-                        }
-                    }
-
-                    @Override
-                    public void onSuccess(@NonNull JSONObject json) {
+                ensureCf();
+                cf.listSoulsByFields(wb, 220, new CFClient.JsonCallback() {
+                    @Override public void onSuccess(@NonNull JSONObject json) {
                         try {
-                            String pretty;
-                            try { pretty = json.toString(2); } catch (Exception e) { pretty = json.toString(); }
-                            //logChunked("raw json:", pretty);
+                            // 1) Diziyi güvenle yakala (items → data → souls)
+                            JSONArray items = json.optJSONArray("items");
+                            if (items == null) items = json.optJSONArray("data");
+                            if (items == null) items = json.optJSONArray("souls"); // NOT: "Souls" değil "souls"
 
-                            // Souls'u parse et
+                            if (items == null) items = new JSONArray();
+
+                            // 2) Mevcut parse akışınızı koruyun
                             List<Soul> parsed = parseSouls(json);
                             if (parsed == null) parsed = java.util.Collections.emptyList();
                             Log.d(TAG, "parsed.size=" + parsed.size());
 
-                            if (parsed.isEmpty()) {
-                                String keys = (json.names() != null) ? json.names().toString() : "<no-keys>";
-                                Log.w(TAG, "Empty parsed. Keys=" + keys);
-                                int dataLen = json.optJSONArray("data") != null ? json.optJSONArray("data").length() : -1;
-                                int itemsLen = json.optJSONArray("items") != null ? json.optJSONArray("items").length() : -1;
-                                int soulsLen = json.optJSONArray("souls") != null ? json.optJSONArray("Souls").length() : -1;
-                                Log.w(TAG, "ok=" + json.optBoolean("ok")
-                                        + " total=" + json.optInt("total", -1)
-                                        + " data.length=" + dataLen
-                                        + " items.length=" + itemsLen
-                                        + " Souls.length=" + soulsLen);
-
-                                org.json.JSONArray probe = json.optJSONArray("data");
-                                if (probe == null) probe = json.optJSONArray("items");
-                                if (probe == null) probe = json.optJSONArray("souls");
-                                if (probe != null && probe.length() > 0) {
-                                    JSONObject first = probe.optJSONObject(0);
-                                    Log.d(TAG, "first item probe=" + (first != null ? first.toString() : "null"));
-                                }
-                                Helpers.showToastSafe(Explore.this,"Boş liste döndü");
-                            }
-
-                            ref.finalParsed = parsed;
+                            // 3) UI güncelle
+                            final List<Soul> finalParsed = parsed;
+                            final JSONArray finalItems = new JSONArray(items.toString()); // defensif kopya
                             runOnUiThread(() -> {
                                 companions.clear();
-                                companions.addAll(ref.finalParsed);
-                                Log.d(TAG, "UI companions.size=" + companions.size());
-                                if (companionAdapter != null) {companionAdapter.notifyDataSetChanged();}
+                                companions.addAll(finalParsed);
+                                if (companionAdapter != null) companionAdapter.notifyDataSetChanged();
                                 setLoading(false);
                                 renderEmptyState();
                             });
+
+                            // 4) Çağıran tarafa hem JSONArray hem List ver
+                            cb.onSuccess(finalItems, finalParsed, json);
 
                         } catch (Throwable e) {
                             Log.e(TAG, "parse error", e);
                             Helpers.showToastSafe(Explore.this,"Veri çözümlenirken hata.");
-                            runOnUiThread(() -> {
-                                setLoading(false);
-                                renderEmptyState();
-                            });
+                            runOnUiThread(() -> { setLoading(false); renderEmptyState(); });
+                            cb.onError(e);
                         }
                     }
-
-                    @Override
-                    public void onError(@NonNull Throwable t) {
+                    @Override public void onError(@NonNull Throwable t) {
                         Log.e(TAG, "listSoulsByFields", t);
                         Helpers.showToastSafe(Explore.this,"Veri alınamadı: " + t.getMessage());
-                        runOnUiThread(() -> {
-                            setLoading(false);
-                            renderEmptyState();
-                        });
+                        runOnUiThread(() -> { setLoading(false); renderEmptyState(); });
+                        cb.onError(t);
                     }
                 });
             });
-            return ref.finalParsed;
         } catch (Exception e) {
             Log.e(TAG + "Error :", e.getMessage());
-            return null;
+            cb.onError(e);
         }
     }
+    public interface SoulsJsonCallback {
+        void onSuccess(@NonNull JSONArray items, @NonNull List<Soul> parsed, @NonNull JSONObject raw);
+        void onError(@NonNull Throwable t);
+    }
+
 
     // ----------------------------------------------------------------------
     // Placeholder Content sınıfı (eğer başka bir yerde tanımlı değilse)

@@ -32,6 +32,8 @@ import org.json.JSONObject;
 
 import java.io.IOException;
 import java.lang.reflect.Field;
+import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
@@ -70,6 +72,20 @@ public class AppCheckTokenProvider extends Application {
     // build.gradle(:app) -> defaultConfig:
     // buildConfigField "boolean", "APP_CHECK_ALLOW_DEBUG_FALLBACK", "true"
     private static final boolean ALLOW_DEBUG_FALLBACK = safeBooleanBC("APP_CHECK_ALLOW_DEBUG_FALLBACK", false);
+    // imports’un altı, class alanları
+
+    // Pop-up tetiklemek için basit listener listesi
+    public interface AppCheckListener {
+        void onAppCheckRejected(boolean isDebugProvider, @Nullable String debugSecret, @NonNull String reasonKey);
+    }
+    private final java.util.List<AppCheckListener> listeners = new java.util.concurrent.CopyOnWriteArrayList<>();
+
+    private volatile boolean debugProviderActive = false;
+    @Nullable private volatile String knownDebugSecret = null; // İstersen BuildConfig’ten doldur
+
+    public static AppCheckTokenProvider get() { return sInstance; }
+    public void addListener(AppCheckListener l) { listeners.add(l); }
+    public void removeListener(AppCheckListener l) { listeners.remove(l); }
 
     private static boolean safeBooleanBC(String field, boolean def) {
         try {
@@ -77,7 +93,30 @@ public class AppCheckTokenProvider extends Application {
             return f.getBoolean(null);
         } catch (Throwable ignore) { return def; }
     }
+// AppCheckTokenProvider.java  (eklemeler)
 
+        public interface Listener {
+            void onAppCheckRejected(boolean isDebugProvider, @Nullable String debugSecret, @NonNull String reasonKey);
+        }
+
+
+        public void addListener(Listener l)  { listeners.add((AppCheckListener) l); }
+        public void removeListener(Listener l){ listeners.remove(l); }
+
+        public void setDebugProviderActive(boolean v) { this.debugProviderActive = v; }
+        public void setKnownDebugSecret(@Nullable String s) { this.knownDebugSecret = s; }
+
+        public void notifyAppCheckRejected(Throwable cause) {
+            final String key = mapReason(cause); // örn: "TOKEN_INVALID"
+            for (AppCheckListener l : listeners) {
+                l.onAppCheckRejected(debugProviderActive, knownDebugSecret, key);
+            }
+        }
+
+        private String mapReason(Throwable t) {
+            // İstersen genişlet: ATTESTATION_FAILED, MISSING_PROVIDER, CLOCK_SKEW...
+            return "TOKEN_INVALID";
+        }
     /* ------------------------------------------------------------------------
      * App Check token cache
      * --------------------------------------------------------------------- */

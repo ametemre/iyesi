@@ -91,6 +91,7 @@ dependencies {
     implementation libs.firebase.appcheck.playintegrity
     implementation libs.litert.gpu.api
     implementation libs.swiperefreshlayout
+    implementation libs.places
     debugImplementation 'com.google.firebase:firebase-appcheck-debug'
 
     // ===================== Google Play services / Maps & Location =====================

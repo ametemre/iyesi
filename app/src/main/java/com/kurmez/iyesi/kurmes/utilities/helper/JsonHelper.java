@@ -52,6 +52,51 @@ public class JsonHelper {
     public JSONObject getPriorityPets() throws Exception {
         return doGetJson("/getPriorityPets", null);
     }
+    // JsonHelper.java veya uygun bir utils sınıfına ekle
+    public static void splitSoulsIntoArrays(Object jsonLike, JSONArray catsArr, JSONArray dogsArr, JSONArray criticalArr) throws org.json.JSONException {
+        // 1) items dizisini çıkar
+        JSONArray items = null;
+        if (jsonLike instanceof String) {
+            String t = ((String) jsonLike).trim();
+            if (t.startsWith("[")) {
+                items = new JSONArray(t);
+            } else {
+                JSONObject obj = new JSONObject(t);
+                items = obj.optJSONArray("items");            // beklenen alan
+                if (items == null) items = obj.optJSONArray("data"); // olası alternatif
+                if (items == null) items = new JSONArray();   // yoksa boş
+            }
+        } else if (jsonLike instanceof JSONObject) {
+            JSONObject obj = (JSONObject) jsonLike;
+            items = obj.optJSONArray("items");
+            if (items == null) items = obj.optJSONArray("data");
+            if (items == null) items = new JSONArray();
+        } else if (jsonLike instanceof JSONArray) {
+            items = (JSONArray) jsonLike;
+        } else {
+            items = new JSONArray();
+        }
+
+        // 2) Tür ve sağlık durumuna göre ayır
+        for (int i = 0; i < items.length(); i++) {
+            Object o = items.opt(i);
+            if (!(o instanceof JSONObject)) continue;
+            JSONObject soul = (JSONObject) o;
+
+            String species = soul.optString("species", "");
+            String health  = soul.optString("health", "");
+
+            if ("cat".equalsIgnoreCase(species)) {
+                catsArr.put(soul);
+            } else if ("dog".equalsIgnoreCase(species)) {
+                dogsArr.put(soul);
+            }
+
+            if ("critical".equalsIgnoreCase(health)) {
+                criticalArr.put(soul);
+            }
+        }
+    }
 
     @RequiresApi(api = Build.VERSION_CODES.N)
     public static JSONObject doGetJson(String path, @Nullable Map<String, String> query) throws Exception {
@@ -72,10 +117,31 @@ public class JsonHelper {
         try (Response resp = http.newCall(req).execute()) {
             String body = resp.body() != null ? resp.body().string() : "";
             if (!resp.isSuccessful()) throw new CFHelper.HttpException(resp.code(), body);
-            return toJson(body);
+            // ... OkHttp çağrısı sonrası:
+            String raw = body; // örn: response.body().string()
+
+// İsteği ve ham cevabı logla
+            logLong("JsonHelper", "GET " + path + "  RAW_JSON(len=" + raw.length() + ")\n" + pretty(raw));
+
+// Güvenli parse: üst seviye JSONArray gelirse sarıp döndür
+            JSONObject result;
+            String ti = raw.trim();
+            if (ti.startsWith("[")) {
+                // Objeye sar: { "items": [...] , "_wrapped": true }
+                result = new JSONObject();
+                result.put("_wrapped", true);
+                result.put("items", new JSONArray(ti));
+            } else {
+                result = new JSONObject(ti);
+            }
+
+            return result;
+
+           // return toJson(body);
         } catch (IOException | JSONException e) {
             throw new RuntimeException(e);
         }
+
     }// HTTP yardımcıları
     @RequiresApi(api = Build.VERSION_CODES.N)
     static JSONObject doPostJson(String path, @Nullable JSONObject json) throws Exception {
@@ -97,6 +163,30 @@ public class JsonHelper {
             return toJson(respBody);
         }
     }
+    // --- DEBUG JSON HELPERS ---
+    private static void logLong(@NonNull String tag, @Nullable String msg) {
+        if (msg == null) return;
+        final int CHUNK = 3000;
+        for (int i = 0; i < msg.length(); i += CHUNK) {
+            Log.d(tag, msg.substring(i, Math.min(msg.length(), i + CHUNK)));
+        }
+    }
+
+    @NonNull
+    private static String pretty(@NonNull String raw) {
+        try {
+            String t = raw.trim();
+            if (t.startsWith("[")) {
+                return new org.json.JSONArray(t).toString(2);
+            } else {
+                return new org.json.JSONObject(t).toString(2);
+            }
+        } catch (Exception ignore) {
+            // JSON değilse ham döndür
+            return raw;
+        }
+    }
+
     @RequiresApi(api = Build.VERSION_CODES.N)
     public static String buildUrl(@NonNull String path, @Nullable Map<String, String> query) {
         StringBuilder url = new StringBuilder(baseHttpUrl);

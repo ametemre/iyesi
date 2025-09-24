@@ -4,6 +4,7 @@ import android.Manifest;
 import android.annotation.SuppressLint;
 import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.InstallSourceInfo;
 import android.content.pm.PackageInfo;
@@ -17,9 +18,12 @@ import android.provider.Settings;
 import android.util.Base64;
 import android.util.Log;
 import android.view.View;
+import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.ImageButton;
+import android.widget.LinearLayout;
 import android.widget.ProgressBar;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.RequiresApi;
@@ -124,7 +128,7 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-
+        showDebugPopupIfNeeded();
         progress = findViewById(R.id.progress);
 
         try { FirebaseApp.initializeApp(this); } catch (Throwable ignore) { }
@@ -729,6 +733,41 @@ public class MainActivity extends AppCompatActivity {
         } catch (Throwable t) {
             Log.w(TAG, "SignOut warn", t);
         }
+    }
+    private void showDebugPopupIfNeeded() {
+        if (!BuildConfig.DEBUG) return; // Sadece debug derlemelerinde çalışır
+
+        // "Bir daha gösterme" tercihi
+        SharedPreferences prefs = getSharedPreferences("app_prefs", MODE_PRIVATE);
+        if (prefs.getBoolean("debug_popup_dismissed", false)) return;
+
+        // Basit içerik + "Bir daha gösterme" kutusu (XML’e gerek yok)
+        LinearLayout container = new LinearLayout(this);
+        container.setOrientation(LinearLayout.VERTICAL);
+        int pad = (int) (16 * getResources().getDisplayMetrics().density);
+        container.setPadding(pad, pad, pad, 0);
+
+        TextView msg = new TextView(this);
+        msg.setText("Uygulama DEBUG modda çalışıyor.");
+        msg.setPadding(0, 0, 0, pad/2);
+
+        CheckBox cb = new CheckBox(this);
+        cb.setText("Bir daha gösterme");
+
+        container.addView(msg);
+        container.addView(cb);
+
+        new AlertDialog.Builder(this)
+                .setTitle("DEBUG MODU")
+                .setView(container)
+                .setCancelable(true)
+                .setPositiveButton("Tamam", (d, w) -> {
+                    if (cb.isChecked()) {
+                        prefs.edit().putBoolean("debug_popup_dismissed", true).apply();
+                    }
+                    d.dismiss();
+                })
+                .show();
     }
 
     private void ensureAppCheckProviderInstalled() {

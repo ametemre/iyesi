@@ -82,12 +82,6 @@
         android:theme="@style/Theme.Material3.Light.NoActionBar"
         tools:targetApi="35">
 
-        <activity
-            android:name=".kurmes.social.message.Message"
-            android:windowSoftInputMode="adjustResize|stateHidden"
-            android:exported="false" />
-        <activity android:name=".ProfileActivity" android:exported="false" />
-
         <!-- Google Play services / Maps -->
         <meta-data
             android:name="com.google.android.gms.version"
@@ -97,25 +91,22 @@
             android:value="AIzaSyBbU_M5LP-eJoDPJYcQaACCfDwuzGK8Cx4" />
 
         <!-- Aktiviteler -->
-        <activity android:name=".umay.SokakActivity" android:exported="false" />
-        <activity android:name=".kurmes.ui.SoulsManagerActivity" android:exported="false" />
-        <activity android:name=".kurmes.social.message.Messaging" android:exported="false" />
-        <activity android:name=".umay.sahiplendirme.Sahiplendirme" android:exported="false" />
-        <activity
-            android:name=".kurmes.Kurmes"
-            android:exported="true"
-            android:enabled="@bool/feature_kurmes_enabled"
-            android:label="@string/app_name" />
-        <activity android:name=".kurmes.Kurmes_dummy" android:exported="false" />
-        <activity android:name=".QRScannerActivity" android:exported="false" />
-        <activity android:name=".kurmes.social.content.ExplorePrivate" android:exported="true" />
-        <activity android:name=".kurmes.social.content.Explore" android:exported="false" />
-        <activity android:name=".umay.Welcome" android:exported="false" />
-        <activity android:name=".Register" android:exported="false" />
         <activity android:name=".QR" android:exported="false" />
+        <activity android:name=".QRScannerActivity" android:exported="false" />
         <activity android:name=".Login" android:exported="false" />
+        <activity android:name=".Register" android:exported="false" />
+        <activity android:name=".ProfileActivity" android:exported="false" />
+        <activity android:name=".umay.SokakActivity" android:exported="false" />
+        <activity android:name=".umay.Welcome" android:exported="false" />
         <activity android:name=".umay.sahiplendirme.Founded" android:exported="false" />
         <activity android:name=".umay.sahiplendirme.Companion" android:exported="false" />
+        <activity android:name=".umay.sahiplendirme.Sahiplendirme" android:exported="false" />
+        <activity android:name=".kurmes.Kurmes" android:exported="true" android:enabled="@bool/feature_kurmes_enabled" android:label="@string/app_name" />
+        <activity android:name=".kurmes.ui.SoulsManagerActivity" android:exported="false" />
+        <activity android:name=".kurmes.social.message.Messaging" android:exported="false" />
+        <activity android:name=".kurmes.social.message.Message" android:windowSoftInputMode="adjustResize|stateHidden" android:exported="false" />
+        <activity android:name=".kurmes.social.content.ExplorePrivate" android:exported="true" />
+        <activity android:name=".kurmes.social.content.Explore" android:exported="false" />
 
         <!-- Giriş (Launcher) -->
         <activity android:name=".MainActivity" android:exported="true">

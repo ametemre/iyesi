@@ -322,4 +322,28 @@ public class Helpers {
             }
         }
     }
+    public static String normalizeAdminPathForServer(String ap) {
+        if (ap == null) return null;
+        String[] parts = ap.split("/");
+        if (parts.length < 2) return ap;
+        java.util.Locale TR = new java.util.Locale("tr","TR");
+
+        String cc  = parts[0].trim().toUpperCase(java.util.Locale.ROOT); // "TR"
+        String il  = parts[1].trim();
+
+        // Çok güvenli TitleCase: TR yerelinde küçük harfe indir, sonra kelime kelime baş harfi büyüt
+        il = il.toLowerCase(TR);
+        String[] tokens = il.split("([\\s-]+)");
+        StringBuilder out = new StringBuilder();
+        int pos = 0;
+        for (String t : tokens) {
+            if (t.isEmpty()) continue;
+            String head = t.substring(0,1).toUpperCase(TR);
+            String tail = (t.length()>1) ? t.substring(1) : "";
+            if (pos++ > 0) out.append(" ");
+            out.append(head).append(tail);
+        }
+        return cc + "/" + out.toString(); // Örn: "TR/Adana", "TR/İstanbul"
+    }
+
 }

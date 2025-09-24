@@ -15,6 +15,9 @@ import android.util.Log;
 import android.view.VelocityTracker;
 import android.view.View;
 import android.view.MotionEvent;
+
+import androidx.annotation.Nullable;
+import androidx.core.view.ViewCompat;
 import androidx.interpolator.view.animation.FastOutSlowInInterpolator;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.google.firebase.auth.FirebaseAuth;
@@ -34,6 +37,9 @@ import android.view.animation.ScaleAnimation;
 import android.widget.FrameLayout;
 import android.widget.ImageButton;
 import android.widget.Spinner;
+
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * Helper class to manage a set of mini FABs.
@@ -70,6 +76,10 @@ public class MiniFabs {
     // SokakActivity içine, class-level’da:
     private boolean isFabOpen = false;
     private Animation fabOpenAnim, fabCloseAnim, rotateForwardAnim, rotateBackwardAnim;
+    // sınıf alanları
+    private final Map<FloatingActionButton, ColorStateList> defaultBg = new HashMap<>();
+    private final Map<FloatingActionButton, ColorStateList> defaultIcon = new HashMap<>();
+
     private Handler handler = new Handler();
     public MiniFabs(Activity activity,
                     FloatingActionButton mainFab,
@@ -86,9 +96,78 @@ public class MiniFabs {
             FloatingActionButton fab = activity.findViewById(miniFabIds[i]);
             fab.setVisibility(View.GONE);
             miniFabs[i] = fab;
+            // ctor’da miniFabs[i] atandıktan hemen sonra:
+            ColorStateList bg = ViewCompat.getBackgroundTintList(fab);
+            defaultBg.put(fab, bg); // null olabilir → deselectAll içinde yedekliyoruz
+            defaultIcon.put(fab, fab.getImageTintList());
+
         }
+
         soundFab.setVisibility(View.GONE);
     }
+    public @Nullable FloatingActionButton selectFab(FloatingActionButton fab) {
+        // Aynı FAB’e tekrar tıklandı → deselect
+        if (selectedFab == fab) {
+            deselectAll();
+            return null;
+        }
+
+        selectedFab = fab;
+
+        // Listedeki tüm FAB’leri güncelle
+        for (FloatingActionButton it : miniFabs) {
+            if (it == fab) {
+                // Seçili FAB: kırmızı zemin + beyaz ikon
+                ViewCompat.setBackgroundTintList(it, ColorStateList.valueOf(Color.RED));
+                Drawable icon = it.getDrawable();
+                if (icon != null) {
+                    Drawable w = icon.mutate();
+                    w.setColorFilter(Color.WHITE, PorterDuff.Mode.SRC_ATOP);
+                    it.setImageDrawable(w);
+                }
+                it.setSelected(true);
+            } else {
+                // Diğerleri: orijinal renklere dön
+                ColorStateList fallback = ColorStateList.valueOf(Color.CYAN);
+                ViewCompat.setBackgroundTintList(it, defaultBg.getOrDefault(it, fallback));
+                it.setImageTintList(defaultIcon.get(it));
+                Drawable d = it.getDrawable();
+                if (d != null) {
+                    d = d.mutate();
+                    d.clearColorFilter();
+                    it.setImageDrawable(d);
+                }
+                it.setSelected(false);
+            }
+            it.refreshDrawableState();
+            it.jumpDrawablesToCurrentState();
+        }
+        return selectedFab;
+    }
+
+    public void deselectAll() {
+        selectedFab = null;
+        for (FloatingActionButton it : miniFabs) {
+            // Arka planı orijinale döndür (veya varsayılan teal)
+            ColorStateList fallback = ColorStateList.valueOf(Color.CYAN);
+            ViewCompat.setBackgroundTintList(it, defaultBg.getOrDefault(it, fallback));
+
+            // İkon tint’i orijinale döndür
+            it.setImageTintList(defaultIcon.get(it));
+
+            // Seçim & ikon filter temizliği
+            it.setSelected(false);
+            Drawable d = it.getDrawable();
+            if (d != null) {
+                d = d.mutate();
+                d.clearColorFilter();
+                it.setImageDrawable(d);
+            }
+            it.refreshDrawableState();
+            it.jumpDrawablesToCurrentState();
+        }
+    }
+
     public void toggle() {
         if (isExpanded) collapse(); else expand();
         isExpanded = !isExpanded;
@@ -242,18 +321,6 @@ public class MiniFabs {
                 fab.setImageDrawable(mutated);
             }
         }
-    }
-    public FloatingActionButton selectFab(FloatingActionButton fab) {
-        //applyDefaultColors();
-        selectedFab = fab;
-        fab.setBackgroundTintList(ColorStateList.valueOf(Color.RED));
-        Drawable icon = fab.getDrawable();
-        if (icon != null) {
-            Drawable wIcon = icon.mutate();
-            wIcon.setColorFilter(Color.WHITE, PorterDuff.Mode.SRC_ATOP);
-            fab.setImageDrawable(wIcon);
-        }
-        return selectedFab;
     }
     public void resetIconColor(FloatingActionButton fab) {
         fab.setBackgroundTintList(ColorStateList.valueOf(Color.parseColor("#FF40C4FF"))); // Teal
