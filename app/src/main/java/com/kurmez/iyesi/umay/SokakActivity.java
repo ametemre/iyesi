@@ -25,12 +25,12 @@ import com.google.maps.android.data.geojson.GeoJsonLayer;
 import com.kurmez.iyesi.Login;
 import com.kurmez.iyesi.R;
 import com.kurmez.iyesi.kayra.Classes.Harita;
-import com.kurmez.iyesi.kayra.Classes.ui.MarkerDetailsBottomSheet;
+import com.kurmez.iyesi.kayra.Classes.ui.NodeDetailsBottomSheet;
 import com.kurmez.iyesi.kurmes.Kurmes;
 import com.kurmez.iyesi.kurmes.utilities.MiniFabs;
 import com.kurmez.iyesi.kurmes.utilities.helper.Actions;
 
-public class SokakActivity extends FragmentActivity implements MarkerDetailsBottomSheet.Host {
+public class SokakActivity extends FragmentActivity implements NodeDetailsBottomSheet.Host {
 
     private FloatingActionButton selectedFab = null; // Track the selected FAB
     public Kurmes kurmes;

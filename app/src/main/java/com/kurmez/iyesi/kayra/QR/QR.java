@@ -1,4 +1,4 @@
-package com.kurmez.iyesi;
+package com.kurmez.iyesi.kayra.QR;
 
 import android.content.Intent;
 import android.graphics.Bitmap;
@@ -14,6 +14,7 @@ import androidx.appcompat.app.AppCompatActivity;
 import com.google.zxing.BarcodeFormat;
 import com.google.zxing.WriterException;
 import com.journeyapps.barcodescanner.BarcodeEncoder;
+import com.kurmez.iyesi.R;
 
 import java.util.UUID;
 

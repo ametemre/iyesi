@@ -37,7 +37,6 @@ import com.google.android.gms.location.FusedLocationProviderClient;
 import com.google.android.gms.location.LocationServices;
 import com.google.android.gms.location.Priority;
 import com.google.android.gms.tasks.CancellationTokenSource;
-import com.google.firebase.appcheck.FirebaseAppCheck;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.storage.FirebaseStorage;
@@ -48,7 +47,7 @@ import com.kurmez.iyesi.R;
 import com.kurmez.iyesi.kayra.Classes.data.Soul;
 import com.kurmez.iyesi.kurmes.utilities.adapters.ImageSliderAdapter;
 import com.kurmez.iyesi.kurmes.utilities.helper.CFObligations;
-import com.kurmez.iyesi.AppCheckTokenProvider;
+import com.kurmez.iyesi.kayra.AppCheckTokenProvider;
 
 import org.json.JSONObject;
 

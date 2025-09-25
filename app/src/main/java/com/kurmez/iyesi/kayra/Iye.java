@@ -1,4 +1,4 @@
-package com.kurmez.iyesi;
+package com.kurmez.iyesi.kayra;
 
 import android.content.Context;
 import android.content.Intent;
@@ -7,11 +7,9 @@ import android.os.Bundle;
 import android.text.InputType;
 import android.text.TextUtils;
 import android.util.Log;
-import android.view.Gravity;
 import android.view.View;
 import android.view.Menu;
 import android.view.MenuItem;
-import android.view.LayoutInflater;
 import android.widget.BaseAdapter;
 import android.widget.EditText;
 import android.widget.ImageView;
@@ -30,6 +28,8 @@ import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.auth.GetTokenResult;
 import com.google.firebase.functions.FirebaseFunctions;
 import com.google.firebase.functions.HttpsCallableResult;
+import com.kurmez.iyesi.Login;
+import com.kurmez.iyesi.R;
 import com.kurmez.iyesi.kurmes.utilities.Helpers;
 
 import java.util.ArrayList;
@@ -46,7 +46,7 @@ import java.util.Map;
  * - uid & role düzenlenemez
  * - Backend callable: updateClaims
  */
-public class ProfileActivity extends AppCompatActivity {
+public class Iye extends AppCompatActivity {
 
     // === UI ===
     private ImageView iyeImage, headerTitle;
@@ -323,16 +323,16 @@ public class ProfileActivity extends AppCompatActivity {
             View row = convertView;
             if (row == null) {
                 // Basit yatay layout: Label | EditText
-                LinearLayout layout = new LinearLayout(ProfileActivity.this);
+                LinearLayout layout = new LinearLayout(Iye.this);
                 layout.setOrientation(LinearLayout.VERTICAL);
                 layout.setPadding(dp(12), dp(10), dp(12), dp(10));
 
-                TextView tv = new TextView(ProfileActivity.this);
+                TextView tv = new TextView(Iye.this);
                 tv.setTypeface(Typeface.DEFAULT_BOLD);
                 tv.setTextSize(14);
                 tv.setPadding(0, 0, 0, dp(6));
 
-                EditText et = new EditText(ProfileActivity.this);
+                EditText et = new EditText(Iye.this);
                 et.setSingleLine(true);
                 et.setPadding(dp(10), dp(8), dp(10), dp(8));
                 et.setBackground(null); // sade görünüm
@@ -389,13 +389,13 @@ public class ProfileActivity extends AppCompatActivity {
         return Math.round(v * d);
     }
     public void launchProfile(Context context) {
-        Intent intent = new Intent(context, ProfileActivity.class);
+        Intent intent = new Intent(context, Iye.class);
         context.startActivity(intent);
         finish();
     }
     public static final String EXTRA_EDIT = "editMode";
     public void launchForEdit(Context ctx,Boolean editMode) {
-        Intent i = new Intent(ctx, ProfileActivity.class);
+        Intent i = new Intent(ctx, Iye.class);
         i.putExtra(EXTRA_EDIT, editMode);
         ctx.startActivity(i);
         // İstersen ileride "editMode" flag’ı koyabilirsin:

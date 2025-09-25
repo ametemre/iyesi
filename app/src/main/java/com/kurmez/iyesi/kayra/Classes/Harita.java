@@ -70,8 +70,8 @@ import org.json.JSONArray;
 import androidx.appcompat.app.AlertDialog;
 import androidx.annotation.Nullable;
 
-import com.kurmez.iyesi.kayra.Classes.ui.MarkerDetailsBottomSheet;
-import com.kurmez.iyesi.kayra.Classes.ui.MarkerIconFactory;
+import com.kurmez.iyesi.kayra.Classes.ui.NodeDetailsBottomSheet;
+import com.kurmez.iyesi.kayra.Classes.ui.NodeIconFactory;
 import com.kurmez.iyesi.kurmes.utilities.Helpers;
 
 import okhttp3.HttpUrl;
@@ -80,7 +80,7 @@ import android.net.Uri;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
-import com.kurmez.iyesi.kayra.Classes.model.MarkerType;
+import com.kurmez.iyesi.kayra.Classes.model.NodeType;
 import com.kurmez.iyesi.umay.sokak.GeoSon;
 // imports:
 // imports
@@ -206,20 +206,20 @@ public class Harita implements OnMapReadyCallback {
             markerTypeMap.clear();
         });
     }
-    private static MarkerType mapServerType(@androidx.annotation.Nullable String t) {
-        if (t == null) return MarkerType.TASK;
+    private static NodeType mapServerType(@androidx.annotation.Nullable String t) {
+        if (t == null) return NodeType.TASK;
         String n = t.trim().toLowerCase(java.util.Locale.ROOT);
         switch (n) {
             // TR adları
-            case "besleme": return MarkerType.FEEDING;
-            case "yuva":    return MarkerType.NEST;
-            case "barınak": return MarkerType.SHELTER;
-            case "gorev":   return MarkerType.TASK;
+            case "besleme": return NodeType.FEEDING;
+            case "yuva":    return NodeType.NEST;
+            case "barınak": return NodeType.SHELTER;
+            case "gorev":   return NodeType.TASK;
             // EN adları (olası payloadlar için)
-            case "feeding": return MarkerType.FEEDING;
-            case "nest":    return MarkerType.NEST;
-            case "shelter": return MarkerType.SHELTER;
-            default:        return MarkerType.TASK;
+            case "feeding": return NodeType.FEEDING;
+            case "nest":    return NodeType.NEST;
+            case "shelter": return NodeType.SHELTER;
+            default:        return NodeType.TASK;
         }
     }
     // basit haversine
@@ -254,7 +254,7 @@ public class Harita implements OnMapReadyCallback {
             if (pending.get() != 0) return;
 
             // MarkerType’ı güvenle çıkar
-            MarkerType mt = MarkerType.TASK;
+            NodeType mt = NodeType.TASK;
             try {
                 org.json.JSONObject m = markerRef.get();
                 if (m != null) {
@@ -269,11 +269,11 @@ public class Harita implements OnMapReadyCallback {
                 }
             } catch (Throwable ignore) { /* DEFAULT kalır */ }
 
-            final MarkerType finalMt = mt;
+            final NodeType finalMt = mt;
             activity.runOnUiThread(() -> {
                 try {
-                    MarkerDetailsBottomSheet sheet =
-                            MarkerDetailsBottomSheet
+                    NodeDetailsBottomSheet sheet =
+                            NodeDetailsBottomSheet
                                     .newInstance(markerId, finalMt); // ← asla null değil
 
                     android.os.Bundle args = sheet.getArguments();
@@ -1174,7 +1174,7 @@ public class Harita implements OnMapReadyCallback {
         if (highlightedMarker != null) {
             String uiKey = markerTypeMap.getOrDefault(highlightedMarker, "default");
             highlightedMarker.setIcon(
-                    MarkerIconFactory.getDefaultIcon(activity, uiKey)
+                    NodeIconFactory.getDefaultIcon(activity, uiKey)
             );
             highlightedMarker = null;
         }
@@ -1184,7 +1184,7 @@ public class Harita implements OnMapReadyCallback {
         if (highlightedMarker != null) clearMarkerHighlight();
         String uiKey = markerTypeMap.getOrDefault(marker, "default");
         marker.setIcon(
-                MarkerIconFactory.getSelectedIcon(activity, uiKey)
+                NodeIconFactory.getSelectedIcon(activity, uiKey)
         );
         highlightedMarker = marker;
     }
@@ -1206,7 +1206,7 @@ public class Harita implements OnMapReadyCallback {
         // görsel/etkileşim
         m.setDraggable(true);
         // istersen seçili renk yap:
-        m.setIcon(MarkerIconFactory.getSelectedIcon(activity, "default"));
+        m.setIcon(NodeIconFactory.getSelectedIcon(activity, "default"));
 
         toast("Sürükleyin, çift dokunarak onaylayın. Tek dokunma: iptal");
     }
@@ -1288,7 +1288,7 @@ public class Harita implements OnMapReadyCallback {
                 repositionMarker.setPosition(originalPos);
             }
             // rengini eski haline getir (istenirse):
-            repositionMarker.setIcon(MarkerIconFactory.getDefaultIcon(activity, "default"));
+            repositionMarker.setIcon(NodeIconFactory.getDefaultIcon(activity, "default"));
         }
         isReposition = false;
         repositionMarkerId = null;

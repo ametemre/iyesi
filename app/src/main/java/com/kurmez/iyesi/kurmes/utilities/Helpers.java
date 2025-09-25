@@ -22,9 +22,7 @@ import com.google.firebase.appcheck.AppCheckToken;
 import com.google.firebase.appcheck.FirebaseAppCheck;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
-import com.kurmez.iyesi.AppCheckTokenProvider;
 import com.kurmez.iyesi.R;
-import com.kurmez.iyesi.kayra.appCheck.TopActivity;
 import com.kurmez.iyesi.kurmes.social.Profile;
 import com.kurmez.iyesi.kurmes.utilities.helper.CFHelper;
 
@@ -36,16 +34,12 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.function.Consumer;
 
-import okhttp3.Call;
 import okhttp3.Callback;
-import okhttp3.HttpUrl;
 import okhttp3.MediaType;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.RequestBody;
-import okhttp3.Response;
 
 /** Ortak yardımcılar + Cloud Functions HTTP yardımcıları */
 public class Helpers {

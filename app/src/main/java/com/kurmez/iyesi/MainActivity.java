@@ -54,6 +54,7 @@ import com.google.zxing.BarcodeFormat;
 import com.google.zxing.WriterException;
 import com.journeyapps.barcodescanner.BarcodeEncoder;
 
+import com.kurmez.iyesi.kayra.QR.QRScannerActivity;
 import com.kurmez.iyesi.kurmes.Kurmes;
 import com.kurmez.iyesi.kurmes.ui.SoulsManagerActivity;
 import com.kurmez.iyesi.kurmes.utilities.Helpers;

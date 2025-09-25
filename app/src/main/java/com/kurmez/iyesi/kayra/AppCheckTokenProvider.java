@@ -1,4 +1,4 @@
-package com.kurmez.iyesi;
+package com.kurmez.iyesi.kayra;
 
 import android.app.Application;
 import android.content.Context;
@@ -25,6 +25,7 @@ import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.auth.GetTokenResult;
 
+import com.kurmez.iyesi.BuildConfig;
 import com.kurmez.iyesi.kayra.appCheck.PlayEnvDiagnostics;
 import com.kurmez.iyesi.kayra.appCheck.TopActivity;
 

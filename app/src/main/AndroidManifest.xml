@@ -71,7 +71,7 @@
     </queries>
 
     <application
-        android:name=".AppCheckTokenProvider"
+        android:name=".kayra.AppCheckTokenProvider"
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
@@ -86,7 +86,7 @@
             android:name=".kurmes.social.message.Message"
             android:windowSoftInputMode="adjustResize|stateHidden"
             android:exported="false" />
-        <activity android:name=".ProfileActivity" android:exported="false" />
+        <activity android:name=".kayra.Iye" android:exported="false" />
 
         <!-- Google Play services / Maps -->
         <meta-data
@@ -107,12 +107,12 @@
             android:enabled="@bool/feature_kurmes_enabled"
             android:label="@string/app_name" />
         <activity android:name=".kurmes.Kurmes_dummy" android:exported="false" />
-        <activity android:name=".QRScannerActivity" android:exported="false" />
+        <activity android:name=".kayra.QR.QRScannerActivity" android:exported="false" />
         <activity android:name=".kurmes.social.content.ExplorePrivate" android:exported="true" />
         <activity android:name=".kurmes.social.content.Explore" android:exported="false" />
         <activity android:name=".umay.Welcome" android:exported="false" />
         <activity android:name=".Register" android:exported="false" />
-        <activity android:name=".QR" android:exported="false" />
+        <activity android:name=".kayra.QR.QR" android:exported="false" />
         <activity android:name=".Login" android:exported="false" />
         <activity android:name=".umay.sahiplendirme.Founded" android:exported="false" />
         <activity android:name=".umay.sahiplendirme.Companion" android:exported="false" />

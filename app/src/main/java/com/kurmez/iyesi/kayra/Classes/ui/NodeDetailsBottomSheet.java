@@ -11,13 +11,11 @@ import android.view.ViewGroup;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
-import com.google.android.gms.tasks.Task;
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment;
 import com.google.android.material.chip.Chip;
 import com.google.android.material.chip.ChipGroup;
 import com.kurmez.iyesi.R;
-import com.kurmez.iyesi.kurmes.utilities.Helpers;
-import com.kurmez.iyesi.kayra.Classes.model.MarkerType;
+import com.kurmez.iyesi.kayra.Classes.model.NodeType;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -26,7 +24,7 @@ import org.json.JSONObject;
 import java.util.Locale;
 
 /** Ikon tıklanınca açılan detay paneli. */
-public class MarkerDetailsBottomSheet extends BottomSheetDialogFragment {
+public class NodeDetailsBottomSheet extends BottomSheetDialogFragment {
     public static final String ARG_ID   = "markerId";
     public static final String ARG_TYPE = "markerType";
     // Harita.openMarkerDetails(...) içinde isteğe bağlı eklenen payload anahtarları:
@@ -41,11 +39,11 @@ public class MarkerDetailsBottomSheet extends BottomSheetDialogFragment {
         super.onAttach(ctx);
         if (ctx instanceof Host) host = (Host) ctx;
     }
-    public static MarkerDetailsBottomSheet newInstance(String markerId, MarkerType type) {
-        MarkerDetailsBottomSheet f = new MarkerDetailsBottomSheet();
+    public static NodeDetailsBottomSheet newInstance(String markerId, NodeType type) {
+        NodeDetailsBottomSheet f = new NodeDetailsBottomSheet();
         Bundle b = new Bundle();
         b.putString(ARG_ID, markerId);
-        b.putString(ARG_TYPE, type != null ? type.name() : MarkerType.TASK.name());
+        b.putString(ARG_TYPE, type != null ? type.name() : NodeType.TASK.name());
         f.setArguments(b);
         return f;
     }
@@ -61,7 +59,7 @@ public class MarkerDetailsBottomSheet extends BottomSheetDialogFragment {
 
         Bundle args = getArguments() != null ? getArguments() : new Bundle();
         final String markerId   = args.getString(ARG_ID, "");
-        final String typeEnum   = args.getString(ARG_TYPE, MarkerType.TASK.name());
+        final String typeEnum   = args.getString(ARG_TYPE, NodeType.TASK.name());
         final String markerJson = args.getString(ARG_MARKER_JSON, null);
         final String soulsJson  = args.getString(ARG_SOULS_JSON,  "[]");
 
@@ -217,7 +215,7 @@ public class MarkerDetailsBottomSheet extends BottomSheetDialogFragment {
     private String prettifyType(String enumName, String serverType) {
         String fromEnum;
         try {
-            MarkerType mt = MarkerType.valueOf(enumName);
+            NodeType mt = NodeType.valueOf(enumName);
             switch (mt) {
                 case FEEDING: fromEnum = "Besleme"; break;
                 case NEST:    fromEnum = "Yuva";    break;

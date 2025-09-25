@@ -4,16 +4,16 @@ import android.content.Context;
 
 import com.google.android.gms.maps.model.BitmapDescriptor;
 import com.google.android.gms.maps.model.BitmapDescriptorFactory;
-import com.kurmez.iyesi.kayra.Classes.model.MarkerType;
+import com.kurmez.iyesi.kayra.Classes.model.NodeType;
 
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
 
 /** Pin ikonlarını üretip cache'leyen fabrika (drawable gerektirmez). */
-public final class MarkerIconFactory {
+public final class NodeIconFactory {
 
-    private MarkerIconFactory() {}
+    private NodeIconFactory() {}
 
     // Basit cache: "KEY(type|selected)" -> BitmapDescriptor
     private static final Map<String, BitmapDescriptor> CACHE = new HashMap<>();
@@ -24,7 +24,7 @@ public final class MarkerIconFactory {
 
     /** Genel amaçlı: Enum’a göre ikon (zoom/species/status şimdilik etkisiz, ileride zenginleştirilebilir). */
     public static BitmapDescriptor forMarker(Context ctx,
-                                             MarkerType type,
+                                             NodeType type,
                                              String species,
                                              String status,
                                              int zoomBucket) {
@@ -86,7 +86,7 @@ public final class MarkerIconFactory {
         }
     }
 
-    private static String mapEnumToString(MarkerType type) {
+    private static String mapEnumToString(NodeType type) {
         if (type == null) return "default";
         switch (type) {
             case FEEDING: return "besleme";

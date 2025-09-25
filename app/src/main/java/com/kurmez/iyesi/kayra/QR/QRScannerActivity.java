@@ -1,16 +1,16 @@
-package com.kurmez.iyesi;
+package com.kurmez.iyesi.kayra.QR;
 
 import android.annotation.SuppressLint;
 import android.content.Intent;
 import android.os.Bundle;
 import android.provider.Settings;
-import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.google.firebase.functions.FirebaseFunctions;
 import com.google.zxing.integration.android.IntentIntegrator;
 import com.google.zxing.integration.android.IntentResult;
+import com.kurmez.iyesi.R;
 import com.kurmez.iyesi.kurmes.utilities.Helpers;
 
 import java.util.Map;

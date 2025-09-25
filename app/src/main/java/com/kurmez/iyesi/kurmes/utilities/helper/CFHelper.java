@@ -18,7 +18,6 @@ import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.functions.FirebaseFunctions;
 import com.google.firebase.functions.HttpsCallableReference;
-import com.kurmez.iyesi.AppCheckTokenProvider;
 import com.kurmez.iyesi.kayra.Classes.data.Soul;
 import com.kurmez.iyesi.kurmes.social.Profile;
 
