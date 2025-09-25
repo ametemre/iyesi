@@ -23,7 +23,7 @@ import com.google.firebase.appcheck.FirebaseAppCheck;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 import com.kurmez.iyesi.R;
-import com.kurmez.iyesi.kurmes.social.Profile;
+import com.kurmez.iyesi.kayra.Classes.data.Iye;
 import com.kurmez.iyesi.kurmes.utilities.helper.CFHelper;
 
 import org.json.JSONArray;
@@ -109,10 +109,10 @@ public class Helpers {
         return "İye";
     }
     /** JSON -> Profile list (örnek mevcut) */
-    public static List<Profile> parseProfiles(String jsonBody) throws JSONException {
+    public static List<Iye> parseProfiles(String jsonBody) throws JSONException {
         JSONObject root = new JSONObject(jsonBody);
         JSONArray users = root.optJSONArray("users");
-        List<Profile> list = new ArrayList<>();
+        List<Iye> list = new ArrayList<>();
         if (users == null) return list;
         for (int i = 0; i < users.length(); i++) {
             JSONObject u = users.getJSONObject(i);
@@ -124,7 +124,7 @@ public class Helpers {
             String phone      = u.optString("phone", "");
             String role       = u.optString("role", "");
             String avatar_url = u.optString("avatar","");
-            list.add(new Profile(uid, username, email, location, phone, role, avatar_url));
+            list.add(new Iye(uid, username, email, location, phone, role, avatar_url));
         }
         return list;
     }

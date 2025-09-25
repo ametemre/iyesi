@@ -1,11 +1,11 @@
-package com.kurmez.iyesi.kurmes.social;
+package com.kurmez.iyesi.kayra.Classes.data;
 
 import java.util.Map;
 
 /**
  * Profile model class representing a user via CustomClaims.
  */
-public class Profile {
+public class Iye {
     private String uid;        // DevID’den türetilip backend tarafından claims’e yazılır
     private String username;
     private String email;
@@ -14,10 +14,10 @@ public class Profile {
     private String role;
     private String avatarUrl;  // opsiyonel
 
-    public Profile() { }
+    public Iye() { }
 
-    public Profile(String uid, String username, String email,
-                   String location, String phone, String role, String avatarUrl) {
+    public Iye(String uid, String username, String email,
+               String location, String phone, String role, String avatarUrl) {
         this.uid = uid;
         this.username = username;
         this.email = email;
@@ -28,9 +28,9 @@ public class Profile {
     }
 
     // Factory: CustomClaims’ten Profile üret
-    public static Profile fromClaims(Map<String,Object> claims) {
+    public static Iye fromClaims(Map<String,Object> claims) {
         if (claims == null) return null;
-        return new Profile(
+        return new Iye(
                 (String) claims.get("uid"),
                 (String) claims.get("username"),
                 (String) claims.get("email"),

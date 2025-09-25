@@ -86,7 +86,7 @@
             android:name=".kurmes.social.message.Message"
             android:windowSoftInputMode="adjustResize|stateHidden"
             android:exported="false" />
-        <activity android:name=".kayra.Iye" android:exported="false" />
+        <activity android:name=".kayra.IyeActivity" android:exported="false" />
 
         <!-- Google Play services / Maps -->
         <meta-data

@@ -27,7 +27,7 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 import com.kurmez.iyesi.Login;
-import com.kurmez.iyesi.kayra.Iye;
+import com.kurmez.iyesi.kayra.IyeActivity;
 import com.kurmez.iyesi.R;
 
 import java.util.ArrayList;
@@ -47,7 +47,7 @@ import okhttp3.Request;
 
 public class Messaging extends AppCompatActivity {
     private static final String CF_ALL_USERS = "https://us-central1-iyesi-e8d4f.cloudfunctions.net/listAllUsersHttp";
-    private Iye profileActivity;
+    private IyeActivity profileActivity;
     private FirebaseFunctions functions;
     private RecyclerView rvConversations;
     private ConversationAdapter adapter;
@@ -220,7 +220,7 @@ public class Messaging extends AppCompatActivity {
                 return true;
             }
             if (item.getItemId() == R.id.edit_profile) {
-                profileActivity = new Iye();
+                profileActivity = new IyeActivity();
                 profileActivity.launchForEdit(this, true);
                 Toast.makeText(this, "Profil Düzenleniyor", Toast.LENGTH_SHORT).show();
                 //profileActivity.launchProfile(this);

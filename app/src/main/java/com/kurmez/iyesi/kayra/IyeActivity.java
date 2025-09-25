@@ -46,7 +46,7 @@ import java.util.Map;
  * - uid & role düzenlenemez
  * - Backend callable: updateClaims
  */
-public class Iye extends AppCompatActivity {
+public class IyeActivity extends AppCompatActivity {
 
     // === UI ===
     private ImageView iyeImage, headerTitle;
@@ -323,16 +323,16 @@ public class Iye extends AppCompatActivity {
             View row = convertView;
             if (row == null) {
                 // Basit yatay layout: Label | EditText
-                LinearLayout layout = new LinearLayout(Iye.this);
+                LinearLayout layout = new LinearLayout(IyeActivity.this);
                 layout.setOrientation(LinearLayout.VERTICAL);
                 layout.setPadding(dp(12), dp(10), dp(12), dp(10));
 
-                TextView tv = new TextView(Iye.this);
+                TextView tv = new TextView(IyeActivity.this);
                 tv.setTypeface(Typeface.DEFAULT_BOLD);
                 tv.setTextSize(14);
                 tv.setPadding(0, 0, 0, dp(6));
 
-                EditText et = new EditText(Iye.this);
+                EditText et = new EditText(IyeActivity.this);
                 et.setSingleLine(true);
                 et.setPadding(dp(10), dp(8), dp(10), dp(8));
                 et.setBackground(null); // sade görünüm
@@ -389,13 +389,13 @@ public class Iye extends AppCompatActivity {
         return Math.round(v * d);
     }
     public void launchProfile(Context context) {
-        Intent intent = new Intent(context, Iye.class);
+        Intent intent = new Intent(context, IyeActivity.class);
         context.startActivity(intent);
         finish();
     }
     public static final String EXTRA_EDIT = "editMode";
     public void launchForEdit(Context ctx,Boolean editMode) {
-        Intent i = new Intent(ctx, Iye.class);
+        Intent i = new Intent(ctx, IyeActivity.class);
         i.putExtra(EXTRA_EDIT, editMode);
         ctx.startActivity(i);
         // İstersen ileride "editMode" flag’ı koyabilirsin:
