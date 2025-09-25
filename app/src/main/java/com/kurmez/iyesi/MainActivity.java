@@ -50,6 +50,7 @@ import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.firebase.functions.FirebaseFunctions;
 import com.google.firebase.functions.HttpsCallableResult;
 
+import com.google.firebase.messaging.FirebaseMessaging;
 import com.google.zxing.BarcodeFormat;
 import com.google.zxing.WriterException;
 import com.journeyapps.barcodescanner.BarcodeEncoder;
@@ -318,6 +319,7 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    @RequiresApi(api = Build.VERSION_CODES.N)
     @RequiresPermission(allOf = {Manifest.permission.BLUETOOTH_ADVERTISE, Manifest.permission.BLUETOOTH_CONNECT})
     private void warmUpAppCheckThenInitUiAndAuth() {
         warmUpAppCheck()
@@ -330,17 +332,66 @@ public class MainActivity extends AppCompatActivity {
                     user = mAuth.getCurrentUser();
 
                     if (user != null) {
-                        user.reload()
-                                .addOnSuccessListener(__ ->
+                        user.reload().addOnSuccessListener(__ ->
                                         user.getIdToken(true)
                                                 .addOnSuccessListener(tokenResult -> {
                                                     idToken = tokenResult.getToken();
                                                     hasAuthIdToken = (idToken != null && !idToken.isEmpty());
                                                     Log.d(TAG, "Auth ID token ready? " + hasAuthIdToken);
+
+                                                    // --- NEW: customClaims -> FCM topic abonelikleri
+                                                    try {
+                                                        java.util.Map<String, Object> claims = tokenResult.getClaims();
+                                                        String role = (claims != null && claims.get("role") != null)
+                                                                ? String.valueOf(claims.get("role")) : null;
+                                                        String adminPath = (claims != null && claims.get("adminPath") != null)
+                                                                ? String.valueOf(claims.get("adminPath")) : null;
+
+                                                        // aksan kırp + lower
+                                                        java.util.function.Function<String, String> fold = s -> {
+                                                            if (s == null) return "";
+                                                            String n = java.text.Normalizer.normalize(s, java.text.Normalizer.Form.NFD);
+                                                            return n.replaceAll("\\p{M}", "").toLowerCase(java.util.Locale.ROOT);
+                                                        };
+
+                                                        boolean isUlgen = false;
+                                                        String fr = fold.apply(role);
+                                                        if (!fr.isEmpty()) {
+                                                            isUlgen = fr.equals("ulgen")
+                                                                    || fr.equals("vet-admin")
+                                                                    || fr.equals("ulgen-vet")
+                                                                    || fr.equals("admin-veterinary");
+                                                        }
+
+                                                        if (isUlgen) {
+                                                            FirebaseMessaging.getInstance()
+                                                                    .subscribeToTopic("role.ulgen")
+                                                                    .addOnCompleteListener(t ->
+                                                                            Log.d(TAG, "Subscribed topic: role.ulgen (ok=" + t.isSuccessful() + ")"));
+                                                        }
+
+                                                        if (adminPath != null && !adminPath.trim().isEmpty()) {
+                                                            String regionTopic = adminPath.trim()
+                                                                    .replace('/', '.')         // TR/ADANA -> TR.ADANA
+                                                                    .replace(' ', '_')         // boşluk -> _
+                                                                    .replaceAll("[^A-Za-z0-9._-]", ""); // izinli karakterler
+                                                            if (!regionTopic.isEmpty()) {
+                                                                FirebaseMessaging.getInstance()
+                                                                        .subscribeToTopic(regionTopic)
+                                                                        .addOnCompleteListener(t ->
+                                                                                Log.d(TAG, "Subscribed topic: " + regionTopic + " (ok=" + t.isSuccessful() + ")"));
+                                                            }
+                                                        }
+                                                    } catch (Exception e) {
+                                                        Log.w(TAG, "Topic subscribe from claims failed", e);
+                                                    }
+                                                    // --- /NEW
+
                                                     maybeStartHealthCheck();
                                                 })
                                                 .addOnFailureListener(e -> Log.e(TAG, "getIdToken(refresh) failed", e)))
                                 .addOnFailureListener(e -> Log.e(TAG, "user.reload failed", e));
+
                     } else {
                         mAuth.signInAnonymously()
                                 .addOnSuccessListener(res -> {
