@@ -75,6 +75,8 @@ android {
 }
 
 dependencies {
+    implementation("com.google.firebase:firebase-messaging")
+    implementation("com.google.firebase:firebase-bom")
     // ===================== Firebase (BoM ile) =====================
     implementation platform('com.google.firebase:firebase-bom:34.2.0')
 
