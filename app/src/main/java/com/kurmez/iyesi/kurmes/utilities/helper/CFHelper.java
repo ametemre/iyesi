@@ -86,7 +86,7 @@ public class CFHelper {
     private final FirebaseFunctions functions;
     private final Handler main = new Handler(Looper.getMainLooper());
 
-    private String baseHttpUrl; // örn: https://us-central1-<PROJECT_ID>.cloudfunctions.net
+    public static String baseHttpUrl; // örn: https://us-central1-<PROJECT_ID>.cloudfunctions.net
     private final String region;
     private String pathPrefix = ""; // ops. /v1 gibi
 

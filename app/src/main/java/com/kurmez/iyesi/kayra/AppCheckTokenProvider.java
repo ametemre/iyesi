@@ -1,8 +1,12 @@
 package com.kurmez.iyesi.kayra;
 
+import static com.google.firebase.appcheck.FirebaseAppCheck.*;
+
+import android.app.Activity;
 import android.app.Application;
 import android.content.Context;
 import android.content.Intent;
+import android.os.Bundle;
 import android.util.Log;
 
 import androidx.annotation.NonNull;
@@ -11,6 +15,7 @@ import androidx.annotation.Nullable;
 import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.common.GoogleApiAvailability;
 import com.google.android.gms.security.ProviderInstaller;
+import com.google.android.gms.tasks.OnFailureListener;
 import com.google.android.gms.tasks.Task;
 import com.google.android.gms.tasks.Tasks;
 
@@ -44,6 +49,16 @@ import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.RequestBody;
 import okhttp3.Response;
+// imports (varsa tekrar etmeyin)
+import android.content.Context;
+import java.util.concurrent.atomic.AtomicBoolean;
+
+import com.google.firebase.FirebaseApp;
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.appcheck.FirebaseAppCheck;
+import com.google.firebase.appcheck.debug.DebugAppCheckProviderFactory;
+import com.google.firebase.appcheck.playintegrity.PlayIntegrityAppCheckProviderFactory;
+
 
 /**
  * Application + App Check helper:
@@ -66,7 +81,22 @@ public class AppCheckTokenProvider extends Application {
             (BuildConfig.CF_URL_APP_SEND != null && !BuildConfig.CF_URL_APP_SEND.isEmpty())
                     ? BuildConfig.CF_URL_APP_SEND
                     : "https://us-central1-iyesi-e8d4f.cloudfunctions.net/appSend";
+    // --- Membership Guard (CustomClaims-only) ---
+    private static final java.util.concurrent.atomic.AtomicBoolean sRedirecting =
+            new java.util.concurrent.atomic.AtomicBoolean(false);
 
+    // Hedef ve whitelist (tam sınıf adları)
+    private static final String IYE_ACTIVITY_QNAME = "com.kurmez.iyesi.kayra.IyeActivity";
+    private static final java.util.Set<String> GUARD_WHITELIST =
+            new java.util.HashSet<>(java.util.Arrays.asList(
+                    IYE_ACTIVITY_QNAME,
+                    "com.kurmez.iyesi.Login",
+                    "com.kurmez.iyesi.Register",
+                    "com.kurmez.iyesi.umay.Welcome"
+            ));
+
+    // Sadece bir kez kurmak için guard
+    private static final AtomicBoolean INITIALIZED = new AtomicBoolean(false);
     // QA vb. varyantlarda release'te de debug provider'a düşebilmek için:
     // build.gradle(:app) -> defaultConfig:
     // buildConfigField "boolean", "APP_CHECK_ALLOW_DEBUG_FALLBACK", "true"
@@ -96,7 +126,7 @@ public class AppCheckTokenProvider extends Application {
             return;
         }
 
-        FirebaseAppCheck.getInstance().getAppCheckToken(force)
+        getInstance().getAppCheckToken(force)
                 .addOnSuccessListener((AppCheckToken t) -> {
                     if (t != null && t.getToken() != null) {
                         sAppCheckCached = t.getToken();
@@ -312,12 +342,12 @@ public class AppCheckTokenProvider extends Application {
 
         // 4) App Check warm-up (başarısız olursa force dener, uygulamayı bloklamaz)
         try {
-            FirebaseAppCheck.getInstance()
+            getInstance()
                     .getAppCheckToken(false)
                     .addOnSuccessListener(t -> Log.d(TAG, "warm-up AppCheck OK"))
                     .addOnFailureListener(e -> {
                         Log.w(TAG, "warm-up fail; forcing refresh: " + e.getMessage());
-                        FirebaseAppCheck.getInstance().getAppCheckToken(true)
+                        getInstance().getAppCheckToken(true)
                                 .addOnSuccessListener(t2 -> Log.d(TAG, "warm-up force OK"))
                                 .addOnFailureListener(err -> Log.e(TAG, "warm-up force fail", err));
                     });
@@ -343,10 +373,19 @@ public class AppCheckTokenProvider extends Application {
         if (BuildConfig.DEBUG) {
             Log.w(TAG, "APP_CHECK_DEBUG: Debug cihazını Console > App Check > Debug devices altında 'Allow' etmeyi unutma.");
         }
+        registerActivityLifecycleCallbacks(new ActivityLifecycleCallbacks() {
+            @Override public void onActivityResumed(@NonNull Activity a) {  }
+            @Override public void onActivityCreated(@NonNull Activity a, @Nullable Bundle b) {}
+            @Override public void onActivityStarted(@NonNull Activity a) {}
+            @Override public void onActivityPaused(@NonNull Activity a) {}
+            @Override public void onActivityStopped(@NonNull Activity a) {}
+            @Override public void onActivitySaveInstanceState(@NonNull Activity a, @NonNull Bundle b) {}
+            @Override public void onActivityDestroyed(@NonNull Activity a) {}
+        });
     }
 
     private void configureAppCheckProvider(PlayEnvDiagnostics.PlayEnvStatus env) {
-        FirebaseAppCheck appCheck = FirebaseAppCheck.getInstance();
+        FirebaseAppCheck appCheck = getInstance();
 
         boolean shouldUseDebug =
                 BuildConfig.DEBUG
@@ -420,4 +459,106 @@ public class AppCheckTokenProvider extends Application {
             }
         });
     }
+    private static boolean isRegisteredUser(@NonNull FirebaseUser u) {
+        return !u.isAnonymous();
+    }
+
+    @SuppressWarnings("unchecked")
+    private static boolean isMemberFromClaims(@Nullable java.util.Map<String,Object> claims) {
+        if (claims == null) return false;
+        Object roles = claims.get("roles");
+        boolean hasRole = (roles instanceof java.util.List && !((java.util.List<?>) roles).isEmpty())
+                || (roles instanceof String && !((String) roles).trim().isEmpty());
+        boolean memberFlag = Boolean.TRUE.equals(claims.get("isMember"))
+                || Boolean.TRUE.equals(claims.get("profileComplete"));
+        return hasRole || memberFlag;
+    }
+
+    private static void gotoActivity(@NonNull Activity a, @NonNull String qname, @Nullable String reason) {
+        a.runOnUiThread(() -> {
+            Intent i = new Intent();
+            i.setClassName(a.getPackageName(), qname);
+            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK
+                    | Intent.FLAG_ACTIVITY_CLEAR_TOP
+                    | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+            if (reason != null) i.putExtra("reason", reason);
+            a.startActivity(i);
+            a.finish(); // yığın şişmesin
+        });
+    }
+
+    public static void runMembershipGuard(@NonNull Activity a) {
+        String qname = a.getClass().getName();
+        if (GUARD_WHITELIST.contains(qname)) {
+            Log.d("Guard", "skip (whitelist): " + qname);
+            return;
+        }
+
+        FirebaseUser u = FirebaseAuth.getInstance().getCurrentUser();
+        if (u == null) { Log.d("Guard","user=null → guest pass"); return; }
+        if (!isRegisteredUser(u)) { Log.d("Guard","user=anonymous → guest pass"); return; }
+
+        u.getIdToken(false)
+                .addOnSuccessListener(res -> {
+                    java.util.Map<String,Object> claims = res.getClaims();
+                    Log.d("Guard", "claimsKeys=" + (claims==null? "null" : claims.keySet()));
+
+                    // claims yok/boş → IyeActivity
+                    if (claims == null || claims.isEmpty()) {
+                        if (sRedirecting.compareAndSet(false, true)) {
+                            try { gotoActivity(a, IYE_ACTIVITY_QNAME, "claims_null"); }
+                            finally { sRedirecting.set(false); }
+                        }
+                        return;
+                    }
+
+                    // üye değil → IyeActivity
+                    if (!isMemberFromClaims(claims)) {
+                        if (sRedirecting.compareAndSet(false, true)) {
+                            try { gotoActivity(a, IYE_ACTIVITY_QNAME, "not_member"); }
+                            finally { sRedirecting.set(false); }
+                        }
+                    } else {
+                        Log.d("Guard","member=true → pass");
+                    }
+                })
+                .addOnFailureListener(e -> {
+                    Log.w("Guard","getIdToken(false) failed → IyeActivity", e);
+                    if (sRedirecting.compareAndSet(false, true)) {
+                        try { gotoActivity(a, IYE_ACTIVITY_QNAME, "claims_error"); }
+                        finally { sRedirecting.set(false); }
+                    }
+                });
+    }
+
+
+    // 1) Uygulama açılışında çağrılacak init
+    public static void init(Context appContext) {
+        if (INITIALIZED.getAndSet(true)) return;        // idempotent
+
+        FirebaseApp.initializeApp(appContext);
+
+        FirebaseAppCheck appCheck = FirebaseAppCheck.getInstance();
+        if (BuildConfig.DEBUG) {
+            appCheck.installAppCheckProviderFactory(DebugAppCheckProviderFactory.getInstance());
+        } else {
+            appCheck.installAppCheckProviderFactory(PlayIntegrityAppCheckProviderFactory.getInstance());
+        }
+
+        // X-Firebase-Locale uyarılarını susturur
+        FirebaseAuth.getInstance().setLanguageCode("tr");
+    }
+
+    // 2) App Check token hazır olunca çalıştır
+    public static void whenReady(Runnable action, java.util.function.Consumer<Exception> onFail) {
+        FirebaseAppCheck.getInstance().getAppCheckToken(false)
+                .addOnSuccessListener(t -> action.run())
+                .addOnFailureListener(e ->
+                        FirebaseAppCheck.getInstance().getAppCheckToken(true) // tek seferlik force refresh
+                                .addOnSuccessListener(t2 -> action.run())
+                                .addOnFailureListener((OnFailureListener) onFail)
+                );
+    }
+
+
 }

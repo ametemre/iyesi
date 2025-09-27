@@ -1,5 +1,6 @@
 package com.kurmez.iyesi.umay;
 
+import static com.kurmez.iyesi.kayra.AppCheckTokenProvider.runMembershipGuard;
 import static com.kurmez.iyesi.kayra.Classes.data.Soul.parseSouls;
 
 import com.kurmez.iyesi.kurmes.utilities.helper.CFHelper;
@@ -189,6 +190,7 @@ public class Welcome extends AppCompatActivity {
                 }
             });
         }, e -> android.util.Log.e("TOK", "token fail", e));
+        runMembershipGuard(this);
     }
     private void setupUIListeners() {
         imgWelcome.setOnClickListener(v -> {

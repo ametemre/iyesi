@@ -221,7 +221,7 @@ public class Messaging extends AppCompatActivity {
             }
             if (item.getItemId() == R.id.edit_profile) {
                 profileActivity = new IyeActivity();
-                profileActivity.launchForEdit(this, true);
+                profileActivity.launchForEdit(this);
                 Toast.makeText(this, "Profil Düzenleniyor", Toast.LENGTH_SHORT).show();
                 //profileActivity.launchProfile(this);
                 Toast.makeText(this, "Profil Düzenleniyor", Toast.LENGTH_SHORT).show();

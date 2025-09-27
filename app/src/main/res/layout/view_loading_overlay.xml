@@ -1,0 +1,17 @@
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/loading_overlay_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#66000000"
+    android:visibility="gone"
+    android:clickable="true" android:focusable="true">
+    <LinearLayout
+        android:layout_width="wrap_content" android:layout_height="wrap_content"
+        android:layout_gravity="center" android:gravity="center" android:orientation="vertical">
+        <ProgressBar android:layout_width="48dp" android:layout_height="48dp"
+            style="?android:attr/progressBarStyleLarge"/>
+        <TextView android:id="@+id/loading_message" android:layout_width="wrap_content"
+            android:layout_height="wrap_content" android:layout_marginTop="12dp"
+            android:textColor="@android:color/white" android:text="Yükleniyor..."/>
+    </LinearLayout>
+</FrameLayout>

@@ -1,5 +1,7 @@
 package com.kurmez.iyesi;
 
+import static com.kurmez.iyesi.kayra.AppCheckTokenProvider.runMembershipGuard;
+
 import android.Manifest;
 import android.annotation.SuppressLint;
 import android.content.Context;
@@ -67,11 +69,15 @@ import com.kurmez.iyesi.umay.Welcome;
 import java.io.IOException;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
+import java.text.Normalizer;
 import java.util.HashMap;
+import java.util.Locale;
 import java.util.Map;
 import java.util.function.Consumer;
 import java.nio.charset.StandardCharsets;
+import java.util.function.Function;
 
+@RequiresApi(api = Build.VERSION_CODES.N)
 public class MainActivity extends AppCompatActivity {
 
     private static final String TAG = "MainActivity";
@@ -114,9 +120,7 @@ public class MainActivity extends AppCompatActivity {
         TRANSIENT_ERROR,
         UNKNOWN_ERROR
     }
-
-    @RequiresApi(api = Build.VERSION_CODES.N)
-    @SuppressLint("MissingPermission")
+    @RequiresPermission(allOf = {Manifest.permission.BLUETOOTH_ADVERTISE, Manifest.permission.BLUETOOTH_CONNECT})
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -133,7 +137,7 @@ public class MainActivity extends AppCompatActivity {
         try { FirebaseApp.initializeApp(this); } catch (Throwable ignore) { }
 
         ensureAppCheckProviderInstalled();
-
+        runMembershipGuard(this);
         permissionHelper = new PermissionHelper();
         permissionHelper.setActivity(this);
         permissionHelper.setCallback(new PermissionHelper.Callback() {
@@ -151,7 +155,7 @@ public class MainActivity extends AppCompatActivity {
         handler.removeCallbacksAndMessages(null);
     }
 
-    @RequiresApi(api = Build.VERSION_CODES.N)
+
     private void requestIntegrityWithRetry(Consumer<String> onOk, Consumer<Exception> onFail) {
         // Tek kullanımlık ve bağlamsal nonce (Android ID bağlamı)
         final String androidId = Settings.Secure.getString(getContentResolver(), Settings.Secure.ANDROID_ID);
@@ -205,8 +209,7 @@ public class MainActivity extends AppCompatActivity {
         return PreflightStatus.UNKNOWN_ERROR;
     }
 
-    @RequiresPermission(allOf = {Manifest.permission.BLUETOOTH_ADVERTISE, Manifest.permission.BLUETOOTH_CONNECT})
-    @RequiresApi(api = Build.VERSION_CODES.N)
+
     private void preflightIntegrityOrPrompt() {
         setLoading(true);
 
@@ -269,7 +272,7 @@ public class MainActivity extends AppCompatActivity {
         );
     }
 
-    @RequiresApi(api = Build.VERSION_CODES.N)
+
     private void ensureGmsUpToDateOrPrompt() {
         GoogleApiAvailability.getInstance()
                 .makeGooglePlayServicesAvailable(this)
@@ -319,8 +322,39 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    @RequiresApi(api = Build.VERSION_CODES.N)
-    @RequiresPermission(allOf = {Manifest.permission.BLUETOOTH_ADVERTISE, Manifest.permission.BLUETOOTH_CONNECT})
+    private void maybeStartHealthCheck() {
+        Log.d(TAG, "maybeStartHealthCheck hasAppCheckToken=" + hasAppCheckToken +
+                " hasAuthIdToken=" + hasAuthIdToken);
+        if (!hasAppCheckToken || !hasAuthIdToken) return;
+        sendStartupHealthCheck();
+    }
+
+    private void sendStartupHealthCheck() {
+        if (functions == null) functions = FirebaseFunctions.getInstance();
+
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("kind", "health_check");
+        payload.put("ts", System.currentTimeMillis());
+        payload.put("note", "startup_warmup");
+
+        Log.d(TAG, "Calling healthCheck with hasAppCheckToken=" + hasAppCheckToken +
+                ", hasAuthIdToken=" + hasAuthIdToken + ", idTokenNull=" + (idToken == null));
+
+        functions.getHttpsCallable("healthCheck")
+                .call(payload)
+                .addOnSuccessListener((HttpsCallableResult r) ->
+                        Log.i(TAG, "health_check callable OK: " + r.getData()))
+                .addOnFailureListener(e -> {
+                    String msg = e.getMessage() == null ? "" : e.getMessage();
+                    if (msg.contains("NOT_FOUND")) {
+                        Log.w(TAG, "health_check callable NOT_FOUND (deploy edilmemiş olabilir) — akış devam.");
+                    } else {
+                        Log.w(TAG, "health_check callable FAIL: " + msg);
+                    }
+                });
+    }
+
+    @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
     private void warmUpAppCheckThenInitUiAndAuth() {
         warmUpAppCheck()
                 .addOnSuccessListener(appCheckToken -> {
@@ -341,17 +375,17 @@ public class MainActivity extends AppCompatActivity {
 
                                                     // --- NEW: customClaims -> FCM topic abonelikleri
                                                     try {
-                                                        java.util.Map<String, Object> claims = tokenResult.getClaims();
+                                                        Map<String, Object> claims = tokenResult.getClaims();
                                                         String role = (claims != null && claims.get("role") != null)
                                                                 ? String.valueOf(claims.get("role")) : null;
                                                         String adminPath = (claims != null && claims.get("adminPath") != null)
                                                                 ? String.valueOf(claims.get("adminPath")) : null;
 
                                                         // aksan kırp + lower
-                                                        java.util.function.Function<String, String> fold = s -> {
+                                                        Function<String, String> fold = s -> {
                                                             if (s == null) return "";
-                                                            String n = java.text.Normalizer.normalize(s, java.text.Normalizer.Form.NFD);
-                                                            return n.replaceAll("\\p{M}", "").toLowerCase(java.util.Locale.ROOT);
+                                                            String n = Normalizer.normalize(s, Normalizer.Form.NFD);
+                                                            return n.replaceAll("\\p{M}", "").toLowerCase(Locale.ROOT);
                                                         };
 
                                                         boolean isUlgen = false;
@@ -459,44 +493,11 @@ public class MainActivity extends AppCompatActivity {
                     setLoading(false);
                 });
     }
-
     public static Task<AppCheckToken> warmUpAppCheck() {
         FirebaseAppCheck ac = FirebaseAppCheck.getInstance();
         return ac.getAppCheckToken(false)
                 .continueWithTask(t -> t.isSuccessful() ? Tasks.forResult(t.getResult())
                         : ac.getAppCheckToken(true));
-    }
-
-    private void maybeStartHealthCheck() {
-        Log.d(TAG, "maybeStartHealthCheck hasAppCheckToken=" + hasAppCheckToken +
-                " hasAuthIdToken=" + hasAuthIdToken);
-        if (!hasAppCheckToken || !hasAuthIdToken) return;
-        sendStartupHealthCheck();
-    }
-
-    private void sendStartupHealthCheck() {
-        if (functions == null) functions = FirebaseFunctions.getInstance();
-
-        Map<String, Object> payload = new HashMap<>();
-        payload.put("kind", "health_check");
-        payload.put("ts", System.currentTimeMillis());
-        payload.put("note", "startup_warmup");
-
-        Log.d(TAG, "Calling healthCheck with hasAppCheckToken=" + hasAppCheckToken +
-                ", hasAuthIdToken=" + hasAuthIdToken + ", idTokenNull=" + (idToken == null));
-
-        functions.getHttpsCallable("healthCheck")
-                .call(payload)
-                .addOnSuccessListener((HttpsCallableResult r) ->
-                        Log.i(TAG, "health_check callable OK: " + r.getData()))
-                .addOnFailureListener(e -> {
-                    String msg = e.getMessage() == null ? "" : e.getMessage();
-                    if (msg.contains("NOT_FOUND")) {
-                        Log.w(TAG, "health_check callable NOT_FOUND (deploy edilmemiş olabilir) — akış devam.");
-                    } else {
-                        Log.w(TAG, "health_check callable FAIL: " + msg);
-                    }
-                });
     }
 
     private void safeFinishWithDelay() {
@@ -624,10 +625,6 @@ public class MainActivity extends AppCompatActivity {
     }
 
     @SuppressLint("HardwareIds")
-    @RequiresPermission(allOf = {
-            Manifest.permission.BLUETOOTH_ADVERTISE,
-            Manifest.permission.BLUETOOTH_CONNECT
-    })
     private void handleLongClickForQRCode() {
         generatedQRCode = Settings.Secure.getString(getContentResolver(), Settings.Secure.ANDROID_ID);
 

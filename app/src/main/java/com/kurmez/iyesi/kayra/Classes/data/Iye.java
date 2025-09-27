@@ -55,17 +55,18 @@ public class Iye {
     public void setLocation(String location) { this.location = location; }
     public void setPhone(String phone) { this.phone = phone; }
     public void setAvatarUrl(String avatarUrl) { this.avatarUrl = avatarUrl; }
-}
-final class ClaimsKeys {
-    public static final String UID        = "uid";
-    public static final String ROLE       = "role";
-    public static final String USERNAME   = "username";
-    public static final String EMAIL      = "email";
-    public static final String PHONE      = "phone";
-    public static final String LOCATION   = "location";
+    public final class ClaimsKeys {
+        public static final String UID        = "uid";
+        public static final String ROLE       = "role";
+        public static final String USERNAME   = "username";
+        public static final String EMAIL      = "email";
+        public static final String PHONE      = "phone";
+        public static final String LOCATION   = "location";
 
-    // avatar URL yerine, CF’in yazdığı kısa anahtar(lar):
-    public static final String AVATAR_KEY = "avatarKey";
-    public static final String AVATAR_REV = "avatarRev"; // opsiyonel cache-bust
+        // avatar URL yerine, CF’in yazdığı kısa anahtar(lar):
+        public static final String AVATAR_KEY = "avatarKey";
+        public static final String AVATAR_REV = "avatarRev"; // opsiyonel cache-bust
 
+    }
 }
+

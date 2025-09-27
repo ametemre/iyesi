@@ -1,6 +1,7 @@
 // app/src/main/java/com/kurmez/iyesi/kurmes/social/content/Explore.java
 package com.kurmez.iyesi.kurmes.social.content;
 
+import static com.kurmez.iyesi.kayra.AppCheckTokenProvider.runMembershipGuard;
 import static com.kurmez.iyesi.kayra.Classes.data.Soul.parseSouls;
 
 import android.content.Context;
@@ -235,6 +236,7 @@ public class Explore extends AppCompatActivity {
             // Diğer field'lar gerekiyorsa buraya ekleyebilirsin (örneğin soulId, imageUrl)
             startActivity(intent);
         });
+        runMembershipGuard(this);
     }
 
     @Override

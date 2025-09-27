@@ -1,5 +1,7 @@
 package com.kurmez.iyesi.kurmes.social.content;
 
+import static com.kurmez.iyesi.kayra.AppCheckTokenProvider.runMembershipGuard;
+
 import android.Manifest;
 import android.content.Intent;
 import android.content.pm.PackageManager;
@@ -148,8 +150,8 @@ public class ExplorePrivate extends AppCompatActivity {
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
-
         Log.i(L, "onCreate() → ÇIKIŞ (" + (System.currentTimeMillis() - t0) + " ms)");
+        runMembershipGuard(this);
     }
 
     @Override
