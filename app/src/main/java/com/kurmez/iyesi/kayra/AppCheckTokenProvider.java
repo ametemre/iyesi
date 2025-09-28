@@ -482,7 +482,8 @@ public class AppCheckTokenProvider extends Application {
                     | Intent.FLAG_ACTIVITY_CLEAR_TOP
                     | Intent.FLAG_ACTIVITY_SINGLE_TOP);
             if (reason != null) i.putExtra("reason", reason);
-            a.startActivity(i);
+            if (qname == IYE_ACTIVITY_QNAME){a.startActivity(IyeActivity.intentFromGuard(a.getBaseContext()));}
+            else {a.startActivity(i);}
             a.finish(); // yığın şişmesin
         });
     }

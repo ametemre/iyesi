@@ -1,12 +1,19 @@
 package com.kurmez.iyesi.kurmes.utilities.helper.net;
 
+import android.content.Context;
+import android.graphics.Bitmap;
 import android.os.Handler;
 import android.os.Looper;
+import android.provider.Settings;
 import android.util.Log;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.annotation.WorkerThread;
 
+import com.google.android.gms.tasks.Tasks;
+import com.google.firebase.appcheck.AppCheckToken;
+import com.google.firebase.appcheck.AppCheckTokenResult;
 import com.google.firebase.appcheck.FirebaseAppCheck;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
@@ -14,6 +21,7 @@ import com.google.firebase.auth.FirebaseUser;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Objects;
@@ -443,5 +451,142 @@ public class CFClient {
             Log.e(TAG, "getTokens failed", e);
             postErr(cb, e);
         });
+    }
+
+    private static OkHttpClient http() {
+        return new OkHttpClient.Builder()
+                .connectTimeout(15, TimeUnit.SECONDS)
+                .readTimeout(30, TimeUnit.SECONDS)
+                .writeTimeout(30, TimeUnit.SECONDS)
+                .build();
+    }
+
+    /** Bitmap → JPEG → data URI base64 */
+    private static String toDataUriJpeg(Bitmap bmp, int quality) {
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        bmp.compress(Bitmap.CompressFormat.JPEG, quality, bos);
+        String b64 = android.util.Base64.encodeToString(bos.toByteArray(), android.util.Base64.NO_WRAP);
+        return "data:image/jpeg;base64," + b64;
+    }
+
+    /** bytes → data URI (JPEG varsayımı) */
+    private static String toDataUriJpeg(byte[] jpegBytes) {
+        String b64 = android.util.Base64.encodeToString(jpegBytes, android.util.Base64.NO_WRAP);
+        return "data:image/jpeg;base64," + b64;
+    }
+    // CFClient.java (ek parça)
+    public static final class UploadResult {
+        public final String url;
+        public final String objectPath;
+        public final String contentType;
+        public UploadResult(String url, String objectPath, String contentType) {
+            this.url = url; this.objectPath = objectPath; this.contentType = contentType;
+        }
+    }
+
+    @WorkerThread
+    public static UploadResult uploadImageAndGetUrlBlockingResult(Context ctx,
+                                                                  Request req,
+                                                                  String endpoint,
+                                                                  String dataUriB64,
+                                                                  String path) throws Exception {
+        // (kimlik & appcheck alma kodu – mevcut uploadImageAndGetUrlBlocking ile aynı)
+        // ...
+        try (Response resp = http().newCall(req).execute()) {
+            if (!resp.isSuccessful()) {
+                String err = resp.body() != null ? resp.body().string() : ("HTTP " + resp.code());
+                throw new RuntimeException("saveBase64Image failed: " + err);
+            }
+            String respStr = resp.body() != null ? resp.body().string() : "{}";
+            JSONObject json = new JSONObject(respStr);
+            String url = json.optString("url", null);
+            String objectPath = json.optString("objectPath", null);
+            String contentType = json.optString("contentType", null);
+            if (objectPath == null || objectPath.isEmpty()) {
+                throw new RuntimeException("Missing 'objectPath' in response: " + respStr);
+            }
+            return new UploadResult(url, objectPath, contentType);
+        }
+    }
+
+    /**
+     * BLOKLAYAN çağrı: görüntüyü yükler ve imzalı URL'yi döner.
+     *
+     * @param ctx       Context
+     * @param endpoint  Functions HTTP endpoint (ör: "https://us-central1-<proje>.cloudfunctions.net/saveBase64Image")
+     * @param dataUriB64 "data:image/jpeg;base64,..." biçiminde base64
+     * @param path      İzinli path: "images/iye/avatar", "images/soul/avatar", "images/soul/etc"
+     * @return          Dönen imzalı URL (String)
+     * @throws Exception Hata durumunda fırlatır
+     */
+    @WorkerThread
+    public static String uploadImageAndGetUrlBlocking(Context ctx,
+                                                      String endpoint,
+                                                      String dataUriB64,
+                                                      String path) throws Exception {
+        // 1) Kimlik ve App Check
+        FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
+        if (user == null || user.isAnonymous()) {
+            throw new IllegalStateException("AUTH_REQUIRED: user is null or anonymous");
+        }
+        String idToken = Tasks.await(user.getIdToken(false)).getToken();
+        AppCheckToken appCheckRes = Tasks.await(FirebaseAppCheck.getInstance().getAppCheckToken(false));
+        String appCheck = appCheckRes.getToken();
+
+        // (Opsiyonel) Cihaz kimliği başlığı
+        String deviceId = Settings.Secure.getString(ctx.getContentResolver(), Settings.Secure.ANDROID_ID);
+
+        // 2) Gövde
+        JSONObject opts = new JSONObject();
+        opts.put("path", path); // backend ownerUid’i kendisi enjekte ediyor
+
+        JSONObject body = new JSONObject();
+        body.put("b64", dataUriB64);
+        body.put("opts", opts);
+
+        Request req = new Request.Builder()
+                .url(endpoint)
+                .addHeader("Authorization", "Bearer " + idToken)
+                .addHeader("X-Firebase-AppCheck", appCheck)
+                .addHeader("X-Device-Id", deviceId != null ? deviceId : "unknown")
+                .addHeader("Accept", "application/json")
+                .post(RequestBody.create(body.toString().getBytes(StandardCharsets.UTF_8), JSON))
+                .build();
+
+        // 3) İstek
+        try (Response resp = http().newCall(req).execute()) {
+            if (!resp.isSuccessful()) {
+                String err = resp.body() != null ? resp.body().string() : ("HTTP " + resp.code());
+                throw new RuntimeException("saveBase64Image failed: " + err);
+            }
+            String respStr = resp.body() != null ? resp.body().string() : "{}";
+            JSONObject json = new JSONObject(respStr);
+            String url = json.optString("url", null);
+            if (url == null || url.isEmpty()) {
+                throw new RuntimeException("Missing 'url' in response: " + respStr);
+            }
+            return url; // ← İmzalı URL (String)
+        }
+    }
+
+    // Kolaylık: Bitmap ile çağırmak için
+    @WorkerThread
+    public static String uploadBitmapAndGetUrlBlocking(Context ctx,
+                                                       String endpoint,
+                                                       Bitmap bmp,
+                                                       String path,
+                                                       int jpegQuality) throws Exception {
+        String dataUri = toDataUriJpeg(bmp, Math.max(1, Math.min(jpegQuality, 100)));
+        return uploadImageAndGetUrlBlocking(ctx, endpoint, dataUri, path);
+    }
+
+    // Kolaylık: JPEG byte[] ile çağırmak için
+    @WorkerThread
+    public static String uploadJpegBytesAndGetUrlBlocking(Context ctx,
+                                                          String endpoint,
+                                                          byte[] jpegBytes,
+                                                          String path) throws Exception {
+        String dataUri = toDataUriJpeg(jpegBytes);
+        return uploadImageAndGetUrlBlocking(ctx, endpoint, dataUri, path);
     }
 }

@@ -3,8 +3,6 @@
 // =============================
 package com.kurmez.iyesi.kayra;
 
-import static com.kurmez.iyesi.kurmes.utilities.helper.JsonHelper.buildJsonFromIye;
-
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
@@ -38,7 +36,7 @@ import okhttp3.Response;
  * IyeProfileClient — dış sınıflarla ilişkiler (FirebaseAuth, AppCheck, Cloud Functions, OkHttp)
  * Activity'den ayrıldı; sadece callback ile sonuç döner.
  */
-public class IyeProfileClient {
+public class IyeClient {
     private static final String TAG = "IyeProfileClient";
 
     // Cloud Functions callable isimleri
@@ -52,7 +50,7 @@ public class IyeProfileClient {
     private final String region;
     private final OkHttpClient http;
 
-    public IyeProfileClient(FirebaseApp app, String region) {
+    public IyeClient(FirebaseApp app, String region) {
         this.app = app;
         this.region = region;
         this.fns = FirebaseFunctions.getInstance(app, region);

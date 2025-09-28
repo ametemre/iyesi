@@ -24,6 +24,7 @@ import android.widget.ImageButton;
 import android.widget.ProgressBar;
 import android.widget.Toast;
 
+import androidx.annotation.Nullable;
 import androidx.annotation.RequiresApi;
 import androidx.annotation.RequiresPermission;
 import androidx.appcompat.app.AlertDialog;
@@ -123,6 +124,7 @@ public class MainActivity extends AppCompatActivity {
     @RequiresPermission(allOf = {Manifest.permission.BLUETOOTH_ADVERTISE, Manifest.permission.BLUETOOTH_CONNECT})
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         if (android.os.Build.VERSION.SDK_INT >= 33) {
@@ -137,7 +139,7 @@ public class MainActivity extends AppCompatActivity {
         try { FirebaseApp.initializeApp(this); } catch (Throwable ignore) { }
 
         ensureAppCheckProviderInstalled();
-        runMembershipGuard(this);
+
         permissionHelper = new PermissionHelper();
         permissionHelper.setActivity(this);
         permissionHelper.setCallback(new PermissionHelper.Callback() {
@@ -147,6 +149,7 @@ public class MainActivity extends AppCompatActivity {
         permissionHelper.initialize();
 
         preflightIntegrityOrPrompt();
+        runMembershipGuard(this);
     }
 
     @Override
@@ -479,7 +482,8 @@ public class MainActivity extends AppCompatActivity {
                         });
 
                         patiEnterButton.setOnLongClickListener(v -> {
-                            handleLongClickForQRCode();
+                            openQRScannerForRegistration();
+                            //handleLongClickForQRCode();
                             return true;
                         });
                     }
@@ -677,6 +681,11 @@ public class MainActivity extends AppCompatActivity {
 
     private void navigateToWelcome() {
         startActivity(new Intent(this, Welcome.class));
+        finish();
+    }
+    public void openQRScannerForRegistration(@Nullable int SCAN_QR_REQUEST_CODE) {
+        Intent intent = new Intent(this, QRScannerActivity.class);
+        startActivityForResult(intent, SCAN_QR_REQUEST_CODE);
         finish();
     }
 
