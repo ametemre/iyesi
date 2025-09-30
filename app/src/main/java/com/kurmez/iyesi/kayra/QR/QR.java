@@ -59,13 +59,17 @@ import java.util.Map;
  * - callFunction (Cloud Functions wrapper)
  */
 public final class QR {
+    private static final String TAG = "QR";
+
 
     private QR() {}
+
 
     // ============================================================
     // 1) TARAMA (ZXing + özel scanner)
     // ============================================================
     public static void startScan(@NonNull Activity activity) {
+        Log.i(TAG, "[startScan] in");
         IntentIntegrator integrator = new IntentIntegrator(activity);
         integrator.setDesiredBarcodeFormats(IntentIntegrator.QR_CODE);
         integrator.setPrompt("QR'ı hizalayın");
@@ -77,11 +81,33 @@ public final class QR {
 
     @Nullable
     public static String parseScanResult(int requestCode, int resultCode, @Nullable Intent data) {
+        Log.i(TAG, "[parseScanResult] requestCode=" + requestCode + ", resultCode=" + resultCode);
+
+        // 1. Önce ZXing sonucunu kontrol et
         IntentResult z = IntentIntegrator.parseActivityResult(requestCode, resultCode, data);
-        if (z != null && z.getContents() != null) return z.getContents().trim();
-        if (requestCode == REQ_SCAN && resultCode == Activity.RESULT_OK && data != null) {
-            return data.getStringExtra(EXTRA_RAW);
+        if (z != null && z.getContents() != null) {
+            Log.i(TAG, "[parseScanResult] ZXing result: " + z.getContents());
+            return z.getContents().trim();
         }
+
+        // 2. QRScannerActivity'den gelen sonucu kontrol et
+        if (requestCode == REQ_SCAN && resultCode == Activity.RESULT_OK && data != null) {
+            Log.i(TAG, "[parseScanResult] Checking QRScannerActivity result");
+
+            // Önce QRScannerActivity'nin kendi formatını dene
+            String raw = data.getStringExtra("com.kurmez.iyesi.qr.EXTRA_QR_RAW");
+            Log.i(TAG, "[parseScanResult] QRScannerActivity EXTRA_QR_RAW: " + raw);
+
+            // Eski formatı da dene
+            if (raw == null) {
+                raw = data.getStringExtra(EXTRA_RAW);
+                Log.i(TAG, "[parseScanResult] Legacy EXTRA_RAW: " + raw);
+            }
+
+            return raw;
+        }
+
+        Log.i(TAG, "[parseScanResult] No result found");
         return null;
     }
 
@@ -95,36 +121,47 @@ public final class QR {
     private static volatile TargetResolver sResolver;
 
     public static void installResolver(@Nullable TargetResolver resolver) {
+        Log.i(TAG, "[installResolver] in");
         sResolver = resolver;
     }
 
     @NonNull
     public static Uri normalizeRoute(@NonNull String raw) {
+        Log.i(TAG, "[normalizeRoute] in");
         try {
             String t = raw.trim();
             if (t.startsWith("{") && t.endsWith("}")) {
+                Log.i(TAG, "[method] in");
                 int idx = t.indexOf("\"route\"");
                 if (idx >= 0) {
+                    Log.i(TAG, "[if] in");
                     int q1 = t.indexOf('"', idx + 7);
                     int q2 = t.indexOf('"', q1 + 1);
                     if (q1 > 0 && q2 > q1) {
+                        Log.i(TAG, "[if] in");
                         String route = t.substring(q1 + 1, q2);
+                        Log.i(TAG, "[Uri.parse] return Uri.parse(\"iyesi://\" + trimLeadingSlash(route));");
                         return Uri.parse("iyesi://" + trimLeadingSlash(route));
                     }
                 }
             }
 
             Uri uri = Uri.parse(raw);
+            Log.i(TAG, "[Uri.parse] Uri uri = Uri.parse(raw);");
 
             if ("https".equalsIgnoreCase(uri.getScheme())
                     && uri.getHost() != null
                     && uri.getHost().contains("us-central1-")) {
+                Log.i(TAG, "[method] in");
                 String to = uri.getQueryParameter("to");
                 if (!TextUtils.isEmpty(to)) {
+                    Log.i(TAG, "[method] in");
+                    Log.i(TAG, "[Uri.parse] return Uri.parse(\"iyesi://\" + trimLeadingSlash(to));");
                     return Uri.parse("iyesi://" + trimLeadingSlash(to));
                 }
                 String slug = uri.getQueryParameter("slug");
                 if (!TextUtils.isEmpty(slug)) {
+                    Log.i(TAG, "[method] in");
                     return slugToRoute(slug);
                 }
             }
@@ -133,9 +170,12 @@ public final class QR {
                     && "iyesi.app".equalsIgnoreCase(uri.getHost())
                     && uri.getPath() != null
                     && uri.getPath().startsWith("/d/")) {
+                Log.i(TAG, "[method] in");
                 String route = uri.getPath().substring(3);
                 Uri n = Uri.parse("iyesi://" + trimLeadingSlash(route));
+                Log.i(TAG, "[Uri.parse] Uri n = Uri.parse(\"iyesi://\" + trimLeadingSlash(route));");
                 if (uri.getQuery() != null) {
+                    Log.i(TAG, "[method] in");
                     n = n.buildUpon().encodedQuery(uri.getEncodedQuery()).build();
                 }
                 return n;
@@ -148,17 +188,21 @@ public final class QR {
             return uri;
 
         } catch (Throwable e) {
+            Log.i(TAG, "[catch] in");
             Log.e("QR", "normalizeRoute error: " + e);
+            Log.i(TAG, "[Uri.parse] return Uri.parse(raw);");
             return Uri.parse(raw);
         }
     }
 
     @Nullable
     public static Intent buildIntentFromQr(@NonNull Context ctx, @NonNull String raw) {
+        Log.i(TAG, "[buildIntentFromQr] in");
         Uri route = normalizeRoute(raw);
 
         TargetResolver r = sResolver;
         if (r != null && "iyesi".equalsIgnoreCase(route.getScheme())) {
+            Log.i(TAG, "[method] in");
             Intent custom = r.resolve(ctx, route);
             if (custom != null) return custom;
         }
@@ -166,22 +210,28 @@ public final class QR {
         if ("https".equalsIgnoreCase(route.getScheme())
                 || "http".equalsIgnoreCase(route.getScheme())
                 || "market".equalsIgnoreCase(route.getScheme())) {
+            Log.i(TAG, "[method] in");
             return new Intent(Intent.ACTION_VIEW, route);
         }
 
         if ("iyesi".equalsIgnoreCase(route.getScheme())) {
+            Log.i(TAG, "[method] in");
             Intent i = new Intent(ctx, com.kurmez.iyesi.MainActivity.class);
             i.putExtra("route", route.toString());
+            Log.i(TAG, "[putExtra] i.putExtra(\"route\", route.toString());");
             return i;
         }
         return new Intent(Intent.ACTION_VIEW, route);
     }
 
     public static boolean route(@NonNull Context ctx, @NonNull String raw) {
+        Log.i(TAG, "[route] in");
         Intent i = buildIntentFromQr(ctx, raw);
         if (i != null) {
+            Log.i(TAG, "[if] in");
             i.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP);
             ctx.startActivity(i);
+            Log.i(TAG, "[startActivity] ctx.startActivity(i);");
             return true;
         }
         return false;
@@ -198,6 +248,7 @@ public final class QR {
                                           @NonNull QROptions defaults,
                                           int sizePx,
                                           @Nullable OnGenerated cb) {
+        Log.i(TAG, "[method] in");
 
         final int pad = (int) (a.getResources().getDisplayMetrics().density * 16);
 
@@ -242,8 +293,10 @@ public final class QR {
         tvDotVal.setText(String.format(java.util.Locale.US, "%.02f", clamp(defaults.dotScale, 0.30f, 0.48f)));
         root.addView(tvDotVal);
 
+        Log.i(TAG, "[setOnSeekBarChangeListener] in");
         sbDot.setOnSeekBarChangeListener(new SimpleSeek() {
             @Override public void onProgressChanged(SeekBar seekBar, int p, boolean fromUser) {
+                Log.i(TAG, "[onProgressChanged] in");
                 float val = map(p, 0, 100, 0.30f, 0.48f);
                 tvDotVal.setText(String.format(java.util.Locale.US, "%.02f", val));
             }
@@ -266,6 +319,7 @@ public final class QR {
 
         sbSp.setOnSeekBarChangeListener(new SimpleSeek() {
             @Override public void onProgressChanged(SeekBar seekBar, int p, boolean fromUser) {
+                Log.i(TAG, "[onProgressChanged] in");
                 tvSpVal.setText(p==0 ? "Tam (mod 0)" : p==1 ? "Seyrek: 3'te1 (mod3)" : "Seyrek: 2'de1 (mod2)");
             }
         });
@@ -298,6 +352,7 @@ public final class QR {
         });
         sbHole.setOnSeekBarChangeListener(new SimpleSeek() {
             @Override public void onProgressChanged(SeekBar seekBar, int p, boolean fromUser) {
+                Log.i(TAG, "[onProgressChanged] in");
                 float val = map(p, 0, 100, 0f, 0.35f);
                 tvHoleVal.setText(String.format(java.util.Locale.US, "Çap oranı: %.02f", val));
             }
@@ -344,6 +399,7 @@ public final class QR {
                     .setTitle("Logo Seç")
                     .setItems(names, (d, which) -> {
                         if (which == 0) {
+                            Log.i(TAG, "[if] in");
                             selectedLogoResId[0] = -1;
                             ivLogo.setImageDrawable(null);
                         } else {
@@ -352,6 +408,7 @@ public final class QR {
                             Bitmap preview = loadBitmapFromDrawable(a, it.resId, logoPreviewPx);
                             ivLogo.setImageBitmap(preview);
                             if (!cbHole.isChecked()) {
+                                Log.i(TAG, "[method] in");
                                 cbHole.setChecked(true);
                                 int pHole = (int) (0.22f / 0.35f * 100f);
                                 sbHole.setProgress(pHole);
@@ -411,6 +468,7 @@ public final class QR {
 
             // seçilen logo → bitmap
             if (selectedLogoResId[0] > 0 && o.holeRatio > 0f) {
+                Log.i(TAG, "[if] in");
                 int target = Math.round(sizePx * o.holeRatio);
                 o.centerLogo = loadBitmapFromDrawable(a, selectedLogoResId[0], target);
             } else {
@@ -427,6 +485,7 @@ public final class QR {
 
             String content = link.isEmpty() ? buildSmartContentFromOptions(o) : link;
             if (!frag.isEmpty()) {
+                Log.i(TAG, "[method] in");
                 String fragClean = frag.startsWith("#") ? frag.substring(1) : frag;
                 content = content + "#" + Uri.encode(fragClean);
             }
@@ -437,6 +496,7 @@ public final class QR {
                 showPreviewDialog(a, content, qr);
                 if (cb != null) cb.onGenerated(qr, content);
             } catch (WriterException e) {
+                Log.i(TAG, "[catch] in");
                 Log.e("QR", "Generate failed", e);
                 Toast.makeText(a, "QR üretilemedi: " + e.getMessage(), Toast.LENGTH_SHORT).show();
             }
@@ -453,15 +513,18 @@ public final class QR {
 
     @NonNull
     private static List<DrawableItem> listAppDrawables(@NonNull Context ctx) {
+        Log.i(TAG, "[listAppDrawables] in");
         List<DrawableItem> out = new ArrayList<>();
         Field[] fields = com.kurmez.iyesi.R.drawable.class.getDeclaredFields();
         for (Field f : fields) {
+            Log.i(TAG, "[for] in");
             try {
                 int id = f.getInt(null);
                 String name = f.getName();
                 if (name.startsWith("ic_launcher_background")) continue;
                 out.add(new DrawableItem(name, id));
             } catch (Throwable ignore) {}
+            Log.i(TAG, "[catch] in");
         }
         java.util.Collections.sort(out, (a, b) -> a.name.compareToIgnoreCase(b.name));
         return out;
@@ -469,6 +532,7 @@ public final class QR {
 
     @Nullable
     private static Bitmap loadBitmapFromDrawable(@NonNull Context ctx, int resId, int targetPx) {
+        Log.i(TAG, "[loadBitmapFromDrawable] in");
         try {
             Drawable d = AppCompatResources.getDrawable(ctx, resId);
             if (d == null) return null;
@@ -480,12 +544,14 @@ public final class QR {
             d.draw(c);
             return bmp;
         } catch (Throwable t) {
+            Log.i(TAG, "[catch] in");
             Log.e("QR", "loadBitmapFromDrawable failed id=" + resId, t);
             return null;
         }
     }
 
     private static void showPreviewDialog(@NonNull Activity a, @NonNull String content, @NonNull Bitmap bmp) {
+        Log.i(TAG, "[showPreviewDialog] in");
         ImageView iv = new ImageView(a);
         iv.setAdjustViewBounds(true);
         iv.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
@@ -506,6 +572,7 @@ public final class QR {
                                                  @NonNull QROptions initial,
                                                  int sizePx,
                                                  @NonNull OnGenerated cb) {
+        Log.i(TAG, "[method] in");
         final int pad = (int) (a.getResources().getDisplayMetrics().density * 16);
 
         ScrollView sc = new ScrollView(a);
@@ -552,8 +619,10 @@ public final class QR {
             QROptions o = new QROptions();
             try { o.dotScale = clamp(Float.parseFloat(etDot.getText().toString()), 0.25f, 0.55f); }
             catch (Exception ignore) { o.dotScale = 0.34f; }
+            Log.i(TAG, "[catch] in");
             try { o.holeRatio = clamp(Float.parseFloat(etHole.getText().toString()), 0f, 0.35f); }
             catch (Exception ignore) { o.holeRatio = 0.22f; }
+            Log.i(TAG, "[catch] in");
 
             o.centerLogo    = initial.centerLogo;
             o.transparentBg = initial.transparentBg;
@@ -571,6 +640,7 @@ public final class QR {
 
             String content = linkText.isEmpty() ? buildSmartContentFromOptions(o) : linkText;
             if (!fragText.isEmpty()) {
+                Log.i(TAG, "[method] in");
                 String frag = fragText.startsWith("#") ? fragText.substring(1) : fragText;
                 content = content + "#" + Uri.encode(frag);
             }
@@ -580,6 +650,7 @@ public final class QR {
                 dlg.dismiss();
                 cb.onGenerated(qr, content);
             } catch (WriterException e) {
+                Log.i(TAG, "[catch] in");
                 Log.e("QR", "Generate failed", e);
             }
         });
@@ -591,6 +662,7 @@ public final class QR {
     // 4) QR GÖRSEL ÜRETİMİ (Daire/Kare modül + merkez boşluk + opsiyonel logo)
     // ============================================================
     private static float clamp(float v, float lo, float hi) { return Math.max(lo, Math.min(hi, v)); }
+
 
     @NonNull
     public static Bitmap generate(@NonNull String content, int sizePx, @Nullable Bitmap centerLogo)
@@ -633,11 +705,14 @@ public final class QR {
         final float cx = sizePx / 2f, cy = sizePx / 2f;
 
         for (int my = 0; my < modules; my++) {
+            Log.i(TAG, "[for] in");
             for (int mx = 0; mx < modules; mx++) {
+                Log.i(TAG, "[for] in");
                 if (m.get(mx, my) != 1) continue;
 
                 if (o.sparseModulo > 0 && !isFunctional(mx, my, modules)
                         && ((mx + my) % o.sparseModulo != 0)) {
+                    Log.i(TAG, "[method] in");
                     continue;
                 }
 
@@ -646,10 +721,12 @@ public final class QR {
 
                 float dx = centerX - cx, dy = centerY - cy;
                 if (holeR > 0f && ((dx*dx + dy*dy) <= (holeR + dotHalf) * (holeR + dotHalf))) {
+                    Log.i(TAG, "[method] in");
                     continue;
                 }
 
                 if (o.dotShape == QROptions.DotShape.SQUARE) {
+                    Log.i(TAG, "[if] in");
                     canvas.drawRect(centerX - dotHalf, centerY - dotHalf,
                             centerX + dotHalf, centerY + dotHalf, paint);
                 } else {
@@ -659,6 +736,7 @@ public final class QR {
         }
 
         if (o.centerLogo != null && holeRatio > 0f) {
+            Log.i(TAG, "[if] in");
             int logoSize = Math.round(sizePx * holeRatio * clamp(o.logoScaleInHole, 0.6f, 0.95f));
             Bitmap scaled = Bitmap.createScaledBitmap(o.centerLogo, logoSize, logoSize, true);
             float left = (sizePx - logoSize) / 2f;
@@ -671,6 +749,7 @@ public final class QR {
     }
 
     private static boolean isFunctional(int x, int y, int w) {
+        Log.i(TAG, "[isFunctional] in");
         if ((x <= 8 && y <= 8) || (x >= w - 9 && y <= 8) || (x <= 8 && y >= w - 9)) return true;
         if (x == 6 || y == 6) return true;
         return false;
@@ -689,9 +768,11 @@ public final class QR {
     public static String composeSmartPayload(@NonNull String redirectBaseUrl,
                                              @NonNull String toRoute,
                                              @Nullable String hiddenCodeB64OrPlain) {
+        Log.i(TAG, "[method] in");
         String toEnc = urlEnc(toRoute);
         String hc = hiddenCodeB64OrPlain;
         if (!TextUtils.isEmpty(hc) && !looksBase64(hc)) {
+            Log.i(TAG, "[method] in");
             hc = Base64.encodeToString(hc.getBytes(StandardCharsets.UTF_8), Base64.NO_WRAP);
         }
         StringBuilder sb = new StringBuilder();
@@ -705,8 +786,10 @@ public final class QR {
                                              @NonNull String toRoute,
                                              @Nullable String hiddenCodeB64OrPlain,
                                              @Nullable String fragmentNoHash) {
+        Log.i(TAG, "[method] in");
         String base = composeSmartPayload(redirectBaseUrl, toRoute, hiddenCodeB64OrPlain);
         if (!TextUtils.isEmpty(fragmentNoHash)) {
+            Log.i(TAG, "[method] in");
             String frag = fragmentNoHash.startsWith("#") ? fragmentNoHash.substring(1) : fragmentNoHash;
             base += "#" + Uri.encode(frag);
         }
@@ -715,6 +798,7 @@ public final class QR {
 
     @NonNull
     public static String buildSmartContentFromOptions(@NonNull QROptions o) {
+        Log.i(TAG, "[buildSmartContentFromOptions] in");
         String route = o.toRoute;
         if (!TextUtils.isEmpty(route) && !route.startsWith("/")) route = "/" + route;
         return composeSmartPayload(
@@ -727,6 +811,7 @@ public final class QR {
 
     public static Task<HttpsCallableResult> callFunction(@NonNull String name,
                                                          @NonNull Map<String, Object> data) {
+        Log.i(TAG, "[method] in");
         return FirebaseFunctions.getInstance().getHttpsCallable(name).call(data);
     }
 
@@ -735,29 +820,40 @@ public final class QR {
     // ============================================================
     @NonNull
     public static String androidId(@NonNull Context ctx) {
+        Log.i(TAG, "[androidId] in");
         return Settings.Secure.getString(ctx.getContentResolver(), Settings.Secure.ANDROID_ID);
     }
 
     @NonNull
     private static Uri slugToRoute(@NonNull String slug) {
+        Log.i(TAG, "[slugToRoute] in");
         if (slug.startsWith("SOUL-")) return Uri.parse("iyesi://souls/" + slug.substring(5));
+        Log.i(TAG, "[Uri.parse] if (slug.startsWith(\"SOUL-\")) return Uri.parse(\"iyesi://souls/\" + slug.substring(5));");
         if (slug.startsWith("MSG-"))  return Uri.parse("iyesi://message/" + slug.substring(4));
+        Log.i(TAG, "[Uri.parse] if (slug.startsWith(\"MSG-\"))  return Uri.parse(\"iyesi://message/\" + slug.substring(4));");
         if (slug.startsWith("SOS-"))  return Uri.parse("iyesi://sokak?case=" + slug.substring(4));
+        Log.i(TAG, "[Uri.parse] if (slug.startsWith(\"SOS-\"))  return Uri.parse(\"iyesi://sokak?case=\" + slug.substring(4));");
         if (slug.startsWith("VET-"))  return Uri.parse("iyesi://sahiplendirme/" + slug.substring(4));
+        Log.i(TAG, "[Uri.parse] if (slug.startsWith(\"VET-\"))  return Uri.parse(\"iyesi://sahiplendirme/\" + slug.substring(4));");
         if (slug.startsWith("QRAD-")) return Uri.parse("iyesi://qr/admin/" + slug.substring(5));
+        Log.i(TAG, "[Uri.parse] if (slug.startsWith(\"QRAD-\")) return Uri.parse(\"iyesi://qr/admin/\" + slug.substring(5));");
+        Log.i(TAG, "[Uri.parse] return Uri.parse(\"iyesi://explore/\" + sl  ug);");
         return Uri.parse("iyesi://explore/" + slug);
     }
 
     private static String trimLeadingSlash(String s) {
+        Log.i(TAG, "[trimLeadingSlash] in");
         return (s != null && s.startsWith("/")) ? s.substring(1) : s;
     }
 
     private static String urlEnc(String s) {
+        Log.i(TAG, "[urlEnc] in");
         try { return URLEncoder.encode(s, "UTF-8"); }
         catch (Exception e) { return s; }
     }
 
     private static boolean looksBase64(@NonNull String s) {
+        Log.i(TAG, "[looksBase64] in");
         return s.matches("^[A-Za-z0-9+/=]+$");
     }
 
@@ -767,6 +863,7 @@ public final class QR {
         @Override public void onStopTrackingTouch(SeekBar seekBar) {}
     }
     private static float map(int progress, int minP, int maxP, float outMin, float outMax) {
+        Log.i(TAG, "[map] in");
         float t = (progress - minP) / (float) (maxP - minP);
         return outMin + t * (outMax - outMin);
     }
@@ -777,15 +874,21 @@ public final class QR {
     public static final int REQ_SCAN = 0xBEEF;
 
     public static Intent newScanIntent(Context ctx) {
+        Log.i(TAG, "[newScanIntent] in");
         return new Intent(ctx, QRScannerActivity.class);
     }
 
     public static void deliverResult(Activity a, String raw, @Nullable String format) {
+        Log.i(TAG, "[deliverResult] in");
         Intent r = new Intent();
         r.putExtra(EXTRA_RAW, raw);
+        Log.i(TAG, "[putExtra] r.putExtra(EXTRA_RAW, raw);");
         if (format != null) r.putExtra(EXTRA_FORMAT, format);
+        Log.i(TAG, "[putExtra] if (format != null) r.putExtra(EXTRA_FORMAT, format);");
         a.setResult(Activity.RESULT_OK, r);
+        Log.i(TAG, "[setResult] a.setResult(Activity.RESULT_OK, r);");
         a.finish();
+        Log.i(TAG, "[finish] called");
     }
 
     // ============================================================

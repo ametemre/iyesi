@@ -47,17 +47,21 @@ public class QRScannerActivity extends AppCompatActivity {
 
     /** Kolay başlatma helper’ı (startActivityForResult kullananlar için) */
     public static void launchForResult(@NonNull Activity caller, int requestCode) {
+        Log.i(TAG, "[launchForResult] in");
         Intent i = new Intent(caller, QRScannerActivity.class);
         caller.startActivityForResult(i, requestCode);
+        Log.i(TAG, "[startActivityForResult] caller.startActivityForResult(i, requestCode);");
     }
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
+        Log.i(TAG, "[onCreate] in");
         super.onCreate(savedInstanceState);
 
         // 1) Deep-link ile açılmış mı? (ACTION_VIEW + data)
         Uri data = getIntent() != null ? getIntent().getData() : null;
         if (data != null) {
+            Log.i(TAG, "[if] in");
             String raw = data.toString();
             finishWithSuccess(raw, /*isDeeplink=*/true);
             return;
@@ -65,6 +69,7 @@ public class QRScannerActivity extends AppCompatActivity {
 
         // 2) Kamera izni kontrolü
         if (!hasCameraPermission()) {
+            Log.i(TAG, "[method] in");
             ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.CAMERA}, REQ_CAMERA);
             return;
         }
@@ -74,10 +79,12 @@ public class QRScannerActivity extends AppCompatActivity {
     }
 
     private boolean hasCameraPermission() {
+        Log.i(TAG, "[hasCameraPermission] in");
         return ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED;
     }
 
     private void startZxingScan() {
+        Log.i(TAG, "[startZxingScan] in");
         IntentIntegrator integrator = new IntentIntegrator(this);
         integrator.setDesiredBarcodeFormats(IntentIntegrator.QR_CODE);
         integrator.setPrompt("QR'ı hizalayın");
@@ -89,9 +96,12 @@ public class QRScannerActivity extends AppCompatActivity {
 
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] perms, @NonNull int[] grantResults) {
+        Log.i(TAG, "[onRequestPermissionsResult] in");
         super.onRequestPermissionsResult(requestCode, perms, grantResults);
         if (requestCode == REQ_CAMERA) {
+            Log.i(TAG, "[if] in");
             if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                Log.i(TAG, "[if] in");
                 startZxingScan();
             } else {
                 finishWithError("permission_denied");
@@ -103,77 +113,87 @@ public class QRScannerActivity extends AppCompatActivity {
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
 
-        IntentResult res = IntentIntegrator.parseActivityResult(requestCode, resultCode, data);
-        String raw = QR.parseScanResult(requestCode, resultCode, data);
+        Log.i(TAG, "[onActivityResult] requestCode=" + requestCode + ", resultCode=" + resultCode);
 
-        if (res != null) {
-            if (res.getContents() != null) {
-                QR.deliverResult(this, res.getContents(), res.getFormatName());
+        // Sadece ZXing sonucunu işle
+        IntentResult zxingResult = IntentIntegrator.parseActivityResult(requestCode, resultCode, data);
+
+        if (zxingResult != null) {
+            if (zxingResult.getContents() != null) {
+                // Başarılı tarama
+                String rawContent = zxingResult.getContents().trim();
+                Log.i(TAG, "[onActivityResult] Scan successful: " + rawContent);
+                finishWithSuccess(rawContent, false);
             } else {
-                setResult(Activity.RESULT_CANCELED);
-                finish();
+                // Tarama iptal edildi
+                Log.i(TAG, "[onActivityResult] Scan cancelled");
+                finishWithError("scan_cancelled");
             }
-        }
-        if (raw != null) {
-            // 1) Normalize + resolver + fallback → doğru Activity’yi açar
-            QR.route(this, raw);
-            // 2) İsteğe bağlı: bu ekran işlevini bitirdiyse kapanabilir
-            finish();
+        } else {
+            Log.i(TAG, "[onActivityResult] No ZXing result");
         }
     }
 
-
     private void finishWithSuccess(@NonNull String raw, boolean isDeeplink) {
+        Log.i(TAG, "[finishWithSuccess] in");
         try {
             // Normalize edilmiş rota (iyi-esi://..., iyesi.app/d/... → iyesi://..., CF redirect vb.)
             Uri normalized = com.kurmez.iyesi.kayra.QR.QR.normalizeRoute(raw);
 
             Intent out = new Intent();
             out.putExtra(EXTRA_QR_RAW, raw);
+            Log.i(TAG, "[putExtra] out.putExtra(EXTRA_QR_RAW, raw);");
             out.putExtra(EXTRA_QR_ROUTE, normalized != null ? normalized.toString() : raw);
+            Log.i(TAG, "[putExtra] out.putExtra(EXTRA_QR_ROUTE, normalized != null ? normalized.toString() : raw);");
             out.putExtra(EXTRA_QR_IS_DEEPLINK, isDeeplink);
+            Log.i(TAG, "[putExtra] out.putExtra(EXTRA_QR_IS_DEEPLINK, isDeeplink);");
             out.putExtra(EXTRA_QR_KIND, classify(raw, normalized));
+            Log.i(TAG, "[putExtra] out.putExtra(EXTRA_QR_KIND, classify(raw, normalized));");
             out.putExtra(EXTRA_SCANNED_DATA, classify(raw, normalized));
+            Log.i(TAG, "[putExtra] out.putExtra(EXTRA_SCANNED_DATA, classify(raw, normalized));");
 
             setResult(RESULT_OK, out);
+            Log.i(TAG, "[setResult] setResult(RESULT_OK, out);");
         } catch (Throwable t) {
+            Log.i(TAG, "[catch] in");
             Log.e(TAG, "finishWithSuccess error", t);
             Intent out = new Intent();
             out.putExtra(EXTRA_QR_RAW, raw);
+            Log.i(TAG, "[putExtra] out.putExtra(EXTRA_QR_RAW, raw);");
             out.putExtra(EXTRA_QR_ERROR, "normalize_failed");
+            Log.i(TAG, "[putExtra] out.putExtra(EXTRA_QR_ERROR, \"normalize_failed\");");
             setResult(RESULT_OK, out); // ham veriyi yine de geri ver
+            Log.i(TAG, "[setResult] setResult(RESULT_OK, out); // ham veriyi yine de geri ver");
         }
         finish();
+        Log.i(TAG, "[finish] called");
     }
 
     private void finishWithError(@NonNull String error) {
+        Log.i(TAG, "[finishWithError] in");
         Intent out = new Intent();
         out.putExtra(EXTRA_QR_ERROR, error);
+        Log.i(TAG, "[putExtra] out.putExtra(EXTRA_QR_ERROR, error);");
         setResult(RESULT_CANCELED, out);
+        Log.i(TAG, "[setResult] setResult(RESULT_CANCELED, out);");
         finish();
+        Log.i(TAG, "[finish] called");
     }
 
     /** Kabaca sınıflandır: eşleştirme/route/url/düz metin */
     @NonNull
     private String classify(@NonNull String raw, @Nullable Uri normalized) {
-        // Pairing: 16 haneli hex (ANDROID_ID gibi)
-        if (raw.matches("(?i)^[0-9a-f]{16}$")) return "PAIRING";
-
-        // Normalized route "iyesi://" olduysa ROUTE
+        Log.i(TAG, "[classify] in");
+        // Sadece basit sınıflandırma
+        if (raw.startsWith("iyesi://")) return "INTERNAL_ROUTE";
+        if (raw.startsWith("http")) return "EXTERNAL_URL";
+        if (raw.matches("(?i)^[0-9a-f]{16}$")) return "PAIRING_CODE";
         if (normalized != null && "iyesi".equalsIgnoreCase(normalized.getScheme())) return "ROUTE";
 
-        // http/https/market ise URL
-        try {
-            Uri u = Uri.parse(raw);
-            String sch = u.getScheme();
-            if ("http".equalsIgnoreCase(sch) || "https".equalsIgnoreCase(sch) || "market".equalsIgnoreCase(sch)) {
-                return "URL";
-            }
-        } catch (Exception ignore) {}
-
-        return "TEXT";
+        return "PLAIN_TEXT";
     }
 
     // (İsteğe bağlı) kullanıcıya küçük bir bilgi verme
     private void toast(String msg) { Toast.makeText(this, msg, Toast.LENGTH_SHORT).show(); }
+    //Log.i(TAG, "[toast] in");
 }
