@@ -32,6 +32,7 @@ import com.google.firebase.auth.GetTokenResult;
 
 import com.kurmez.iyesi.BuildConfig;
 import com.kurmez.iyesi.kayra.QR.QR;
+import com.kurmez.iyesi.kayra.QR.QrRouteResolver;
 import com.kurmez.iyesi.kayra.appCheck.PlayEnvDiagnostics;
 import com.kurmez.iyesi.kayra.appCheck.TopActivity;
 
@@ -328,7 +329,7 @@ public class AppCheckTokenProvider extends Application {
         sInstance = this;
         TopActivity.init(this);
 // Örn. App.java (Application.onCreate):
-        QR.installResolver((ctx, route) -> {
+        /**QR.installResolver((ctx, route) -> {
             List<String> seg = route.getPathSegments(); // iyesi://souls/123 → ["souls","123"]
             String first = seg.isEmpty() ? "" : seg.get(0).toLowerCase(Locale.ROOT);
 
@@ -368,7 +369,8 @@ public class AppCheckTokenProvider extends Application {
             }
             // Bilinmeyen route → ana ekran
             return new Intent(ctx, com.kurmez.iyesi.MainActivity.class);
-        });
+        });*/
+        QR.installResolver(new QrRouteResolver());
 
         // 0) Play ortamı teşhisi (hızlı)
         PlayEnvDiagnostics.PlayEnvStatus env = PlayEnvDiagnostics.initPreflight(this);

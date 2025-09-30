@@ -114,22 +114,22 @@
         <activity android:name=".umay.sahiplendirme.Companion" android:exported="false" />
         <!-- QR derin bağlantılarını karşılayan aktivite -->
         <activity
-        android:name=".kayra.QR.QRScannerActivity"
-            android:screenOrientation="fullSensor"
-        android:exported="true">   <!-- dış kaynaklardan açılabilsin -->
-
-
+            android:name=".kayra.QR.QRScannerActivity"
+            android:exported="true">
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW"/>
-                <category android:name="android.intent.category.BROWSABLE"/>
                 <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
 
-                <!-- Üretim -->
-                <data android:scheme="https" android:host="iyesi.app" android:pathPrefix="/d/"/>
+                <!-- Prod alan adın -->
+                <data android:scheme="https"
+                    android:host="iyesi.app"
+                    android:pathPrefix="/d/"/>
 
-                <!-- Test (Cloud Run). RUN_HOST_HOLDER yerine gerçek hostu yaz
-                     örn: iyesi-host-238523750447.us-central1.run.app -->
-                <data android:scheme="https" android:host="RUN_HOST_HOLDER" android:pathPrefix="/d/"/>
+                <!-- Cloud Run test hostun -->
+                <data android:scheme="https"
+                    android:host="iyesi-host-pnfxz2soua-uc.a.run.app"
+                    android:pathPrefix="/d/"/>
             </intent-filter>
         </activity>
 

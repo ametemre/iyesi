@@ -102,7 +102,10 @@ public class QRScannerActivity extends AppCompatActivity {
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
+
         IntentResult res = IntentIntegrator.parseActivityResult(requestCode, resultCode, data);
+        String raw = QR.parseScanResult(requestCode, resultCode, data);
+
         if (res != null) {
             if (res.getContents() != null) {
                 QR.deliverResult(this, res.getContents(), res.getFormatName());
@@ -110,6 +113,12 @@ public class QRScannerActivity extends AppCompatActivity {
                 setResult(Activity.RESULT_CANCELED);
                 finish();
             }
+        }
+        if (raw != null) {
+            // 1) Normalize + resolver + fallback → doğru Activity’yi açar
+            QR.route(this, raw);
+            // 2) İsteğe bağlı: bu ekran işlevini bitirdiyse kapanabilir
+            finish();
         }
     }
 

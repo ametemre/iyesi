@@ -53,6 +53,7 @@ public class QRAdmin extends AppCompatActivity {
                 Toast.makeText(QRAdmin.this, "Processing: " + lastRaw, Toast.LENGTH_SHORT).show();
                 if (lastRaw.startsWith("http")) {
                     Toast.makeText(QRAdmin.this, "This looks like a URL!", Toast.LENGTH_SHORT).show();
+
                 } else {
                     Toast.makeText(QRAdmin.this, "Data: " + lastRaw, Toast.LENGTH_SHORT).show();
                 }
@@ -117,6 +118,8 @@ public class QRAdmin extends AppCompatActivity {
         if (raw != null) {
             lastRaw = raw; // en güncel veri
             qrDataTextView.setText("QR Data: " + raw);
+            QR.route(this, raw);
+            finish();
             Toast.makeText(this, "Scanned: " + raw, Toast.LENGTH_SHORT).show();
         } else if (requestCode == QR.REQ_SCAN) {
             Toast.makeText(this, "Scan canceled or empty", Toast.LENGTH_SHORT).show();
