@@ -12,12 +12,8 @@
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
     <!-- Depolama: API 32 ve altı -->
-    <uses-permission
-        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
-        android:maxSdkVersion="32" />
-    <uses-permission
-        android:name="android.permission.READ_EXTERNAL_STORAGE"
-        android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
 
     <!-- Android 13+ medya izinleri (normal uses-permission, lint için targetApi ekledik) -->
     <uses-permission
@@ -108,15 +104,34 @@
             android:enabled="@bool/feature_kurmes_enabled"
             android:label="@string/app_name" />
         <activity android:name=".kurmes.Kurmes_dummy" android:exported="false" />
-        <activity android:name=".kayra.QR.QRScannerActivity" android:exported="false" />
         <activity android:name=".kurmes.social.content.ExplorePrivate" android:exported="true" />
         <activity android:name=".kurmes.social.content.Explore" android:exported="false" />
         <activity android:name=".umay.Welcome" android:exported="false" />
         <activity android:name=".Register" android:exported="false" />
-        <activity android:name=".kayra.QR.QR" android:exported="false" />
+        <activity android:name=".kayra.QR.QRAdmin" android:exported="false" />
         <activity android:name=".Login" android:exported="false" />
         <activity android:name=".umay.sahiplendirme.Founded" android:exported="false" />
         <activity android:name=".umay.sahiplendirme.Companion" android:exported="false" />
+        <!-- QR derin bağlantılarını karşılayan aktivite -->
+        <activity
+        android:name=".kayra.QR.QRScannerActivity"
+            android:screenOrientation="fullSensor"
+        android:exported="true">   <!-- dış kaynaklardan açılabilsin -->
+
+
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+
+                <!-- Üretim -->
+                <data android:scheme="https" android:host="iyesi.app" android:pathPrefix="/d/"/>
+
+                <!-- Test (Cloud Run). RUN_HOST_HOLDER yerine gerçek hostu yaz
+                     örn: iyesi-host-238523750447.us-central1.run.app -->
+                <data android:scheme="https" android:host="RUN_HOST_HOLDER" android:pathPrefix="/d/"/>
+            </intent-filter>
+        </activity>
 
         <!-- Giriş (Launcher) -->
         <activity android:name=".MainActivity" android:exported="true">

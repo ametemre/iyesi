@@ -31,6 +31,7 @@ import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.auth.GetTokenResult;
 
 import com.kurmez.iyesi.BuildConfig;
+import com.kurmez.iyesi.kayra.QR.QR;
 import com.kurmez.iyesi.kayra.appCheck.PlayEnvDiagnostics;
 import com.kurmez.iyesi.kayra.appCheck.TopActivity;
 
@@ -38,6 +39,8 @@ import org.json.JSONObject;
 
 import java.io.IOException;
 import java.lang.reflect.Field;
+import java.util.List;
+import java.util.Locale;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
@@ -58,6 +61,7 @@ import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.appcheck.FirebaseAppCheck;
 import com.google.firebase.appcheck.debug.DebugAppCheckProviderFactory;
 import com.google.firebase.appcheck.playintegrity.PlayIntegrityAppCheckProviderFactory;
+import com.kurmez.iyesi.kurmes.Kurmes;
 
 
 /**
@@ -323,6 +327,48 @@ public class AppCheckTokenProvider extends Application {
         super.onCreate();
         sInstance = this;
         TopActivity.init(this);
+// Örn. App.java (Application.onCreate):
+        QR.installResolver((ctx, route) -> {
+            List<String> seg = route.getPathSegments(); // iyesi://souls/123 → ["souls","123"]
+            String first = seg.isEmpty() ? "" : seg.get(0).toLowerCase(Locale.ROOT);
+
+            switch (first) {
+                case "souls": {
+                    String id = seg.size() > 1 ? seg.get(1) : null;
+                    Intent i = new Intent(ctx, com.kurmez.iyesi.kurmes.ui.SoulsManagerActivity.class);
+                    if (id != null) i.putExtra("soulId", id);
+                    return i;
+                }
+                case "sokak": {
+                    Intent i = new Intent(ctx, com.kurmez.iyesi.umay.SokakActivity.class);
+                    if (route.getQueryParameter("lat") != null) {
+                        i.putExtra("lat", route.getQueryParameter("lat"));
+                        i.putExtra("lng", route.getQueryParameter("lng"));
+                    }
+                    return i;
+                }
+                case "sahiplendirme": {
+                    String id = seg.size() > 1 ? seg.get(1) : null;
+                    Intent i = new Intent(ctx, com.kurmez.iyesi.umay.sahiplendirme.Sahiplendirme.class);
+                    if (id != null) i.putExtra("postId", id);
+                    return i;
+                }
+                case "qr": {
+                    if (seg.size() > 2 && "admin".equalsIgnoreCase(seg.get(1))) {
+                        Intent i = new Intent(ctx, com.kurmez.iyesi.kayra.QR.QRAdmin.class);
+                        i.putExtra("code", seg.get(2));
+                        return i;
+                    }
+                    break;
+                }
+                case "kurmes": {
+                    Intent i = new Intent(ctx, Kurmes.class);
+                    return i;
+                }
+            }
+            // Bilinmeyen route → ana ekran
+            return new Intent(ctx, com.kurmez.iyesi.MainActivity.class);
+        });
 
         // 0) Play ortamı teşhisi (hızlı)
         PlayEnvDiagnostics.PlayEnvStatus env = PlayEnvDiagnostics.initPreflight(this);

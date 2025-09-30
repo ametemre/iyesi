@@ -9,7 +9,7 @@
 
     <!-- QR Icon -->
     <ImageView
-        android:id="@+id/qr_icon"
+        android:id="@+id/qr_image_preview"
         android:layout_width="100dp"
         android:layout_height="100dp"
         android:src="@drawable/pati"

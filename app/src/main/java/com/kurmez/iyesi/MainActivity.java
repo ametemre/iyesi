@@ -58,6 +58,8 @@ import com.google.zxing.BarcodeFormat;
 import com.google.zxing.WriterException;
 import com.journeyapps.barcodescanner.BarcodeEncoder;
 
+import com.kurmez.iyesi.kayra.QR.QR;
+import com.kurmez.iyesi.kayra.QR.QRAdmin;
 import com.kurmez.iyesi.kayra.QR.QRScannerActivity;
 import com.kurmez.iyesi.kurmes.Kurmes;
 import com.kurmez.iyesi.kurmes.ui.SoulsManagerActivity;
@@ -470,8 +472,9 @@ public class MainActivity extends AppCompatActivity {
                             if (clickCounter >= MAX_CLICKS) {
                                 clickCounter = 0;
                                 try {
-                                    permissionHelper.requestBluetooth();
-                                    PrivateCom.connectToBluetoothDevice(this, this::openQRScannerForRegistration);
+                                    startActivity(new Intent(this,QRAdmin.class));
+                                    //permissionHelper.requestBluetooth();
+                                    //PrivateCom.connectToBluetoothDevice(this, this::openQRScannerForRegistration);
                                 } catch (Exception e) {
                                     Log.e(TAG, "Bluetooth connect failed", e);
                                 }
@@ -482,7 +485,8 @@ public class MainActivity extends AppCompatActivity {
                         });
 
                         patiEnterButton.setOnLongClickListener(v -> {
-                            openQRScannerForRegistration();
+                            QRScannerActivity.launchForResult(this, 2001);
+                            //openQRScannerForRegistration();
                             //handleLongClickForQRCode();
                             return true;
                         });
@@ -579,6 +583,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void openQRScannerForRegistration() {
+
         Intent intent = new Intent(this, QRScannerActivity.class);
         startActivityForResult(intent, SCAN_QR_REQUEST_CODE);
     }
