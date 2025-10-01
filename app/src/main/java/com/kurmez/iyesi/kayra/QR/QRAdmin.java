@@ -41,6 +41,7 @@ public class QRAdmin extends AppCompatActivity {
         Button   scanQRButton     = findViewById(R.id.scan_qr_button);
         Button   generateQRButton = findViewById(R.id.generate_qr_button);
         Button   processButton    = findViewById(R.id.process_button);
+        Button   goToButton       = findViewById(R.id.go_to_button);
 
         if (!TextUtils.isEmpty(qrData)) {
             Log.i(TAG, "[method] in");

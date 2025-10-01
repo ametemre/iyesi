@@ -72,5 +72,20 @@
         android:text="Process QR"
         android:textColor="@android:color/black"
         android:layout_marginTop="16dp" />
+    <!-- Go To Button -->
+    <androidx.appcompat.widget.AppCompatButton
+        android:id="@+id/go_to_button"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginHorizontal="32dp"
+        android:background="@drawable/button_border_white"
+        android:text="Process QR"
+        android:textColor="@android:color/black"
+        android:layout_marginTop="16dp" />
+    <EditText
+        android:id="@+id/go_to_textField"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="GoTo"/>
 
 </LinearLayout>
