@@ -60,7 +60,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import com.google.firebase.FirebaseApp;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.appcheck.FirebaseAppCheck;
-import com.google.firebase.appcheck.debug.DebugAppCheckProviderFactory;
+//import com.google.firebase.appcheck.debug.DebugAppCheckProviderFactory;
 import com.google.firebase.appcheck.playintegrity.PlayIntegrityAppCheckProviderFactory;
 import com.kurmez.iyesi.kurmes.Kurmes;
 
@@ -589,7 +589,7 @@ public class AppCheckTokenProvider extends Application {
 
         FirebaseAppCheck appCheck = FirebaseAppCheck.getInstance();
         if (BuildConfig.DEBUG) {
-            appCheck.installAppCheckProviderFactory(DebugAppCheckProviderFactory.getInstance());
+            //appCheck.installAppCheckProviderFactory(DebugAppCheckProviderFactory.getInstance());
         } else {
             appCheck.installAppCheckProviderFactory(PlayIntegrityAppCheckProviderFactory.getInstance());
         }
