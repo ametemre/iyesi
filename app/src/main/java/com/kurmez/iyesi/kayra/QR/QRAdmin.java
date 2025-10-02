@@ -9,10 +9,12 @@ import android.os.Bundle;
 import android.text.TextUtils;
 import android.util.Log;
 import android.widget.Button;
+import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 
@@ -22,7 +24,6 @@ import com.kurmez.iyesi.R;
 
 public class QRAdmin extends AppCompatActivity {
     private static final String TAG = "QRAdmin";
-
 
     private @Nullable String lastRaw = null; // En güncel taranan/üretilen içerik
 
@@ -38,10 +39,11 @@ public class QRAdmin extends AppCompatActivity {
 
         // View referansları
         TextView qrDataTextView   = findViewById(R.id.qr_data_text_view);
+        EditText qrDataEditText   = findViewById(R.id.go_to_textField);
         Button   scanQRButton     = findViewById(R.id.scan_qr_button);
         Button   generateQRButton = findViewById(R.id.generate_qr_button);
         Button   processButton    = findViewById(R.id.process_button);
-        Button   goToButton       = findViewById(R.id.go_to_button);
+        Button   go_to_button    = findViewById(R.id.go_to_button);
 
         if (!TextUtils.isEmpty(qrData)) {
             Log.i(TAG, "[method] in");
@@ -51,14 +53,13 @@ public class QRAdmin extends AppCompatActivity {
             qrDataTextView.setText("QR Data will appear here");
         }
 
-        // Tara
+        // Tara - QRScannerActivity'yi kullan
         scanQRButton.setOnClickListener(v -> startQRScanner());
 
         // Üret (ayar pop-up → onay → önizleme pop-up)
         generateQRButton.setOnClickListener(v -> openGenerateDialog());
 
         // İşle
-// İşle butonuna yeni mantık
         processButton.setOnClickListener(v -> {
             if (!TextUtils.isEmpty(lastRaw)) {
                 Log.i(TAG, "[method] in");
@@ -68,10 +69,39 @@ public class QRAdmin extends AppCompatActivity {
                 Toast.makeText(QRAdmin.this, "No QR Data to process", Toast.LENGTH_SHORT).show();
             }
         });
+        go_to_button.setOnClickListener(v -> {
+            String target = String.valueOf(qrDataEditText.getText());
+            Log.i(TAG + "goTo",target);
+            QrRouteResolver.resolveTarget(target,this);
+        });
     }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        Log.i(TAG, "[onResume] QRAdmin aktif");
+        // TextView içeriğini güncelle (tarama sonrası kaybolmaması için)
+        updateQRDataView();
+    }
+
+    private void updateQRDataView() {
+        TextView qrDataTextView = findViewById(R.id.qr_data_text_view);
+        if (!TextUtils.isEmpty(lastRaw)) {
+            qrDataTextView.setText("QR Data: " + lastRaw);
+        }
+    }
+
     private void processQRContent(String rawContent) {
-        Log.i(TAG, "[processQRContent] in");
-        // Önce normalize et (iyesi:// formatına çevir)
+        Log.i(TAG, "[processQRContent] in: " + rawContent);
+
+        // Özel işleme: "welcome" route'u için özel davranış
+        if ("welcome".equals(rawContent)) {
+            Log.i(TAG, "[processQRContent] Welcome route detected");
+            handleWelcomeRoute();
+            return;
+        }
+
+        // Normalize et (iyesi:// formatına çevir)
         Uri normalized = QR.normalizeRoute(rawContent);
 
         if ("iyesi".equalsIgnoreCase(normalized.getScheme())) {
@@ -86,6 +116,21 @@ public class QRAdmin extends AppCompatActivity {
             // Düz metin - olduğu gibi kullan
             handlePlainText(rawContent);
         }
+    }
+
+    private void handleWelcomeRoute() {
+        Log.i(TAG, "[handleWelcomeRoute] in");
+        // Welcome sayfası için özel işlem
+        Toast.makeText(this, "Welcome sayfası açılıyor...", Toast.LENGTH_LONG).show();
+
+        // Burada veteriner kayıtlı sokak hayvanları listesini göster
+        // Örnek: Intent ile WelcomeActivity'yi aç
+        // Intent i = new Intent(this, WelcomeActivity.class);
+        // startActivity(i);
+
+        // Şimdilik sadece mesaj göster
+        TextView qrDataTextView = findViewById(R.id.qr_data_text_view);
+        qrDataTextView.setText("Welcome - Veteriner Kayıtlı Sokak Hayvanları Listesi");
     }
 
     private void handleInternalRoute(Uri route) {
@@ -172,11 +217,11 @@ public class QRAdmin extends AppCompatActivity {
         def.quietZone      = 4;         // 1 yerine 4
         def.ecLevel        = com.google.zxing.qrcode.decoder.ErrorCorrectionLevel.Q;
         def.transparentBg  = false;
-// içerik
-        def.redirectBaseUrl = "https://iyesi-host-pnfxz2soua-uc.a.run.app";//"https://us-central1-iyesi-e8d4f.cloudfunctions.net/redirect";
-        def.toRoute         = "/souls/06kKAcLDhBnFOH9Er98Y";
+        // içerik
+        def.redirectBaseUrl = "https://iyesi-host-pnfxz2soua-uc.a.run.app";
+        def.toRoute         = "/d/welcome"; // Welcome route için
         def.hiddenCode      = "AB7QK9D";
-        def.fragmentNoHash  = "";        // fragmanı şimdilik boş bırak (uzunluk ↓)
+        def.fragmentNoHash  = "";
 
         // SADECE BİR DİALOG ÇAĞRISI
         QR.showGenerateDialog(this, def, 1024, (qrBmp, contentUsed) -> {
@@ -184,63 +229,66 @@ public class QRAdmin extends AppCompatActivity {
             if (preview != null) preview.setImageBitmap(qrBmp);
 
             lastRaw = contentUsed;
-            TextView tv = findViewById(R.id.qr_data_text_view);
-            if (tv != null) tv.setText("QR Data: " + contentUsed);
+            updateQRDataView();
         });
     }
 
     private void startQRScanner() {
         Log.d("QRAdmin", "Starting QR scanner...");
-
-        // Doğrudan ZXing scanner'ı başlat
-        IntentIntegrator integrator = new IntentIntegrator(this);
-        integrator.setDesiredBarcodeFormats(IntentIntegrator.QR_CODE);
-        integrator.setPrompt("QR'ı hizalayın");
-        integrator.setBeepEnabled(true);
-        integrator.setBarcodeImageEnabled(false);
-        integrator.setOrientationLocked(true);
-        integrator.initiateScan();
-
-        // VEYA QRScannerActivity'yi doğrudan başlat
-        // QRScannerActivity.launchForResult(this, QR.REQ_SCAN);
+        // QRScannerActivity'yi başlat
+        QRScannerActivity.launchForResult(this, QR.REQ_SCAN);
     }
+
     @Override
     protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
 
         Log.d("QRAdmin", "onActivityResult req=" + requestCode + " res=" + resultCode);
 
-        TextView qrDataTextView = findViewById(R.id.qr_data_text_view);
-
-        if (requestCode == IntentIntegrator.REQUEST_CODE) {
-            // ZXing scanner sonucu
-            IntentResult result = IntentIntegrator.parseActivityResult(requestCode, resultCode, data);
-            if (result != null) {
-                if (result.getContents() != null) {
-                    String raw = result.getContents().trim();
-                    lastRaw = raw;
-                    qrDataTextView.setText("QR Data: " + raw);
-                    Toast.makeText(this, "Scanned: " + raw, Toast.LENGTH_SHORT).show();
-
-                    // Otomatik işleme
-                    processQRContent(raw);
-                } else {
-                    Toast.makeText(this, "Scan cancelled", Toast.LENGTH_SHORT).show();
-                }
-            }
-        } else if (requestCode == QR.REQ_SCAN) {
+        if (requestCode == QR.REQ_SCAN) {
             // QRScannerActivity sonucu
             if (resultCode == Activity.RESULT_OK && data != null) {
                 String raw = data.getStringExtra(QRScannerActivity.EXTRA_QR_RAW);
                 if (!TextUtils.isEmpty(raw)) {
                     lastRaw = raw;
-                    qrDataTextView.setText("QR Data: " + raw);
+                    updateQRDataView();
                     Toast.makeText(this, "Scanned: " + raw, Toast.LENGTH_SHORT).show();
+
+                    // Otomatik işleme
                     processQRContent(raw);
                 }
             } else if (resultCode == Activity.RESULT_CANCELED) {
                 Toast.makeText(this, "Scan cancelled", Toast.LENGTH_SHORT).show();
             }
+        } else if (requestCode == IntentIntegrator.REQUEST_CODE) {
+            // ZXing scanner sonucu (fallback)
+            IntentResult result = IntentIntegrator.parseActivityResult(requestCode, resultCode, data);
+            if (result != null) {
+                if (result.getContents() != null) {
+                    String raw = result.getContents().trim();
+                    lastRaw = raw;
+                    updateQRDataView();
+                    Toast.makeText(this, "Scanned: " + raw, Toast.LENGTH_SHORT).show();
+                    processQRContent(raw);
+                } else {
+                    Toast.makeText(this, "Scan cancelled", Toast.LENGTH_SHORT).show();
+                }
+            }
         }
+    }
+
+    @Override
+    protected void onSaveInstanceState(@NonNull Bundle outState) {
+        super.onSaveInstanceState(outState);
+        if (lastRaw != null) {
+            outState.putString("lastRaw", lastRaw);
+        }
+    }
+
+    @Override
+    protected void onRestoreInstanceState(@NonNull Bundle savedInstanceState) {
+        super.onRestoreInstanceState(savedInstanceState);
+        lastRaw = savedInstanceState.getString("lastRaw");
+        updateQRDataView();
     }
 }

@@ -1,5 +1,8 @@
 package com.kurmez.iyesi.kayra.QR;
 
+import static androidx.core.content.ContextCompat.startActivity;
+
+import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
 import android.net.Uri;
@@ -8,6 +11,8 @@ import android.util.Log;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+
+import com.kurmez.iyesi.kurmes.utilities.Helpers;
 
 /**
  * iyesi://... biçimindeki normalize edilmiş route'ları uygun Activity'lere çevirir.
@@ -21,15 +26,147 @@ import androidx.annotation.Nullable;
 public final class QrRouteResolver implements QR.TargetResolver {
     private static final String TAG = "QrRouteResolver";
 
-
     // — İsteğe göre değiştir: Projendeki Activity sınıf isimleri —
     private static final String CLS_MAIN            = "com.kurmez.iyesi.MainActivity";
-    private static final String CLS_SOUL_DETAIL     = "com.kurmez.iyesi.features.souls.SoulDetailActivity";
-    private static final String CLS_MESSAGE_DETAIL  = "com.kurmez.iyesi.features.messages.MessageDetailActivity";
-    private static final String CLS_ADOPTION_DETAIL = "com.kurmez.iyesi.features.adoption.AdoptionDetailActivity";
-    private static final String CLS_STREET_CASE     = "com.kurmez.iyesi.features.street.StreetCaseActivity";
-    private static final String CLS_EXPLORE         = "com.kurmez.iyesi.features.explore.ExploreActivity";
+    private static final String CLS_SOUL_DETAIL     = "com.kurmez.iyesi.kurmes.ui.SoulsManagerActivity";
+    private static final String CLS_MESSAGE_DETAIL  = "com.kurmez.iyesi.kurmes.social.message.Messaging";
+    private static final String CLS_ADOPTION_DETAIL = "com.kurmez.iyesi.umay.sahiplendirme.Sahiplendirme";
+    private static final String CLS_STREET_CASE     = "com.kurmez.iyesi.umay.SokakActivity";
+    private static final String CLS_EXPLORE         = "com.kurmez.iyesi.kurmes.social.content.Explore";
     private static final String CLS_QR_ADMIN        = "com.kurmez.iyesi.kayra.QR.QRAdmin";
+    private static final String CLS_WELCOME         = "com.kurmez.iyesi.umay.Welcome"; // Yeni ekle
+
+    public static void resolveTarget(String target, Context ctx) {
+        Intent i = null;
+
+        switch (target) {
+            case "𐱅𐰭𐰼𐰃": {
+                i = safeIntent(ctx, CLS_SOUL_DETAIL);
+                if (i != null) {
+                    i.putExtra("route", target);
+                    // SoulsManagerActivity'de soulId yerine farklı bir extra kullanılıyor olabilir
+                    i.putExtra("soulId", target); // Bu satırı kontrol et
+                } else {
+                    i = safeIntent(ctx, CLS_MAIN);
+                    i.putExtra("route", "souls");
+                    i.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
+                    Helpers.showToastSafe(ctx, "Souls feature not available");
+                }
+                break;
+            }
+            case "message":
+            case "𐱅𐰇𐰼𐰜": {
+                i = safeIntent(ctx, CLS_MESSAGE_DETAIL);
+                if (i != null) {
+                    i.putExtra("route", target);
+                    // Messaging activity'si messageId bekliyor olabilir
+                    i.putExtra("messageId", target);
+                } else {
+                    i = safeIntent(ctx, CLS_MAIN);
+                    i.putExtra("route", "messages");
+                    i.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
+                    Helpers.showToastSafe(ctx, "Messages feature not available");
+                }
+                break;
+            }
+            case "𐰉𐰆𐰑𐰣𐰃": {
+                i = safeIntent(ctx, CLS_ADOPTION_DETAIL); // Sahiplendirme activity'si
+                if (i != null) {
+                    i.putExtra("route", target);
+                } else {
+                    i = safeIntent(ctx, CLS_MAIN);
+                    i.putExtra("route", "sahiplendirme");
+                    i.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
+                    Helpers.showToastSafe(ctx, "Sahiplendirme feature not available");
+                }
+                break;
+            }
+            case "𐰋𐰏𐰠𐰼𐰃": {
+                i = safeIntent(ctx, CLS_STREET_CASE); // SokakActivity
+                if (i != null) {
+                    i.putExtra("route", target);
+                } else {
+                    i = safeIntent(ctx, CLS_MAIN);
+                    i.putExtra("route", "sokak");
+                    i.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
+                    Helpers.showToastSafe(ctx, "Street case feature not available");
+                }
+                break;
+            }
+            case "𐰚𐰼𐰚𐰇𐰠𐰏": {
+                i = safeIntent(ctx, CLS_EXPLORE); // Explore activity'si
+                if (i != null) {
+                    i.putExtra("route", target);
+                } else {
+                    i = safeIntent(ctx, CLS_MAIN);
+                    i.putExtra("route", "explore");
+                    i.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
+                    Helpers.showToastSafe(ctx, "Explore feature not available");
+                }
+                break;
+            }
+            case "𐰓𐰔": {
+                i = safeIntent(ctx, CLS_WELCOME); // Welcome activity'si
+                if (i != null) {
+                    i.putExtra("route", target);
+                } else {
+                    i = safeIntent(ctx, CLS_MAIN);
+                    i.putExtra("route", "welcome");
+                    i.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
+                    Helpers.showToastSafe(ctx, "Welcome feature not available");
+                }
+                break;
+            }
+            case "𐰘𐰃": {
+                i = safeIntent(ctx, CLS_QR_ADMIN);
+                if (i != null) {
+                    i.putExtra("route", target);
+                } else {
+                    i = safeIntent(ctx, CLS_MAIN);
+                    i.putExtra("route", "qr");
+                    i.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
+                    Helpers.showToastSafe(ctx, "QR feature not available");
+                }
+                break;
+            }
+            default: {
+                Log.w(TAG, "Bilinmeyen target: " + target);
+                i = safeIntent(ctx, CLS_MAIN);
+                if (i != null) {
+                    i.putExtra("route", target);
+                    i.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
+                }
+                break;
+            }
+        }
+
+        // Activity'yi başlat
+        if (i != null) {
+            try {
+                ctx.startActivity(i);
+                // QRAdmin'den MainActivity'ye geçiyorsak QRAdmin'i kapat
+                if (ctx instanceof Activity && i.getComponent() != null &&
+                        CLS_MAIN.equals(i.getComponent().getClassName())) {
+                    ((Activity) ctx).finish();
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "Activity başlatılamadı: " + e.getMessage());
+                // Fallback: MainActivity'yi aç
+                Intent fallback = safeIntent(ctx, CLS_MAIN);
+                if (fallback != null) {
+                    fallback.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
+                    ctx.startActivity(fallback);
+                    if (ctx instanceof Activity) {
+                        ((Activity) ctx).finish();
+                    }
+                }
+            }
+        } else {
+            Log.e(TAG, "Intent oluşturulamadı target için: " + target);
+            Helpers.showToastSafe(ctx, "Hedef bulunamadı: " + target);
+        }
+    }
+
 
     @Override
     public @Nullable Intent resolve(@NonNull Context ctx, @NonNull Uri route) {
@@ -142,7 +279,7 @@ public final class QrRouteResolver implements QR.TargetResolver {
                     break;
                 }
                 default:
-                    // Bilmediğin host: null döndür → QR.java MainActivity fallback’ini çalıştırır
+                    // Bilmediğin host: null döndür → QR.java MainActivity fallback'ini çalıştırır
                     break;
             }
         } catch (Throwable t) {
@@ -154,7 +291,6 @@ public final class QrRouteResolver implements QR.TargetResolver {
 
     // ————————————————————— helpers —————————————————————
     private static boolean isEmpty(@Nullable String s) { return TextUtils.isEmpty(s); }
-    //Log.i(TAG, "[isEmpty] in");
 
     private static @Nullable String firstOrNull(java.util.List<String> segs) {
         Log.i(TAG, "[firstOrNull] in");
@@ -162,13 +298,17 @@ public final class QrRouteResolver implements QR.TargetResolver {
     }
 
     private static @Nullable Intent safeIntent(@NonNull Context ctx, @NonNull String clsName) {
-        Log.i(TAG, "[safeIntent] in");
+        Log.i(TAG, "[safeIntent] attempting: " + clsName);
         try {
             Class<?> c = Class.forName(clsName);
+            Log.i(TAG, "[safeIntent] SUCCESS: " + clsName);
             Intent i = new Intent(ctx, c);
             return i;
-        } catch (Throwable ignore) {
-            Log.i(TAG, "[catch] in");
+        } catch (ClassNotFoundException e) {
+            Log.e(TAG, "[safeIntent] CLASS NOT FOUND: " + clsName, e);
+            return null;
+        } catch (Throwable t) {
+            Log.e(TAG, "[safeIntent] ERROR for: " + clsName, t);
             return null;
         }
     }

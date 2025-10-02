@@ -79,7 +79,7 @@
         android:layout_height="wrap_content"
         android:layout_marginHorizontal="32dp"
         android:background="@drawable/button_border_white"
-        android:text="Process QR"
+        android:text="GoTo"
         android:textColor="@android:color/black"
         android:layout_marginTop="16dp" />
     <EditText

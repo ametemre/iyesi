@@ -904,13 +904,28 @@ public final class QR {
         public int sparseModulo = 0;           // 0, 3, 2
         public boolean transparentBg = false;
         public ErrorCorrectionLevel ecLevel = ErrorCorrectionLevel.H;
-        public DotShape dotShape = DotShape.CIRCLE;
+        public QROptions.DotShape dotShape = QROptions.DotShape.CIRCLE;
         @Nullable public Bitmap centerLogo = null;
 
-        public String redirectBaseUrl = "https://us-central1-iyesi-e8d4f.cloudfunctions.net/redirect";
+        public String redirectBaseUrl = "https://iyesi-host-pnfxz2soua-uc.a.run.app";
         public String toRoute        = "/souls/123";
         public String hiddenCode     = "";
         public String fragmentNoHash = "";
+        // QR görsel ayarları
+
+        // Payload ayarları - YENİ YAPILANDIRMA
+        public String baseUrl = "https://iyesi-host-pnfxz2soua-uc.a.run.app";
+        public int payloadMode = 0; // 0: iyesi.app/d/, 1: redirect?to=, 2: redirect?slug=
+        public String routeOrSlug = "welcome";
+
+        // Uygulama açma seçenekleri - YENİ
+        public boolean openApp = false;
+        public String openType = "intent"; // "intent" veya "scheme"
+        public String packageName = "com.kurmez.iyesi";
+
+        // Eski alanları yeni sisteme uyarla
+        public String getRedirectBaseUrl() { return baseUrl; }
+        public String getToRoute() { return routeOrSlug; }
     }
 }
 

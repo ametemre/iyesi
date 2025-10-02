@@ -55,6 +55,7 @@ public class QRScannerActivity extends AppCompatActivity {
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
+        // Deep-link ile açılmış mı kontrolü
         Log.i(TAG, "[onCreate] in");
         super.onCreate(savedInstanceState);
 
@@ -108,7 +109,81 @@ public class QRScannerActivity extends AppCompatActivity {
             }
         }
     }
+    /**
+     * Taranan içeriği işler - BaseLink'i tamamen çıkarır
+     */
+    private String processScannedContent_raw(String rawContent) {
+        Log.i(TAG, "[processScannedContent] in: " + rawContent);
 
+        // Base URL'yi kontrol et
+        String baseUrl = "https://iyesi-host-pnfxz2soua-uc.a.run.app";
+
+        if (rawContent.contains(baseUrl)) {
+            Log.i(TAG, "[processScannedContent] Base URL tespit edildi");
+
+            // Base URL'yi tamamen çıkar
+            String processedContent = rawContent.replace(baseUrl, "");
+            Log.i(TAG, "[processScannedContent] Base URL çıkarıldı: " + processedContent);
+
+            // Boş string kontrolü
+            if (processedContent.isEmpty()) {
+                Log.i(TAG, "[processScannedContent] Sadece base URL, welcome döndürülüyor");
+                return "welcome";
+            }
+
+            // Baştaki ve sondaki slash'leri temizle
+            processedContent = processedContent.replaceAll("^/+", "").replaceAll("/+$", "");
+
+            // Eğer /d/ formatındaysa, /d/ kısmını da çıkar
+            if (processedContent.startsWith("d/")) {
+                processedContent = processedContent.substring(2);
+            }
+
+            Log.i(TAG, "[processScannedContent] İşlenmiş içerik: " + processedContent);
+            return processedContent;
+        }
+
+        // Diğer durumlarda ham içeriği döndür
+        return rawContent;
+    }
+    /**
+     * Taranan içeriği işler - BaseLink'i tamamen çıkarır
+     */
+    private String processScannedContent(String rawContent) {
+        Log.i(TAG, "[processScannedContent] in: " + rawContent);
+
+        String baseUrl = "https://iyesi-host-pnfxz2soua-uc.a-run.app";
+
+        if (rawContent.contains(baseUrl)) {
+            Log.i(TAG, "[processScannedContent] Base URL tespit edildi");
+
+            // Base URL'yi ve ardından gelen path/fragment'i ayır
+            String remaining = rawContent.substring(baseUrl.length());
+
+            // Boşsa welcome döndür
+            if (remaining.isEmpty()) {
+                return "welcome";
+            }
+
+            // Path'de /d/ varsa onu da çıkar
+            if (remaining.startsWith("/d/")) {
+                remaining = remaining.substring(3);
+            }
+            // Sadece / ile başlıyorsa onu çıkar
+            else if (remaining.startsWith("/")) {
+                remaining = remaining.substring(1);
+            }
+            // # ile başlıyorsa onu çıkar
+            else if (remaining.startsWith("#")) {
+                remaining = remaining.substring(1);
+            }
+
+            Log.i(TAG, "[processScannedContent] İşlenmiş: " + remaining);
+            return remaining;
+        }
+
+        return rawContent;
+    }
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
@@ -117,13 +192,20 @@ public class QRScannerActivity extends AppCompatActivity {
 
         // Sadece ZXing sonucunu işle
         IntentResult zxingResult = IntentIntegrator.parseActivityResult(requestCode, resultCode, data);
-
+        String BaseLink = "https://iyesi-host-pnfxz2soua-uc.a.run.app";
         if (zxingResult != null) {
             if (zxingResult.getContents() != null) {
                 // Başarılı tarama
-                String rawContent = zxingResult.getContents().trim();
-                Log.i(TAG, "[onActivityResult] Scan successful: " + rawContent);
-                finishWithSuccess(rawContent, false);
+                String rawContent = zxingResult.getContents();
+                if (rawContent.contains(BaseLink)){
+                    String target = processScannedContent_raw(rawContent);
+                    Log.i(TAG, "Applikasyon linkli :" + target );
+                    QrRouteResolver qrRouteResolver = new QrRouteResolver();
+                    qrRouteResolver.resolveTarget(target,this);
+                }else {
+                    Log.i(TAG, "[onActivityResult] Scan successful: " + rawContent);
+                    finishWithSuccess(rawContent, false);
+                }
             } else {
                 // Tarama iptal edildi
                 Log.i(TAG, "[onActivityResult] Scan cancelled");

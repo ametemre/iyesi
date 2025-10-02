@@ -501,6 +501,16 @@ public class MainActivity extends AppCompatActivity {
                     setLoading(false);
                 });
     }
+
+    // In MainActivity.java
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent); // Important: update the current intent
+//        handleRouteIntent(intent);
+    }
+
+
     public static Task<AppCheckToken> warmUpAppCheck() {
         FirebaseAppCheck ac = FirebaseAppCheck.getInstance();
         return ac.getAppCheckToken(false)
