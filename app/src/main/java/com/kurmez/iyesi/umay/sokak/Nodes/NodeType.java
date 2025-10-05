@@ -1,4 +1,4 @@
-package com.kurmez.iyesi.kayra.Classes.model;// MarkerType.java
+package com.kurmez.iyesi.umay.sokak.Nodes;// MarkerType.java
 // Enum mapping for Turkish <-> English marker types
 // package com.kurmez.iyesi.model;  // <-- paket adını istersen ayarla
 

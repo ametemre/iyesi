@@ -9,12 +9,10 @@ import android.util.Log;
 
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.kurmez.iyesi.R;
+import com.kurmez.iyesi.kurmes.Kurmes;
 import com.kurmez.iyesi.umay.SokakActivity;
 import com.kurmez.iyesi.kurmes.utilities.Ai.Ai;
-import com.kurmez.iyesi.kurmes.utilities.Helpers;
 import com.kurmez.iyesi.kurmes.utilities.MiniFabs;
-
-import org.tensorflow.lite.gpu.CompatibilityList;
 
 import java.io.IOException;
 
@@ -81,8 +79,9 @@ public class Actions {
 
         //miniFabs.highlightFab(fab);
     }
-    public Ai performSelectedAction(FloatingActionButton selectedFab) {
-        CompatibilityList compatList = new CompatibilityList();
+    public Ai performSelectedAction(FloatingActionButton selectedFab,Context context) {
+        this.context=context;
+        /*CompatibilityList compatList = new CompatibilityList();
         boolean isGpuSupported = compatList.isDelegateSupportedOnThisDevice();
         Log.i(TAG, "Cihazda GPU delegate desteği: " + isGpuSupported);
         if (!isGpuSupported) {
@@ -91,7 +90,7 @@ public class Actions {
         if (selectedFab == null) {
             Log.w(TAG, "performSelectedAction: selectedFab is null!");
             return null;
-        }
+        }*/
 
         int id = selectedFab.getId();
         try {
@@ -118,7 +117,9 @@ public class Actions {
                 Log.i(TAG, "yolov8n.tflite yükleniyor...");
                 ai = new Ai(host, null, "yolov8n.tflite", "coco_labels.txt");
                 Log.i(TAG, "yolov8n.tflite başarıyla yüklendi.");
-            }
+            } else if (id == R.id.ülgen_fab) { Log.i(TAG, "Ülgen başlatılıyor.");
+            } else if (id == R.id.acil_fab) {host.startActivity(new Intent(host, Kurmes.class));
+            } else if (id == R.id.coban_fab) { Log.i(TAG, "Çoban başlatılıyor.");}
             // Diğer FAB id'leri için de benzer şekilde devam ettir...
             // threading.availableCPU() vs. loglamak istersen ekle.
         } catch (IOException e) {

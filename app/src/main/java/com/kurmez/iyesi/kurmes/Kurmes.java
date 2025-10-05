@@ -284,7 +284,7 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
                 gpuExecutor.execute(() -> {
                     // Model yüklemesi ve fallback güvenliği
                     try {
-                        ai = actions.performSelectedAction(miniFabs.getSelectedFab());
+                        ai = actions.performSelectedAction(miniFabs.getSelectedFab(),this);
                         if (ai == null) {//-----------Dilkkat !
                             runOnUiThread(() -> Helpers.showToastSafe(this,"Model yükleme başarısız"));
                             //runOnUiThread(() -> Toast.makeText(this, "Model yükleme başarısız", Toast.LENGTH_SHORT).show());

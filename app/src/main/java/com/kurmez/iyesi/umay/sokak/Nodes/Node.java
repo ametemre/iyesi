@@ -1,4 +1,4 @@
-package com.kurmez.iyesi.kayra.Classes.model;// MarkerBase.java
+package com.kurmez.iyesi.umay.sokak.Nodes;// MarkerBase.java
 // Firestore POJO, MockData.py şemasına uyumlu.
 // package com.kurmez.iyesi.model;  // <-- paket adını istersen ayarla
 

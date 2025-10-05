@@ -4,7 +4,7 @@
 package com.kurmez.iyesi.kayra;
 
 import static com.kurmez.iyesi.kurmes.utilities.helper.JsonHelper.buildJsonFromIye;
-import android.Manifest;
+
 import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
@@ -30,10 +30,7 @@ import android.widget.ImageView;
 import android.widget.ListView;
 import android.widget.TextView;
 import android.widget.Toast;
-import android.content.pm.PackageManager;
-import android.location.Location;
-import android.location.Address;
-import android.location.Geocoder;
+
 import androidx.annotation.Nullable;
 import androidx.annotation.RequiresApi;
 import androidx.appcompat.app.AlertDialog;
@@ -46,7 +43,7 @@ import com.google.firebase.auth.FirebaseUser;
 import com.kurmez.iyesi.Login;
 import com.kurmez.iyesi.MainActivity;
 import com.kurmez.iyesi.R;
-import com.kurmez.iyesi.kayra.Classes.Harita;
+import com.kurmez.iyesi.umay.sokak.Harita;
 import com.kurmez.iyesi.kayra.Classes.data.Iye;
 import com.kurmez.iyesi.kurmes.utilities.Helpers;
 import com.kurmez.iyesi.kurmes.utilities.LoadingOverlay;
@@ -231,7 +228,7 @@ public class IyeActivity extends AppCompatActivity {
         String emailLike = getStringClaim(claims, ClaimsKeys.EMAIL);
         String loc       = getStringClaim(claims, ClaimsKeys.LOCATION);
         String phone     = getStringClaim(claims, ClaimsKeys.PHONE);
-
+        String url       = getStringClaim(claims, ClaimsKeys.AVATAR_URL);
         //headerTitle.setImageResource(R.drawable.ic_user);
         tvCompanion.setText(nonEmptyOrDash(username));
         tvCompanion.setTypeface(Typeface.MONOSPACE, Typeface.BOLD);

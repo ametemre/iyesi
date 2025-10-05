@@ -4,7 +4,7 @@ import android.content.Context;
 
 import com.google.android.gms.maps.model.BitmapDescriptor;
 import com.google.android.gms.maps.model.BitmapDescriptorFactory;
-import com.kurmez.iyesi.kayra.Classes.model.NodeType;
+import com.kurmez.iyesi.umay.sokak.Nodes.NodeType;
 
 import java.util.HashMap;
 import java.util.Locale;

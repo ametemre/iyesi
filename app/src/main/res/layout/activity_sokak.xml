@@ -7,6 +7,7 @@
     android:layout_height="match_parent"
     tools:context=".umay.SokakActivity">
   <!-- 1) En tepede indikatör olacak -->
+
   <ProgressBar
       android:id="@+id/progress_bar"
       style="?android:attr/progressBarStyleHorizontal"
@@ -20,6 +21,15 @@
       android:progress="0"
       android:progressTint="@color/blue_translucent"/>
   <!-- Sağ üst köşede Spinner (dropdown) -->
+  <!-- Harita kilitli mod overlay'i -->
+  <View
+      android:id="@+id/lock_mode_overlay"
+      android:layout_width="match_parent"
+      android:layout_height="match_parent"
+      android:background="#80000000"
+      android:visibility="gone"
+      android:clickable="true"
+      android:focusable="true" />
   <fragment
       android:id="@+id/map"
       android:name="com.google.android.gms.maps.SupportMapFragment"
@@ -446,7 +456,7 @@
       android:contentDescription="Ana Menü" />
 
   <com.google.android.material.floatingactionbutton.FloatingActionButton
-      android:id="@+id/besleme_fab"
+      android:id="@+id/ülgen_fab"
       android:contentDescription="ulgen"
       android:layout_width="wrap_content"
       android:layout_height="wrap_content"
@@ -457,7 +467,7 @@
       android:visibility="gone" />
 
   <com.google.android.material.floatingactionbutton.FloatingActionButton
-      android:id="@+id/bolge_fab"
+      android:id="@+id/coban_fab"
       android:contentDescription="coban"
       android:layout_width="wrap_content"
       android:layout_height="wrap_content"
@@ -468,7 +478,7 @@
       android:visibility="gone" />
 
   <com.google.android.material.floatingactionbutton.FloatingActionButton
-      android:id="@+id/nakil_fab"
+      android:id="@+id/acil_fab"
       android:layout_width="wrap_content"
       android:layout_height="wrap_content"
       android:src="@drawable/pati"

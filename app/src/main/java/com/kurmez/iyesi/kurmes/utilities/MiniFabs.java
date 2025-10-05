@@ -22,15 +22,13 @@ import com.google.maps.android.data.geojson.GeoJsonLayer;
 import com.kurmez.iyesi.Login;
 import com.kurmez.iyesi.kurmes.Kurmes;
 import com.kurmez.iyesi.umay.Welcome;
-import com.kurmez.iyesi.kayra.Classes.Harita;
+import com.kurmez.iyesi.umay.sokak.Harita;
 
 import android.animation.AnimatorListenerAdapter;
 import android.animation.AnimatorSet;
 import android.animation.ObjectAnimator;
-import android.view.animation.AlphaAnimation;
 import android.view.animation.Animation;
 import android.view.animation.DecelerateInterpolator;
-import android.view.animation.ScaleAnimation;
 import android.widget.FrameLayout;
 import android.widget.ImageButton;
 import android.widget.Spinner;
@@ -60,6 +58,7 @@ public class MiniFabs {
     private final int LONG_PRESS_THRESHOLD = 2000; // 2 seconds
     private final int DRAG_THRESHOLD = 20; // Minimum movement to consider a drag
     private FrameLayout rootLayout;
+
     private Spinner spinner1, spinner2, spinner3, spinner4, spinner5;
     private ImageButton clear1, clear2, clear3, clear4, clear5;
     private ImageButton toggle1, toggle2, toggle3, toggle4, toggle5;
@@ -214,10 +213,13 @@ public class MiniFabs {
         }
     }
 
-    public boolean isExpanded() {
-        return isExpanded;
+    public void setAnimations(Animation fabOpen, Animation fabClose,
+                              Animation rotateForward, Animation rotateBackward) {
+        this.fabOpenAnim = fabOpen;
+        this.fabCloseAnim = fabClose;
+        this.rotateForwardAnim = rotateForward;
+        this.rotateBackwardAnim = rotateBackward;
     }
-
     public boolean handleOutsideTouch(MotionEvent ev) {
         if (ev.getAction() != MotionEvent.ACTION_DOWN || !isExpanded) return false;
         int x = (int)ev.getRawX(), y = (int)ev.getRawY();
@@ -244,7 +246,19 @@ public class MiniFabs {
         }
     }
     public FloatingActionButton selectFab(FloatingActionButton fab) {
-        //applyDefaultColors();
+        // Eğer aynı FAB tekrar tıklandıysa, seçimi kaldır
+        if (selectedFab == fab) {
+            resetIconColor(selectedFab);
+            selectedFab = null;
+            return null;
+        }
+
+        // Önceki seçili FAB varsa rengini sıfırla
+        if (selectedFab != null) {
+            resetIconColor(selectedFab);
+        }
+
+        // Yeni FAB'ı seç ve rengini değiştir
         selectedFab = fab;
         fab.setBackgroundTintList(ColorStateList.valueOf(Color.RED));
         Drawable icon = fab.getDrawable();
@@ -401,7 +415,174 @@ public class MiniFabs {
             }
         });
     }
+    @SuppressLint("ClickableViewAccessibility")
+    public void setupDraggableOnly(Context context, FloatingActionButton fabDraggable) {
+        mAuth = FirebaseAuth.getInstance();
 
+        fabDraggable.setOnTouchListener(new View.OnTouchListener() {
+            private float initialX, initialY;
+            private long pressStartTime;
+            private boolean isDragging = false;
+            private VelocityTracker velocityTracker = null;
+            private final int LONG_PRESS_THRESHOLD = 2000; // 2 saniye
+            private final int DRAG_THRESHOLD = 20; // Minimum hareket eşiği
+
+            @Override
+            public boolean onTouch(View v, MotionEvent event) {
+                int action = event.getActionMasked();
+
+                switch (action) {
+                    case MotionEvent.ACTION_DOWN:
+                        // Başlangıç pozisyonlarını ve zamanını kaydet
+                        initialX = event.getRawX();
+                        initialY = event.getRawY();
+                        pressStartTime = System.currentTimeMillis();
+                        isDragging = false;
+
+                        // VelocityTracker'ı başlat
+                        if (velocityTracker == null) {
+                            velocityTracker = VelocityTracker.obtain();
+                        } else {
+                            velocityTracker.clear();
+                        }
+                        velocityTracker.addMovement(event);
+
+                        // FAB'ın orijinal pozisyonunu kaydet
+                        mainFabX = fabDraggable.getX();
+                        mainFabY = fabDraggable.getY();
+                        dX = mainFabX - initialX;
+                        dY = mainFabY - initialY;
+
+                        return true;
+
+                    case MotionEvent.ACTION_MOVE:
+                        // Hareketi velocity tracker'a ekle
+                        if (velocityTracker != null) {
+                            velocityTracker.addMovement(event);
+                        }
+
+                        // Yeni pozisyonu hesapla
+                        float newX = event.getRawX() + dX;
+                        float newY = event.getRawY() + dY;
+
+                        // Sürükleme eşiğini kontrol et
+                        if (!isDragging &&
+                                (Math.abs(newX - mainFabX) > DRAG_THRESHOLD ||
+                                        Math.abs(newY - mainFabY) > DRAG_THRESHOLD)) {
+                            isDragging = true;
+                        }
+
+                        // Eğer sürüklüyorsak, FAB'ı ve mini FAB'ları hareket ettir
+                        if (isDragging) {
+                            fabDraggable.setX(newX);
+                            fabDraggable.setY(newY);
+
+                            // Mini FAB'ları da taşı
+                            float deltaX = newX - mainFabX;
+                            float deltaY = newY - mainFabY;
+                            move(deltaX, deltaY);
+
+                            // Ana FAB pozisyonunu güncelle
+                            mainFabX = newX;
+                            mainFabY = newY;
+                        }
+
+                        return true;
+
+                    case MotionEvent.ACTION_UP:
+                    case MotionEvent.ACTION_CANCEL:
+                        // Velocity'yi hesapla
+                        if (velocityTracker != null) {
+                            velocityTracker.addMovement(event);
+                            velocityTracker.computeCurrentVelocity(1000); // pixels per second
+                        }
+
+                        long pressDuration = System.currentTimeMillis() - pressStartTime;
+
+                        if (!isDragging) {
+                            // Sürükleme yoksa, tıklama veya uzun basış
+                            if (pressDuration < LONG_PRESS_THRESHOLD) {
+                                // Kısa basış - toggle işlemi
+                                toggleWithAnimation();
+                            } else {
+                                // Uzun basış - context'e göre işlem yap
+                                handleLongPress(context, fabDraggable);
+                            }
+                        } else {
+                            // Sürükleme varsa, momentum animasyonu uygula
+                            if (velocityTracker != null) {
+                                float velocityX = velocityTracker.getXVelocity();
+                                float velocityY = velocityTracker.getYVelocity();
+                                animateMomentumGravity(fabDraggable, velocityX, velocityY, rootLayout);
+                            }
+                        }
+
+                        // VelocityTracker'ı temizle
+                        if (velocityTracker != null) {
+                            velocityTracker.recycle();
+                            velocityTracker = null;
+                        }
+
+                        isDragging = false;
+                        return true;
+
+                    default:
+                        return false;
+                }
+            }
+
+            /**
+             * Uzun basış işlemini yönet
+             */
+            private void handleLongPress(Context context, FloatingActionButton fab) {
+                try {
+                    if (context instanceof com.kurmez.iyesi.kurmes.Kurmes) {
+                        // Kurmes context'inde snapshot veya login işlemi
+                        com.kurmez.iyesi.kurmes.Kurmes kurmes = (com.kurmez.iyesi.kurmes.Kurmes) context;
+                        if (kurmes.getCurrentState() != com.kurmez.iyesi.kurmes.Kurmes.State.IDLE &&
+                                kurmes.reusableBitmap != null) {
+                            takeSnapshot(kurmes.reusableBitmap);
+                        } else {
+                            handleLongClick(context, fab);
+                        }
+                    } else if (context instanceof com.kurmez.iyesi.umay.SokakActivity) {
+                        // SokakActivity context'inde node oluşturma sürecini başlat
+                        ((com.kurmez.iyesi.umay.SokakActivity) context).startNodeCreationProcess();
+                    } else {
+                        // Diğer context'ler için genel uzun basış işlemi
+                        Log.e("Minifabs","Tanımlı değil");//handleLongClick(context, fab);
+                    }
+                } catch (Exception e) {
+                    Log.w("MiniFabs", "Uzun basış işlenirken hata: " + e.getMessage());
+                    // Hata durumunda genel uzun basış işlemini çağır
+                    handleLongClick(context, fab);
+                }
+            }
+        });
+    }
+
+    public void toggleWithAnimation() {
+        if (isExpanded) {
+            collapseWithAnimation();
+        } else {
+            expandWithAnimation();
+        }
+        isExpanded = !isExpanded;
+    }
+
+    private void expandWithAnimation() {
+        if (rotateForwardAnim != null) {
+            mainFab.startAnimation(rotateForwardAnim);
+        }
+        expand(); // Mevcut expand mantığını koru
+    }
+
+    private void collapseWithAnimation() {
+        if (rotateBackwardAnim != null) {
+            mainFab.startAnimation(rotateBackwardAnim);
+        }
+        collapse(); // Mevcut collapse mantığını koru
+    }
     private void handleLongClick(Context context,FloatingActionButton fabDraggable) {
         animateButtonPress(fabDraggable);
         if (mAuth.getCurrentUser() != null) {
@@ -420,15 +601,16 @@ public class MiniFabs {
     private void animateButtonPress(FloatingActionButton fabDraggable) {
         fabDraggable.setEnabled(false);
 
-        // Create shadow effect
-        Animation scaleDown = new ScaleAnimation(
+        // Scale down animasyonu
+        android.view.animation.ScaleAnimation scaleDown = new android.view.animation.ScaleAnimation(
                 1f, 0.9f, 1f, 0.9f,
-                Animation.RELATIVE_TO_SELF, 0.5f,
-                Animation.RELATIVE_TO_SELF, 0.5f);
+                android.view.animation.Animation.RELATIVE_TO_SELF, 0.5f,
+                android.view.animation.Animation.RELATIVE_TO_SELF, 0.5f);
         scaleDown.setDuration(500);
         scaleDown.setFillAfter(true);
 
-        Animation fadeOut = new AlphaAnimation(1f, 0.6f);
+        // Fade out animasyonu
+        android.view.animation.AlphaAnimation fadeOut = new android.view.animation.AlphaAnimation(1f, 0.6f);
         fadeOut.setDuration(2000);
 
         fabDraggable.startAnimation(scaleDown);

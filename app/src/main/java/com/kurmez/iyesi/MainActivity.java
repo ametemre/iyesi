@@ -67,6 +67,7 @@ import com.kurmez.iyesi.kurmes.utilities.Helpers;
 import com.kurmez.iyesi.kurmes.utilities.PrivateCom;
 import com.kurmez.iyesi.kurmes.utilities.handler.NonceUtils;
 import com.kurmez.iyesi.kurmes.utilities.helper.PermissionHelper;
+import com.kurmez.iyesi.umay.SokakActivity;
 import com.kurmez.iyesi.umay.Welcome;
 
 import java.io.IOException;
@@ -468,22 +469,29 @@ public class MainActivity extends AppCompatActivity {
                             clickCounter++;
                             if (startCameraRunnable != null) handler.removeCallbacks(startCameraRunnable);
                             Log.d(TAG, "pati_enter clicked → " + clickCounter);
-
-                            if (clickCounter >= MAX_CLICKS) {
-                                clickCounter = 0;
-                                try {
-                                    startActivity(new Intent(this,QRAdmin.class));
-                                    //permissionHelper.requestBluetooth();
-                                    //PrivateCom.connectToBluetoothDevice(this, this::openQRScannerForRegistration);
-                                } catch (Exception e) {
-                                    Log.e(TAG, "Bluetooth connect failed", e);
+                            if (user != null) {
+                                if (clickCounter >= MAX_CLICKS) {
+                                    clickCounter = 0;
+                                    try {
+                                        startActivity(new Intent(this, QRAdmin.class));
+                                        //permissionHelper.requestBluetooth();
+                                        //PrivateCom.connectToBluetoothDevice(this, this::openQRScannerForRegistration);
+                                    } catch (Exception e) {
+                                        Log.e(TAG, "Bluetooth connect failed", e);
+                                    }
+                                } else {
+                                    if (user.isAnonymous()) {
+                                        startActivity(new Intent(this, SokakActivity.class));
+                                    } else {
+                                        startActivity(new Intent(this, Welcome.class));
+                                    }
                                 }
                             } else {
-                                startCameraRunnable = this::openCameraWithDelay;
-                                handler.postDelayed(startCameraRunnable, 500);
+                                startActivity(new Intent(this, Kurmes.class));
+                                //startCameraRunnable = this::openCameraWithDelay;
+                                //handler.postDelayed(startCameraRunnable, 500);
                             }
                         });
-
                         patiEnterButton.setOnLongClickListener(v -> {
                             QRScannerActivity.launchForResult(this, 2001);
                             //openQRScannerForRegistration();

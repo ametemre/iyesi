@@ -3,6 +3,7 @@ package com.kurmez.iyesi.umay;
 import static com.kurmez.iyesi.kayra.AppCheckTokenProvider.runMembershipGuard;
 import static com.kurmez.iyesi.kayra.Classes.data.Soul.parseSouls;
 
+import com.kurmez.iyesi.kurmes.Kurmes;
 import com.kurmez.iyesi.kurmes.utilities.helper.CFHelper;
 import com.kurmez.iyesi.kayra.Classes.data.Soul; // tek ve doğru Soul
 import androidx.annotation.NonNull;
@@ -40,6 +41,7 @@ import com.kurmez.iyesi.kurmes.utilities.helper.net.FirebaseAuthenticator;
 import com.kurmez.iyesi.kurmes.utilities.helper.net.FirebaseHeadersInterceptor;
 
 import java.util.ArrayList;
+import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 
 import okhttp3.OkHttpClient;
@@ -72,7 +74,7 @@ public class Welcome extends AppCompatActivity {
                 return chain.proceed(req);
             })
             .build();
-
+    private CFClient cf = new CFClient("https://us-central1-iyesi-e8d4f.cloudfunctions.net");
     public static String nz(String s) { return s == null ? "" : s; }
 
 
@@ -114,7 +116,7 @@ public class Welcome extends AppCompatActivity {
         }
 
         // CFHelper
-        CFClient cf = new CFClient("https://us-central1-iyesi-e8d4f.cloudfunctions.net");
+
 
         CFClient.WhereBuilder wb = new CFClient.WhereBuilder().eq("status", "adoptable");
 
@@ -198,7 +200,11 @@ public class Welcome extends AppCompatActivity {
         });
 
         imgWelcome.setOnLongClickListener(v -> {
-            startActivity(new Intent(this, ExplorePrivate.class));
+            //if (Objects.equals(role, "Ülgen")) {
+                startActivity(new Intent(this, Kurmes.class));
+            //} else {
+                //startActivity(new Intent(this, ExplorePrivate.class));
+            //}
             return true;
         });
 
