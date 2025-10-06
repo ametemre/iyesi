@@ -13,6 +13,8 @@ import com.kurmez.iyesi.kurmes.Kurmes;
 import com.kurmez.iyesi.umay.SokakActivity;
 import com.kurmez.iyesi.kurmes.utilities.Ai.Ai;
 import com.kurmez.iyesi.kurmes.utilities.MiniFabs;
+import com.kurmez.iyesi.umay.Welcome;
+import com.kurmez.iyesi.umay.sahiplendirme.Founded;
 
 import java.io.IOException;
 
@@ -117,9 +119,9 @@ public class Actions {
                 Log.i(TAG, "yolov8n.tflite yükleniyor...");
                 ai = new Ai(host, null, "yolov8n.tflite", "coco_labels.txt");
                 Log.i(TAG, "yolov8n.tflite başarıyla yüklendi.");
-            } else if (id == R.id.ülgen_fab) { Log.i(TAG, "Ülgen başlatılıyor.");
+            } else if (id == R.id.ülgen_fab) {host.startActivity(new Intent(host, Founded.class));
             } else if (id == R.id.acil_fab) {host.startActivity(new Intent(host, Kurmes.class));
-            } else if (id == R.id.coban_fab) { Log.i(TAG, "Çoban başlatılıyor.");}
+            } else if (id == R.id.coban_fab) {host.startActivity(new Intent(host, Welcome.class));}
             // Diğer FAB id'leri için de benzer şekilde devam ettir...
             // threading.availableCPU() vs. loglamak istersen ekle.
         } catch (IOException e) {

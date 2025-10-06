@@ -38,7 +38,7 @@ public class LocationManager {
     }
 
     @SuppressLint("MissingPermission")
-    public void getCurrentLocations() {
+    public void getCurrentLocation() {
         if (!hasLocationPermission()) {
             if (listener != null) {
                 listener.onLocationError("Konum izni gerekli");
@@ -113,8 +113,11 @@ public class LocationManager {
         return location.getLatitude() + ", " + location.getLongitude();
     }
 
-    public LatLng getCurrentLocation() {
-        return currentLocation;
+    public static boolean hasLocationPermission(Context context) {
+        return ActivityCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION)
+                == PackageManager.PERMISSION_GRANTED ||
+                ActivityCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION)
+                        == PackageManager.PERMISSION_GRANTED;
     }
 
     public void cleanup() {

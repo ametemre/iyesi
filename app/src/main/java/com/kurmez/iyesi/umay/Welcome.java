@@ -189,6 +189,7 @@ public class Welcome extends AppCompatActivity {
                 @Override public void onError(@NonNull Throwable t) {
                     Log.e(TAG, "listSoulsByFields", t);
                     Toast.makeText(Welcome.this, "Veri alınamadı: " + t.getMessage(), Toast.LENGTH_LONG).show();
+                    finish();
                 }
             });
         }, e -> android.util.Log.e("TOK", "token fail", e));
@@ -201,7 +202,8 @@ public class Welcome extends AppCompatActivity {
 
         imgWelcome.setOnLongClickListener(v -> {
             //if (Objects.equals(role, "Ülgen")) {
-                startActivity(new Intent(this, Kurmes.class));
+                startActivity(new Intent(this, SokakActivity.class));
+                finish();
             //} else {
                 //startActivity(new Intent(this, ExplorePrivate.class));
             //}

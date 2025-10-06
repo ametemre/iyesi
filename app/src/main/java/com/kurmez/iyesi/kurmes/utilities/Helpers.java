@@ -108,26 +108,7 @@ public class Helpers {
         if (r.equalsIgnoreCase("Ağaç") || r.equalsIgnoreCase("Agac")) return "Ağaç";
         return "İye";
     }
-    /** JSON -> Profile list (örnek mevcut) */
-    public static List<Iye> parseProfiles(String jsonBody) throws JSONException {
-        JSONObject root = new JSONObject(jsonBody);
-        JSONArray users = root.optJSONArray("users");
-        List<Iye> list = new ArrayList<>();
-        if (users == null) return list;
-        for (int i = 0; i < users.length(); i++) {
-            JSONObject u = users.getJSONObject(i);
-            String uid        = u.optString("uid", "");
-            String email      = u.optString("email", "");
-            String dispName   = u.optString("displayName", "").trim();
-            String username   = !dispName.isEmpty() ? dispName : email;
-            String location   = u.optString("location", "");
-            String phone      = u.optString("phone", "");
-            String role       = u.optString("role", "");
-            String avatar_url = u.optString("avatar","");
-            list.add(new Iye(uid, username, email, location, phone, role, avatar_url));
-        }
-        return list;
-    }
+
 
     /** Header menü yardımcıları */
     public static class ConversationHeaderHelper { // ← static yapıldı

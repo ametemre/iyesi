@@ -1,4 +1,3 @@
-// HaritaManager.java
 package com.kurmez.iyesi.umay.sokak.Managers;
 
 import android.content.Context;
@@ -7,6 +6,7 @@ import android.util.Log;
 
 import com.google.android.gms.maps.*;
 import com.google.android.gms.maps.model.*;
+import com.kurmez.iyesi.R; // EKLENDİ
 
 import androidx.annotation.NonNull;
 import androidx.fragment.app.FragmentActivity;
@@ -15,9 +15,16 @@ public class HaritaManager implements OnMapReadyCallback {
     private GoogleMap mMap;
     private FragmentActivity activity;
     private boolean mapReady = false;
+    private OnMapReadyCallback externalCallback;
 
     public HaritaManager(FragmentActivity activity) {
         this.activity = activity;
+        initializeMap();
+    }
+
+    // Harita.java'dan çağrılan metod EKLENDİ
+    public void getMapAsync(OnMapReadyCallback callback) {
+        this.externalCallback = callback;
         initializeMap();
     }
 
@@ -26,6 +33,8 @@ public class HaritaManager implements OnMapReadyCallback {
                 activity.getSupportFragmentManager().findFragmentById(R.id.map);
         if (mapFragment != null) {
             mapFragment.getMapAsync(this);
+        } else {
+            Log.e("HaritaManager", "Map fragment bulunamadı! R.id.map kontrol edin.");
         }
     }
 
@@ -34,14 +43,22 @@ public class HaritaManager implements OnMapReadyCallback {
         mMap = googleMap;
         mapReady = true;
         configureMapSettings();
+
+        // External callback'i çağır (Harita.java'ya bildirim)
+        if (externalCallback != null) {
+            externalCallback.onMapReady(googleMap);
+        }
     }
 
     private void configureMapSettings() {
         if (mMap != null) {
             mMap.getUiSettings().setAllGesturesEnabled(true);
             mMap.getUiSettings().setScrollGesturesEnabledDuringRotateOrZoom(true);
+            mMap.getUiSettings().setZoomControlsEnabled(true);
+            mMap.getUiSettings().setCompassEnabled(true);
 
             try {
+                // Resource kontrolü - eğer map_style_json yoksa atla
                 boolean success = mMap.setMapStyle(
                         MapStyleOptions.loadRawResourceStyle(activity, R.raw.map_style_json));
                 if (!success) {
@@ -65,8 +82,18 @@ public class HaritaManager implements OnMapReadyCallback {
         }
     }
 
+    public void animateCamera(LatLng position, float zoom, int duration) {
+        if (mMap != null) {
+            mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(position, zoom), duration, null);
+        }
+    }
+
     public LatLng screenPointToLatLng(Point point) {
         return mMap != null ? mMap.getProjection().fromScreenLocation(point) : null;
+    }
+
+    public Point latLngToScreenPoint(LatLng latLng) {
+        return mMap != null ? mMap.getProjection().toScreenLocation(latLng) : null;
     }
 
     public boolean isMapReady() {
@@ -77,9 +104,40 @@ public class HaritaManager implements OnMapReadyCallback {
         return mMap;
     }
 
+    // Harita kontrolleri için yardımcı metodlar EKLENDİ
+    public void setMyLocationEnabled(boolean enabled) {
+        if (mMap != null) {
+            try {
+                mMap.setMyLocationEnabled(enabled);
+            } catch (SecurityException e) {
+                Log.e("HaritaManager", "Konum izni gerekli: " + e.getMessage());
+            }
+        }
+    }
+
+    public void setOnMapClickListener(GoogleMap.OnMapClickListener listener) {
+        if (mMap != null) {
+            mMap.setOnMapClickListener(listener);
+        }
+    }
+
+    public void setOnMapLongClickListener(GoogleMap.OnMapLongClickListener listener) {
+        if (mMap != null) {
+            mMap.setOnMapLongClickListener(listener);
+        }
+    }
+
+    public void setOnMarkerClickListener(GoogleMap.OnMarkerClickListener listener) {
+        if (mMap != null) {
+            mMap.setOnMarkerClickListener(listener);
+        }
+    }
+
     public void cleanup() {
         if (mMap != null) {
             mMap.clear();
+            mMap = null;
         }
+        mapReady = false;
     }
 }

@@ -346,11 +346,42 @@ public class JsonHelper {
     /** Iye.java -> sunucu JSON (profil güncelle) */
     public static Map<String, Object> buildJsonFromIye(Iye iye, @Nullable Map<String, Object> claims) {
         Map<String, Object> j = new HashMap<>();
+
+        // Temel string alanlar
         if (!TextUtils.isEmpty(iye.getUsername())) j.put("username", iye.getUsername());
-        if (!TextUtils.isEmpty(iye.getEmail()))    j.put("email",    iye.getEmail());     // sadece claims aynası
-        if (!TextUtils.isEmpty(iye.getLocation())) j.put("location", iye.getLocation());
+        if (!TextUtils.isEmpty(iye.getEmail()))    j.put("email",    iye.getEmail());
         if (!TextUtils.isEmpty(iye.getPhone()))    j.put("phone",    iye.getPhone());
         if (!TextUtils.isEmpty(iye.getAvatarUrl())) j.put("avatarUrl", iye.getAvatarUrl());
+
+        // ⭐ YENİ: Location object olarak işleme
+        if (iye.getLocation() != null) {
+            Iye.Location location = iye.getLocation();
+            Map<String, Object> locationMap = new HashMap<>();
+
+            // Adres bilgisi
+            if (!TextUtils.isEmpty(location.getAddress())) {
+                locationMap.put("address", location.getAddress());
+            }
+
+            // Koordinatlar (varsa)
+            if (location.getLat() != null) {
+                locationMap.put("lat", location.getLat());
+            }
+            if (location.getLng() != null) {
+                locationMap.put("lng", location.getLng());
+            }
+
+            // Location map boş değilse ekle
+            if (!locationMap.isEmpty()) {
+                j.put("location", locationMap);
+            }
+        } else {
+            // Eski string location formatı için fallback
+            String locationStr = iye.getLocation() != null ? iye.getLocation().getAddress() : null;
+            if (!TextUtils.isEmpty(locationStr)) {
+                j.put("location", locationStr);
+            }
+        }
 
         // Claims'te tutuluyorsa kısa anahtarları da geçir (varsa):
         if (claims != null) {
@@ -359,6 +390,7 @@ public class JsonHelper {
             if (ak instanceof String && !TextUtils.isEmpty((String) ak)) j.put("avatarKey", ak);
             if (ar instanceof String && !TextUtils.isEmpty((String) ar)) j.put("avatarRev", ar);
         }
+
         // DİKKAT: uid/role göndermiyoruz!
         return j;
     }

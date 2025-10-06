@@ -3,6 +3,7 @@ package com.kurmez.iyesi.kurmes.utilities.helper;
 import android.content.Context;
 import android.os.Handler;
 import android.os.Looper;
+import android.text.TextUtils;
 import android.util.Base64;
 import android.util.Log;
 
@@ -471,18 +472,71 @@ public class CFHelper {
             String uid       = it.optString("uid", it.optString("id", ""));
             String username  = it.optString("username", it.optString("displayName", ""));
             String email     = it.optString("email", "");
-            String location  = it.optString("location", "");
             String phone     = it.optString("phone", "");
             String role      = it.optString("role", it.optString("userRole", ""));
             String avatarUrl = it.optString("avatarUrl",
                     it.optString("photoUrl",
                             it.optString("photoURL", "")));
 
+            // ⭐ YENİ: Location parsing - hem string hem object formatını destekler
+            Iye.Location location = parseLocationFromJson(it.opt("location"));
+
             out.add(new Iye(uid, username, email, location, phone, role, avatarUrl));
         }
         return out;
     }
+    // ⭐ YENİ: Location parsing yardımcı metodu
+    private Iye.Location parseLocationFromJson(Object locationObj) {
+        if (locationObj == null) {
+            return new Iye.Location("", null, null);
+        }
 
+        // Eğer string ise
+        if (locationObj instanceof String) {
+            return new Iye.Location((String) locationObj, null, null);
+        }
+
+        // Eğer JSONObject ise
+        if (locationObj instanceof JSONObject) {
+            JSONObject locJson = (JSONObject) locationObj;
+            String address = locJson.optString("address", "");
+            Double lat = null;
+            Double lng = null;
+
+            // Lat/Lng değerlerini kontrol et
+            if (locJson.has("lat")) {
+                try {
+                    lat = locJson.getDouble("lat");
+                } catch (JSONException e) {
+                    // Number formatında değilse string'den parse et
+                    String latStr = locJson.optString("lat");
+                    if (!TextUtils.isEmpty(latStr)) {
+                        try {
+                            lat = Double.parseDouble(latStr);
+                        } catch (NumberFormatException ignored) {}
+                    }
+                }
+            }
+
+            if (locJson.has("lng")) {
+                try {
+                    lng = locJson.getDouble("lng");
+                } catch (JSONException e) {
+                    // Number formatında değilse string'den parse et
+                    String lngStr = locJson.optString("lng");
+                    if (!TextUtils.isEmpty(lngStr)) {
+                        try {
+                            lng = Double.parseDouble(lngStr);
+                        } catch (NumberFormatException ignored) {}
+                    }
+                }
+            }
+
+            return new Iye.Location(address, lat, lng);
+        }
+
+        return new Iye.Location("", null, null);
+    }
     // ---------- Sahiplendirme / Priority Pets ----------
     /** GET /getPriorityPets ve sonucu Listener’a List<Soul> olarak aktarır. */
     public void fetchPriorityPets() {

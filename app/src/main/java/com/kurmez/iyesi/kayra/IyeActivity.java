@@ -5,11 +5,15 @@ package com.kurmez.iyesi.kayra;
 
 import static com.kurmez.iyesi.kurmes.utilities.helper.JsonHelper.buildJsonFromIye;
 
+import android.Manifest;
 import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.Typeface;
+import android.net.ConnectivityManager;
+import android.net.NetworkInfo;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -25,17 +29,21 @@ import android.view.WindowManager;
 import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.BaseAdapter;
+import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.ListView;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.annotation.RequiresApi;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.app.ActivityCompat;
 
+import com.google.android.gms.location.FusedLocationProviderClient;
 import com.google.firebase.FirebaseApp;
 import com.google.firebase.appcheck.FirebaseAppCheck;
 import com.google.firebase.auth.FirebaseAuth;
@@ -43,12 +51,14 @@ import com.google.firebase.auth.FirebaseUser;
 import com.kurmez.iyesi.Login;
 import com.kurmez.iyesi.MainActivity;
 import com.kurmez.iyesi.R;
+import com.kurmez.iyesi.kurmes.utilities.helper.FireBaseHelper;
 import com.kurmez.iyesi.umay.sokak.Harita;
 import com.kurmez.iyesi.kayra.Classes.data.Iye;
 import com.kurmez.iyesi.kurmes.utilities.Helpers;
 import com.kurmez.iyesi.kurmes.utilities.LoadingOverlay;
 import com.kurmez.iyesi.kurmes.utilities.helper.net.CFClient;
 
+import java.io.ByteArrayOutputStream;
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -57,6 +67,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.WeakHashMap;
 import com.kurmez.iyesi.kurmes.utilities.helper.ImagePick;
+import android.location.Address;
+import android.location.Geocoder;
+import java.util.List;
+import java.util.Locale;
+import org.json.JSONException;
+import org.json.JSONObject;
+
 /**
  * IyeActivity — (Sadeleştirilmiş)
  * UI ve etkileşimler burada; Firebase / Functions / App Check gibi dış servislerle
@@ -64,13 +81,20 @@ import com.kurmez.iyesi.kurmes.utilities.helper.ImagePick;
  */
 public class IyeActivity extends AppCompatActivity {
     private static final String TAG = "IyeActivity";
+    private static final String BaseURL = "https://us-central1-iyesi-e8d4f.cloudfunctions.net";
     private static final String FUNCTIONS_REGION = "us-central1"; // profile client'a geçiyoruz
     private static final boolean USE_HTTP_FOR_UPDATE = true;       // istersen burada yönet
     public static final int REQ_PICK_PROFILE_IMAGE = 4011;
+    // sınıf başında
+    private FusedLocationProviderClient fusedLocationClient;
+    private final com.google.android.gms.tasks.CancellationTokenSource placeCts = new com.google.android.gms.tasks.CancellationTokenSource();
+    private static final int REQ_LOC_FOR_PLACE = 2013;
+    @Nullable private Runnable pendingAfterLocation = null;
+    @Nullable private Double lastLat = Double.NaN, lastLng = Double.NaN;
 
     // Activity -> hedef EditText (leak önlemek için WeakReference)
     private static final WeakHashMap<Activity, WeakReference<EditText>> pendingTargets = new WeakHashMap<>();
-
+    private Iye currentIye;
     // ====== UI ======
     private ImageView iyeImage, headerTitle;
     private TextView tvCompanion, tvFoundDate, tvPlace, tvWho;
@@ -79,14 +103,15 @@ public class IyeActivity extends AppCompatActivity {
     private static final String EXTRA_VIA_GUARD = "EXTRA_VIA_GUARD"; // runMembershipGuard(...) bunu set etmeli
     private AlertDialog membershipDialog;
     private String pendingNewPassword; // ileride CF upload/doğrulama vs. için elde tut
+    private Context ctx;
     // ====== Firebase ======
     private FirebaseApp app;
-
+    private FirebaseUser u;
     // ====== State ======
     private Map<String, Object> claimCache = new HashMap<>();
     private boolean isEditing = false;
     private EditAdapter editAdapter;
-
+    private FireBaseHelper firebaseHelper = new FireBaseHelper();
     // ====== External relations holder ======
     private IyeClient profileClient;
     // Alanlar
@@ -109,7 +134,6 @@ public class IyeActivity extends AppCompatActivity {
     @Override protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_iye);
-
         // Firebase
         app = FirebaseApp.getInstance();
         profileClient = new IyeClient(app, FUNCTIONS_REGION);
@@ -124,14 +148,20 @@ public class IyeActivity extends AppCompatActivity {
         tvWho        = findViewById(R.id.who);
         listViewIye  = findViewById(R.id.list_view_iye);
 
+        fusedLocationClient = com.google.android.gms.location.LocationServices.getFusedLocationProviderClient(this);
         // Gestures
         iyeImage.setOnLongClickListener(v -> { if (!isEditing) enterEditMode(); return true; });
         iyeImage.setOnClickListener(this::onClickSaveProfile);
-
         // İlk yükleme
-        FirebaseUser uNow = FirebaseAuth.getInstance(app).getCurrentUser();
-        Log.d(TAG, "[onCreate] currentUser=" + (uNow==null? "null" : uNow.getUid()) + " anon=" + (uNow!=null && uNow.isAnonymous()));
-        refreshClaimsAndRender(uNow);
+        u = FirebaseAuth.getInstance(app).getCurrentUser();
+        Log.d(TAG, "[onCreate] currentUser=" + (u==null? "null" : u.getUid()) + " anon=" + (u!=null && u.isAnonymous()));
+        // Eğer intent'te edit flag'i yoksa normal modda başla
+        boolean startInEditMode = getIntent().getBooleanExtra("edit", false);
+        refreshClaimsAndRender(u);
+        if (startInEditMode) {
+            // Sadece edit intent'i ile gelindiyse düzenleme modunda başla
+            enterEditMode();
+        }
         // Sadece guard ile gelindiyse aç
         if (getIntent().getBooleanExtra(EXTRA_VIA_GUARD, false)) {showMembershipDialog();}
     }
@@ -141,48 +171,110 @@ public class IyeActivity extends AppCompatActivity {
         // EditText’i programatik oluşturuyoruz (şifre gibi davranır)
         final EditText et = new EditText(this);
         et.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
-        et.setHint("Üyelik anahtarı / şifre");
+        et.setHint("Yeni Şifre Belirle...");
         et.setPadding(dp(20), dp(12), dp(20), dp(12));
         et.setSingleLine(true);
         et.setImeOptions(EditorInfo.IME_ACTION_DONE);
-                membershipDialog = new AlertDialog.Builder(this)
+
+        membershipDialog = new AlertDialog.Builder(this)
                 .setTitle("Üyelik Doğrulama")
                 .setView(et)
                 .setCancelable(false)               // geri tuşu ile kapanmasın
-                .setPositiveButton("Devam", null)   // auto-dismiss'i override edeceğiz
+                .setPositiveButton("Devam", (d,w)-> {
+                    FireBaseHelper.changePassword(u.getEmail(), et.getText().toString(), new FireBaseHelper.PasswordChangeCallback() {
+                        @Override
+                        public void onSuccess() {
+                            Toast.makeText(getApplicationContext(), "Şifre başarıyla değiştirildi.", Toast.LENGTH_SHORT).show();
+                        }
+
+                        @Override
+                        public void onFailure(Exception e) {
+                            Toast.makeText(getApplicationContext(), "Şifre değiştirilemedi: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                            finish();
+                        }
+
+                    });
+                    iyeImage.performClick();
+                })
                 .setNegativeButton("İptal", (d, w) -> {
                     // Guard başarısız/iptal → aktiviteden çık
-                    finish();
+                    //finish();
+                    d.dismiss();
+                    iyeImage.performClick();
                 })
                 .create();
-                membershipDialog.setCanceledOnTouchOutside(false); // dışarı dokununca kapanmasın
+
+        membershipDialog.setCanceledOnTouchOutside(false); // dışarı dokununca kapanmasın
         membershipDialog.setOnShowListener(d -> {
             // IME’yi aç
-                    membershipDialog.getWindow().setSoftInputMode(
-                            WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE);
-                        // "Devam" tıklanınca doğrula, sonra kapat
-                            membershipDialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
-                                final String text = String.valueOf(et.getText()).trim();
-                                if (TextUtils.isEmpty(text)) {
-                                    et.setError("Boş olamaz");
-                                    et.requestFocus();
-                                    return; // dialog açık kalsın
-                                }
-                                // Burada sadece hafızaya alıyoruz; gerçek işlemi sonra bağlayacaksın
-                                        pendingNewPassword = text;
-                                membershipDialog.dismiss();
-                            });
-        });
-                // IME "Done" → Pozitif butonu tetikle (dialog kapanmasın; bizim click handler karar verir)
-                        et.setOnEditorActionListener((v, actionId, event) -> {
-                            if (actionId == EditorInfo.IME_ACTION_DONE) {
-                                membershipDialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick();
-                                return true;
-                            }
-                            return false;
+            membershipDialog.getWindow().setSoftInputMode(
+                    WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE);
+
+            final Button positive = membershipDialog.getButton(AlertDialog.BUTTON_POSITIVE);
+            final Button negative = membershipDialog.getButton(AlertDialog.BUTTON_NEGATIVE);
+
+            // "Devam" tıklanınca doğrula, sonra kapat
+            positive.setOnClickListener(v -> {
+                final String text = String.valueOf(et.getText()).trim();
+                if (TextUtils.isEmpty(text)) {
+                    et.setError("Boş olamaz");
+                    et.requestFocus();
+                    return; // dialog açık kalsın
+                }
+
+                // Eski şifre ilk üyelikte e-mail olduğundan, burada eski parola yerine u.getEmail() kullanılıyor
+                final String oldPassword = (u != null && u.getEmail() != null) ? u.getEmail() : "";
+                if (TextUtils.isEmpty(oldPassword)) {
+                    et.setError("Kullanıcı e-posta bilgisi bulunamadı.");
+                    et.requestFocus();
+                    return;
+                }
+
+                // UI kilitleme
+                positive.setEnabled(false);
+                negative.setEnabled(false);
+                positive.setText("Doğrulanıyor...");
+
+                // Orijinal koda sadık kalarak firebaseHelper'in changePassword metodunu çağırıyoruz.
+                // Varsayım: firebaseHelper.changePassword(String oldPassword, String newPassword, Callback)
+                firebaseHelper.changePassword(oldPassword, text, new FireBaseHelper.PasswordChangeCallback() {
+                    @Override
+                    public void onSuccess() {
+                        runOnUiThread(() -> {
+                            pendingNewPassword = text;
+                            Toast.makeText(IyeActivity.this, "Şifre başarıyla değiştirildi.", Toast.LENGTH_SHORT).show();
+                            membershipDialog.dismiss();
                         });
-                membershipDialog.show();
+                    }
+
+                    @Override
+                    public void onFailure(Exception e) {
+                        runOnUiThread(() -> {
+                            String msg = (e != null && e.getMessage() != null) ? e.getMessage() : "Şifre değiştirme başarısız.";
+                            et.setError(msg);
+                            et.requestFocus();
+
+                            positive.setEnabled(true);
+                            negative.setEnabled(true);
+                            positive.setText("Devam");
+                        });
+                    }
+                });
+            });
+
+            // IME "Done" → Pozitif butonu tetikle (dialog kapanmasın; bizim click handler karar verir)
+            et.setOnEditorActionListener((v, actionId, event) -> {
+                if (actionId == EditorInfo.IME_ACTION_DONE) {
+                    membershipDialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick();
+                    return true;
+                }
+                return false;
+            });
+        });
+
+        membershipDialog.show();
     }
+
     // Dilersen guard’tan başlatmak için bu yardımcıyı kullan:
     public static Intent intentFromGuard(Context ctx) {
         Intent it = new Intent(ctx, IyeActivity.class);
@@ -312,8 +404,8 @@ public class IyeActivity extends AppCompatActivity {
             Toast.makeText(this, "Değişiklik yok.", Toast.LENGTH_SHORT).show();
             return;
         }
-
-        Iye currentIye = Iye.fromClaims(claimCache);
+        JSONObject payload = new JSONObject();
+        currentIye = Iye.fromClaims(claimCache);
         if (currentIye == null) currentIye = new Iye();
         if (filtered.containsKey(ClaimsKeys.USERNAME))  currentIye.setUsername(String.valueOf(filtered.get(ClaimsKeys.USERNAME)));
         if (filtered.containsKey(ClaimsKeys.EMAIL))     currentIye.setEmail(String.valueOf(filtered.get(ClaimsKeys.EMAIL)));
@@ -322,28 +414,110 @@ public class IyeActivity extends AppCompatActivity {
         Object au = filtered.get(ClaimsKeys.AVATAR_URL);
         if (au != null) currentIye.setAvatarUrl(String.valueOf(au));
 
-        Map<String, Object> payload = new HashMap<>();
-        payload.put("profilDuzenleme", true);
-        payload.put("json", buildJsonFromIye(currentIye, claimCache));
-        payload.put("alsoWriteToFirestore", true);
+        try {
+            // JSON'u doğru şekilde oluştur
+            JSONObject iyeJson = new JSONObject();
 
-        profileClient.updateProfile(payload, USE_HTTP_FOR_UPDATE, new IyeClient.UpdateCallback() {
-            @Override public void onSuccess(boolean viaSdk) {
+            // Temel alanlar
+            iyeJson.put("username", currentIye.getUsername() != null ? currentIye.getUsername() : "");
+            iyeJson.put("email", currentIye.getEmail() != null ? currentIye.getEmail() : "");
+            iyeJson.put("phone", currentIye.getPhone() != null ? currentIye.getPhone() : "");
+            iyeJson.put("avatarUrl", currentIye.getAvatarUrl() != null ? currentIye.getAvatarUrl() : "");
+
+            // ⭐ YENİ: Location object olarak
+            if (currentIye.getLocation() != null) {
+                JSONObject locationJson = new JSONObject();
+                Iye.Location location = currentIye.getLocation();
+                locationJson.put("address", location.getAddress() != null ? location.getAddress() : "");
+                if (location.getLat() != null) locationJson.put("lat", location.getLat());
+                if (location.getLng() != null) locationJson.put("lng", location.getLng());
+                iyeJson.put("location", locationJson);
+            } else {
+                iyeJson.put("location", new JSONObject());
+            }
+
+            // ID Token ekle - ⭐ ZORUNLU
+            FirebaseUser user = FirebaseAuth.getInstance(app).getCurrentUser();
+            if (user == null) {
+                setUiBusy(false, null);
+                Toast.makeText(this, "Kullanıcı bulunamadı.", Toast.LENGTH_LONG).show();
+                return;
+            }
+
+            user.getIdToken(false).addOnSuccessListener(tokenResult -> {
+                String idToken = tokenResult.getToken();
+
+
+                try {
+                    payload.put("idToken", idToken); // ZORUNLU
+                    payload.put("json", new JSONObject(buildJsonFromIye(currentIye, claimCache))); // ⭐ GÜNCEL
+                    payload.put("alsoWriteToFirestore", true);
+
+                    Log.d(TAG, "Gönderilen JSON: " + payload.toString(2));
+                } catch (JSONException e) {
+                    setUiBusy(false, null);
+                    Helpers.showToastSafe(this, "Hata: JSON oluşturulamadı: " + e.getMessage());
+                }
+            });
+
+        } catch (JSONException e) {
+            setUiBusy(false, null);
+            Helpers.showToastSafe(this, "Hata: JSON oluşturulamadı: " + e.getMessage());
+            return;
+        }
+
+        CFClient cfClient = new CFClient(BaseURL);
+        setUiBusy(true, "Kaydediliyor...");
+
+        // ESKİ: cfClient.postJsonAsync("updateProfile", payload, new CFClient.JsonCallback() {
+        // YENİ:
+        String url = BaseURL.endsWith("/") ? BaseURL + "updateIye" : BaseURL + "/updateIye";
+        // çağırmadan önce
+        if (!isNetworkAvailable()) {
+            setUiBusy(false, null);
+            Toast.makeText(this, "İnternet bağlantısı yok.", Toast.LENGTH_LONG).show();
+            return;
+        }
+
+        cfClient.postJsonAsync(url, payload, new CFClient.JsonCallback() {
+
+            @Override
+            public void onSuccess(@NonNull JSONObject obj) {
+                Log.d(TAG, "updateIye başarılı: " + obj.toString());  // updateProfile -> updateIye
+                listViewIye.setVisibility(View.GONE);
+                // Token'ı refresh et
                 FirebaseAuth.getInstance(app).getCurrentUser().getIdToken(true);
                 setUiBusy(false, null);
                 Helpers.showToastSafe(IyeActivity.this, "Profil güncellendi.");
+                // SADECE düzenleme modundan çık, yönlendirme YAPMA
                 isEditing = false;
                 listViewIye.setAdapter(null);
                 listViewIye.setVisibility(View.GONE);
-                startActivity(new Intent(IyeActivity.this, MainActivity.class));
-                finish();
+                // Claims'i yenile ve UI'ı güncelle
+                refreshClaimsAndRender(FirebaseAuth.getInstance(app).getCurrentUser());
+                // Yönlendirme YAPMIYORUZ - kullanıcı burada kalıyor
+                // startActivity(new Intent(IyeActivity.this, MainActivity.class));
+                // finish();
             }
-            @Override public void onFailure(String error) {
+
+            @Override public void onError(@NonNull Throwable t) {
+                Log.e(TAG, "updateIye hatası: " + t.getMessage(), t);
                 setUiBusy(false, null);
-                Helpers.showToastSafe(IyeActivity.this, "Güncelleme başarısız: " + error);
+                String msg = t.getMessage() != null && t.getMessage().contains("Unable to resolve host")
+                        ? "Sunucu adresine ulaşılamıyor. İnternet bağlantınızı veya base URL'inizi kontrol edin."
+                        : "Güncelleme başarısız: " + t.getMessage();
+                Helpers.showToastSafe(IyeActivity.this, msg);
             }
+
         });
     }
+    private boolean isNetworkAvailable() {
+        ConnectivityManager cm = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
+        if (cm == null) return false;
+        NetworkInfo ni = cm.getActiveNetworkInfo();
+        return ni != null && ni.isConnected();
+    }
+
 
     // ====== Loading ======
     private void setUiBusy(boolean busy, @Nullable String message) {
@@ -372,6 +546,56 @@ public class IyeActivity extends AppCompatActivity {
         act.startActivityForResult(it, REQ_PICK_PROFILE_IMAGE);
     }
 
+    /**
+     * Görsel yükler ve URL'yi String olarak döndürür (blocking)
+     *
+     * @param uri       Görsel URI'sı
+     * @param endpoint  Cloud Functions endpoint
+     * @param path      Storage path (örn: "images/iye/avatar")
+     * @return          Yüklenen görselin URL'si
+     * @throws Exception Yükleme hatası durumunda
+     */
+    /**
+     * Görsel yükler ve URL'yi String olarak döndürür (blocking)
+     *
+     * @param uri       Görsel URI'sı
+     * @param endpoint  Cloud Functions endpoint
+     * @param path      Storage path (örn: "images/iye/avatar")
+     * @return          Yüklenen görselin URL'si
+     * @throws Exception Yükleme hatası durumunda
+     */
+    private String handlePickedImage(Uri uri, String endpoint, String path) throws Exception {
+        if (uri == null) {
+            throw new IllegalArgumentException("URI cannot be null");
+        }
+
+        // 1) URI'dan görsel verisini oku
+        byte[] imageBytes;
+        try (java.io.InputStream is = getContentResolver().openInputStream(uri)) {
+            if (is == null) {
+                throw new IllegalStateException("Dosya açılamadı: " + uri);
+            }
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            byte[] buf = new byte[8192];
+            int bytesRead;
+            while ((bytesRead = is.read(buf)) != -1) {
+                baos.write(buf, 0, bytesRead);
+            }
+            imageBytes = baos.toByteArray();
+        }
+
+        // 2) Base64 data URI'ya dönüştür
+        String mimeType = getContentResolver().getType(uri);
+        if (mimeType == null) mimeType = "image/jpeg";
+
+        String base64 = android.util.Base64.encodeToString(imageBytes, android.util.Base64.NO_WRAP);
+        String dataUri = "data:" + mimeType + ";base64," + base64;
+
+        // 3) Görseli yükle ve URL'yi döndür (blocking) - PARAMETRE SIRASI DÜZELTİLDİ
+        return CFClient.uploadImageAndGetUrlBlocking(this, endpoint, dataUri, path);
+        // .toString() KALDIRILDI - zaten String dönüyor
+    }
+
     @Override
     protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
@@ -384,74 +608,44 @@ public class IyeActivity extends AppCompatActivity {
             try {
                 getContentResolver().takePersistableUriPermission(uri, flags);
             } catch (Exception ignore) { /* bazı cihazlar izin tekrarı atabilir */ }
-            onActivityResult(this, requestCode, resultCode, data);
 
-            // 2) Güvenli decode (ölçekli) → Bitmap (ARGB_8888)
-            Bitmap bmp = ImagePick.decodeScaledBitmapFromUri(this, uri, /*maxDim*/ 1600);
-            if (bmp == null) {
-                // kullanıcıya hata bildir
-                return;
-            }
-            if (bmp.getConfig() != Bitmap.Config.ARGB_8888) {
-                bmp = bmp.copy(Bitmap.Config.ARGB_8888, false);
-            }
+            // 2) Hedef EditText'i al
+            EditText target = deref(this);
 
-            // 3) PNG → data URI
-            String dataUri = ImagePick.bitmapToPngDataUri(bmp);
-
-            // 4) Upload (background thread)
-            EditText target = ImagePick.findPendingTargetFor(this); // senin pendingTargets haritandan çeker
-            String path = "images/iye/avatar"; // senaryona göre: "images/soul/avatar" vs.
-            String endpoint = "https://us-central1-<project-id>.cloudfunctions.net/saveBase64Image";
+            // 3) handlePickedImage kullanarak görsel yükle (arka planda)
+            // BEFORE starting new Thread:
+            runOnUiThread(() -> setUiBusy(true, "Görsel yükleniyor…"));
 
             new Thread(() -> {
                 try {
-                    String url = CFClient.uploadImageAndGetUrlBlocking(this, endpoint, dataUri, path);
+                    String endpoint = BaseURL + "/saveBase64Image";
+                    String path = "images/iye/avatar/" + System.currentTimeMillis();
+                    String imageUrl = handlePickedImage(uri, endpoint, path);
+
                     runOnUiThread(() -> {
-                        if (target != null) target.setText(url);
-                        // burada UI'da göster / kaydet / avatar önizlemesi yap
+                        // başarılıysa
+                        if (target != null) {
+                            target.setText(imageUrl);
+                            target.setTag(uri);
+                        }
+                        uploadedObjectPath = imageUrl;
+                        Helpers.showToastSafe(IyeActivity.this, "Görsel yüklendi");
+                        setUiBusy(false, null); // ÖNEMLİ: overlay'i kapat
                     });
-                } catch (Exception e) {
+
+                } catch (final Exception e) {
                     runOnUiThread(() -> {
-                        if (target != null) target.setError("Yükleme hatası: " + e.getMessage());
+                        if (target != null) {
+                            target.setError("Yükleme hatası: " + e.getMessage());
+                        }
+                        Helpers.showToastSafe(IyeActivity.this, "Yükleme başarısız: " + e.getMessage());
+                        setUiBusy(false, null); // Hata durumunda da kapat
                     });
                 }
             }).start();
         }
     }
 
-    /** Activity.onActivityResult'tan forward et. */
-    public static void onActivityResult(Activity act, int requestCode, int resultCode, @Nullable Intent data) {
-        if (requestCode != REQ_PICK_PROFILE_IMAGE) return;
-        EditText target = deref(act);
-
-        if (resultCode != Activity.RESULT_OK || data == null || data.getData() == null) {
-            Toast.makeText(act, "Resim seçilmedi.", Toast.LENGTH_SHORT).show();
-            return;
-        }
-
-        Uri uri = data.getData();
-
-        // Kullanıcı verdiği okuma iznini kalıcı hale getir (uygulama yeniden açıldığında da erişilsin)
-        try {
-            final int takeFlags = data.getFlags()
-                    & (Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
-            act.getContentResolver().takePersistableUriPermission(uri, takeFlags);
-        } catch (Exception ignore) { /* Bazı cihazlarda write flag gelmeyebilir, sorun değil. */ }
-
-        if (target != null) {
-            // Görsel referansını text'e basitçe yazalım (ileride upload tamamlanınca gerçek URL ile değiştirirsin)
-            target.setText(uri.toString());
-
-            // (İsteğe bağlı) Kullanıcıya dosya adı gibi bir bilgi göster
-            String name = tryGetDisplayName(act, uri);
-            if (name != null) {
-                Toast.makeText(act, "Seçildi: " + name, Toast.LENGTH_SHORT).show();
-            }
-            // İleride upload için URI'yi saklamak istersen:
-            target.setTag(uri);
-        }
-    }
 
     private static EditText deref(Activity act) {
         WeakReference<EditText> ref = pendingTargets.get(act);
@@ -494,7 +688,7 @@ public class IyeActivity extends AppCompatActivity {
         @Override public Object getItem(int position) { return data.get(position); }
         @Override public long getItemId(int position) { return position; }
         @Override public View getView(int position, View convertView, ViewGroup parent) {
-            Context ctx = parent.getContext();
+            ctx = parent.getContext();
 
             TextView label = new TextView(ctx);
             label.setText(data.get(position).getValue().label);
@@ -515,13 +709,123 @@ public class IyeActivity extends AppCompatActivity {
             layout.addView(label);
             layout.addView(et);
             if (ClaimsKeys.LOCATION.equals(key)) {
-                View.OnClickListener askThenFill =
-                        v -> Harita.askAndFill(IyeActivity.this, et);
-                et.setOnClickListener(askThenFill);
+                // non-editable görünüm, dokununca Harita veya izin akışı başlasın
+                et.setFocusable(false);
+                et.setFocusableInTouchMode(false);
+                et.setCursorVisible(false);
+                et.setHint("Konum seçmek için dokun");
+                et.setTag(lastLat != null && lastLng != null ?
+                        new Iye.Location(et.getText().toString(), lastLat, lastLng) :
+                        new Iye.Location(et.getText().toString(), null, null));
+                final long[] lastClick = {0L};
+                View.OnClickListener openMapWithPermission = v -> {
+                    long now = System.currentTimeMillis();
+                    if (now - lastClick[0] < 600) return;
+                    lastClick[0] = now;
+
+                    // Eğer Android < M ise izin kontrolü gerekmez
+                    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
+                        Harita.askAndFill(IyeActivity.this, et);
+                        return;
+                    }
+
+                    Context localCtx = v.getContext();
+                    boolean fine = androidx.core.content.ContextCompat.checkSelfPermission(localCtx, Manifest.permission.ACCESS_FINE_LOCATION)
+                            == PackageManager.PERMISSION_GRANTED;
+                    boolean coarse = androidx.core.content.ContextCompat.checkSelfPermission(localCtx, Manifest.permission.ACCESS_COARSE_LOCATION)
+                            == PackageManager.PERMISSION_GRANTED;
+
+                    if (fine || coarse) {
+                        // Eğer lastLat/lastLng daha önce doğru şekilde set edilmişse kullan
+                        boolean haveCoords =
+                                (lastLat != null && lastLng != null)
+                                        && !Double.isNaN(lastLat) && !Double.isNaN(lastLng)
+                                        && !Double.isInfinite(lastLat) && !Double.isInfinite(lastLng);
+
+                        if (haveCoords) {
+                            //getAddressAndFill(et, lastLat.doubleValue(), lastLng.doubleValue());
+                            getAddressAndFill(et, lastLat, lastLng);
+                            return;
+                        }
+
+                        // Aksi halde fusedLocationClient ile aktif olarak konum iste
+                        if (fusedLocationClient == null) {
+                            fusedLocationClient = com.google.android.gms.location.LocationServices.getFusedLocationProviderClient(IyeActivity.this);
+                        }
+
+                        et.post(() -> et.setText("Konum alınıyor..."));
+                        try {
+                            fusedLocationClient.getCurrentLocation(
+                                    com.google.android.gms.location.Priority.PRIORITY_BALANCED_POWER_ACCURACY,
+                                    placeCts.getToken()
+                            ).addOnSuccessListener(loc -> {
+                                if (loc != null) {
+                                    lastLat = loc.getLatitude();
+                                    lastLng = loc.getLongitude();
+                                    getAddressAndFill(et, lastLat, lastLng);
+                                } else {
+                                    // getCurrentLocation null döndü -> deneyebileceğimiz fallback: getLastLocation
+                                    fusedLocationClient.getLastLocation()
+                                            .addOnSuccessListener(last -> {
+                                                if (last != null) {
+                                                    lastLat = last.getLatitude();
+                                                    lastLng = last.getLongitude();
+                                                    getAddressAndFill(et, lastLat, lastLng);
+                                                } else {
+                                                    et.post(() -> {
+                                                        et.setText("");
+                                                        Toast.makeText(IyeActivity.this, "Konum alınamadı.", Toast.LENGTH_SHORT).show();
+                                                    });
+                                                }
+                                            })
+                                            .addOnFailureListener(e -> et.post(() -> {
+                                                et.setText("");
+                                                Toast.makeText(IyeActivity.this, "Konum alınamadı: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                                            }));
+                                }
+                            }).addOnFailureListener(e -> {
+                                et.post(() -> {
+                                    et.setText("");
+                                    Toast.makeText(IyeActivity.this, "Konum isteği başarısız: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                                });
+                            });
+                        } catch (SecurityException se) {
+                            et.post(() -> {
+                                et.setText("");
+                                Toast.makeText(IyeActivity.this, "Konum izni yok.", Toast.LENGTH_SHORT).show();
+                            });
+                        }
+                        return;
+                    }
+                    // izin yok: hedefi sakla ve izin iste
+                    pendingTargets.put(IyeActivity.this, new WeakReference<>(et));
+                    ActivityCompat.requestPermissions(IyeActivity.this,
+                            new String[]{ Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION },
+                            REQ_LOC_FOR_PLACE);
+                };
+
+                et.setOnClickListener(openMapWithPermission);
+
+                // uzun basınca elle düzenleme izni (klavyeyi aç)
+                et.setOnLongClickListener(v -> {
+                    et.setFocusable(true);
+                    et.setFocusableInTouchMode(true);
+                    et.setCursorVisible(true);
+                    et.requestFocus();
+                    InputMethodManager imm = (InputMethodManager) v.getContext().getSystemService(Context.INPUT_METHOD_SERVICE);
+                    if (imm != null) imm.showSoftInput(et, InputMethodManager.SHOW_IMPLICIT);
+                    return true;
+                });
+
                 et.setOnFocusChangeListener((v, hasFocus) -> {
-                    if (hasFocus) askThenFill.onClick(v);
+                    if (!hasFocus) {
+                        et.setFocusable(false);
+                        et.setFocusableInTouchMode(false);
+                        et.setCursorVisible(false);
+                    }
                 });
             }
+
             // "Avatar URL" alanına dokunulduğunda: galeri aç
             if (ClaimsKeys.AVATAR_URL.equals(key)) {
                 View.OnClickListener pick = v -> askAndPick(IyeActivity.this, et);
@@ -538,10 +842,206 @@ public class IyeActivity extends AppCompatActivity {
             return out;
         }
     }
+    private void tryFillLastLocation() {
+        // Eğer izin yoksa hemen dön
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            Log.d(TAG, "tryFillLastLocation() → permission missing");
+            return;
+        }
+
+        // fusedLocationClient'in null olmamasını garanti et
+        if (fusedLocationClient == null) {
+            fusedLocationClient = com.google.android.gms.location.LocationServices.getFusedLocationProviderClient(this);
+        }
+
+        fusedLocationClient.getLastLocation()
+                .addOnSuccessListener(loc -> {
+                    if (loc != null) {
+                        lastLat = loc.getLatitude();
+                        lastLng = loc.getLongitude();
+
+                        // Bekleyen EditText hedefini al (askAndPick/izin akışıyla saklanan)
+                        EditText target = deref(this);
+                        if (target != null) {
+                            // Basit ama güvenilir format: "lat, lng"
+                            String text = String.format(java.util.Locale.US, "%.6f, %.6f", lastLat, lastLng);
+                            target.setText(text);
+                            Log.d(TAG, "tryFillLastLocation -> wrote to target: " + text);
+                        } else {
+                            Log.d(TAG, "tryFillLastLocation -> no pending target to write to");
+                        }
+                    } else {
+                        Log.d(TAG, "lastLocation is null");
+                    }
+                })
+                .addOnFailureListener(e -> Log.e(TAG, "lastLocation err: " + e.getMessage()));
+    }
+
+    private void runPendingAfterLocation() {
+        Log.d(TAG, "[LOC] runPendingAfterLocation()");
+        Runnable r = pendingAfterLocation;
+        pendingAfterLocation = null;
+        if (r != null) {
+            r.run();
+        }
+    }
+
+    private void ensureLocationThen(@NonNull Runnable next) {
+        Log.d(TAG, "[LOC] ensureLocationThen → GİRİŞ");
+        pendingAfterLocation = next;
+
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
+                != PackageManager.PERMISSION_GRANTED) {
+            Log.d(TAG, "[LOC] requesting ACCESS_FINE_LOCATION");
+            ActivityCompat.requestPermissions(this,
+                    new String[]{Manifest.permission.ACCESS_FINE_LOCATION},
+                    REQ_LOC_FOR_PLACE);
+            return;
+        }
+
+        // İzin varsa aktif olarak bir konum iste (getCurrentLocation daha güvenilir)
+        fusedLocationClient.getCurrentLocation(
+                com.google.android.gms.location.Priority.PRIORITY_BALANCED_POWER_ACCURACY,
+                placeCts.getToken()
+        ).addOnSuccessListener(loc -> {
+            if (loc != null) {
+                lastLat = loc.getLatitude(); lastLng = loc.getLongitude();
+                // gerekli iş: örn placeView.setText(formatLatLng(...)) veya reverse-geocode
+                if (pendingAfterLocation != null) {
+                    Runnable r = pendingAfterLocation;
+                    pendingAfterLocation = null;
+                    r.run();
+                }
+            } else {
+                Log.w(TAG, "[LOC] getCurrentLocation returned null -> running pending as fallback");
+                runPendingAfterLocation();
+            }
+        }).addOnFailureListener(e -> {
+            Log.w(TAG, "[LOC] getCurrentLocation fail: " + e.getMessage());
+            runPendingAfterLocation();
+        });
+    }
+// Gerekli importlar dosyanın başına ekli değilse ekle:
+
+
+    private void getAddressAndFill(@NonNull EditText target, double lat, double lng) {
+        // Güvenli kontrol: NaN/Infinite ve aralık kontrolü
+        if (Double.isNaN(lat) || Double.isNaN(lng) || Double.isInfinite(lat) || Double.isInfinite(lng)
+                || lat < -90.0 || lat > 90.0 || lng < -180.0 || lng > 180.0) {
+            Log.w(TAG, String.format(Locale.US, "getAddressAndFill called with invalid coords: lat=%s lng=%s", lat, lng));
+            target.post(() -> {
+                target.setText("");
+                Toast.makeText(this, "Konum bilgisi geçersiz.", Toast.LENGTH_SHORT).show();
+            });
+            return;
+        }
+
+        final Locale tr = new Locale("tr", "TR");
+        final Geocoder geocoder = new Geocoder(this, tr);
+
+        final String coordText = String.format(Locale.US, "%.6f,%.6f", lat, lng);
+        target.post(() -> {
+            target.setText("Konum alınıyor...");
+            target.setTag(coordText); // koordinatları tag'e koyduk
+        });
+
+        if (Build.VERSION.SDK_INT >= 33) {
+            geocoder.getFromLocation(lat, lng, 1, new Geocoder.GeocodeListener() {
+                @Override
+                public void onGeocode(@NonNull List<Address> results) {
+                    String formatted = formatAddressFromResults(results, lat, lng);
+                    target.post(() -> {
+                        target.setText(formatted);
+                        target.setTag(coordText);
+                    });
+                }
+                @Override
+                public void onError(@NonNull String errorMessage) {
+                    target.post(() -> target.setText("Konum bulunamadı"));
+                }
+            });
+        } else {
+            new Thread(() -> {
+                try {
+                    List<Address> res = geocoder.getFromLocation(lat, lng, 1);
+                    final String formatted = formatAddressFromResults(res, lat, lng);
+                    runOnUiThread(() -> {
+                        if (formatted != null) {
+                            target.setText(formatted);
+                            target.setTag(coordText);
+                        } else {
+                            target.setText("Konum bilgisi bulunamadı");
+                        }
+                    });
+                } catch (Exception e) {
+                    Log.w(TAG, "Geocoder error: " + e.getMessage(), e);
+                    runOnUiThread(() -> target.setText("Konum alınamadı"));
+                }
+            }).start();
+        }
+    }
+
+
+    /** Address listesi -> "Ülke, Şehir, Mahalle" formatı döndürür; yoksa koordinatı geri döner */
+    @Nullable
+    private String formatAddressFromResults(@Nullable List<Address> res, double lat, double lng) {
+        if (res == null || res.isEmpty()) {
+            // fallback: sadece koordinat
+            return String.format(Locale.US, "LangLat: %.6f,%.6f  —  AvatarLoc:%.6f,%.6f", lat, lng, lat, lng);
+        }
+        Address a = res.get(0);
+
+        // Ülke (country) — getCountryName() veya getCountryCode()
+        String country = a.getCountryName();  // örn: Türkiye
+        if (country == null) country = a.getCountryCode(); // TR
+
+        // İl / bölge
+        String admin = a.getAdminArea();       // örn: Ankara (bazen null)
+        // Şehir (locality) daha spesifik olabilir
+        String city = a.getLocality();
+        if (city == null) city = admin;
+
+        // Mahalle / alt-lokalite
+        String neighborhood = a.getSubLocality(); // semt/mahalle
+        if (neighborhood == null) neighborhood = a.getThoroughfare(); // sokak/cadde fallback
+
+        // Güvenli null handling
+        if (country == null) country = "—";
+        if (city == null) city = "—";
+        if (neighborhood == null) neighborhood = "—";
+
+        // Sonucu Türkçe etiketlerle döndür
+        return String.format(Locale.forLanguageTag("tr-TR"),
+                "%s / %s / %s", country, city, neighborhood);
+    }
+
     // İzin sonucunu LocationAssist'e forward et
     @Override public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        Harita.onRequestPermissionsResult(this, requestCode, grantResults);
+        //Harita.onRequestPermissionsResult(this, requestCode, grantResults);
+        // Harita.onRequestPermissionsResult(this, requestCode, grantResults); // bunu bırak
+
+        // mevcut satırdan sonra ekle:
+        if (requestCode == REQ_LOC_FOR_PLACE) {
+            boolean granted = false;
+            if (grantResults != null && grantResults.length > 0) {
+                for (int r : grantResults) {
+                    if (r == PackageManager.PERMISSION_GRANTED) { granted = true; break; }
+                }
+            }
+            if (granted) {
+                EditText target = deref(this);
+                if (target != null) {
+                    // doğrudan Harita'ya gönder
+                    runOnUiThread(() -> Harita.askAndFill(IyeActivity.this, target));
+                } else {
+                    // hedef yoksa isteğe bağlı: kısa bildirim
+                    Toast.makeText(this, "Konum için izin verildi.", Toast.LENGTH_SHORT).show();
+                }
+            } else {
+                Toast.makeText(this, "Konum izni gereklidir.", Toast.LENGTH_SHORT).show();
+            }
+        }
     }
     // ====== Entry helpers ======
     public static void launchProfile(Context ctx) {

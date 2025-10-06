@@ -2,6 +2,7 @@ package com.kurmez.iyesi.kurmes.utilities.helper.net;
 
 import android.content.Context;
 import android.graphics.Bitmap;
+import android.net.Uri;
 import android.os.Handler;
 import android.os.Looper;
 import android.provider.Settings;
@@ -277,33 +278,92 @@ public class CFClient {
         enqueue(req, cb);
     }
 
+    // CFClient.java - postJsonAsync metodunu güncelle
     public void postJsonAsync(@NonNull String url, @NonNull JSONObject body, @NonNull JsonCallback cb) {
-        Request req = new Request.Builder().url(url)
-                .post(RequestBody.create(body.toString(), JSON)).build();
-        enqueue(req, cb);
+        // ⭐ CRITICAL: onCall formatına uygun wrapper
+        JSONObject onCallWrapper = new JSONObject();
+        try {
+            onCallWrapper.put("data", body); // body'yi "data" içine sar
+        } catch (JSONException e) {
+            postErr(cb, e);
+            return;
+        }
+
+        Log.d(TAG, "onCall Wrapped JSON: " + onCallWrapper.toString());
+
+        // App Check token'ını al
+        FirebaseAppCheck.getInstance().getAppCheckToken(false)
+                .addOnSuccessListener(appCheckTokenResult -> {
+                    String appCheckToken = appCheckTokenResult.getToken();
+
+                    Request.Builder requestBuilder = new Request.Builder()
+                            .url(url)
+                            .post(RequestBody.create(onCallWrapper.toString(), JSON));
+
+                    // App Check header'ını ekle
+                    if (appCheckToken != null && !appCheckToken.isEmpty()) {
+                        requestBuilder.header("X-Firebase-AppCheck", appCheckToken);
+                        Log.d(TAG, "AppCheck header added");
+                    } else {
+                        Log.w(TAG, "AppCheck token is empty or null");
+                    }
+
+                    // Diğer header'lar
+                    requestBuilder.header("Content-Type", "application/json");
+                    requestBuilder.header("Accept", "application/json");
+
+                    Request req = requestBuilder.build();
+
+                    // Request detaylarını logla
+                    Log.d(TAG, "Sending request to: " + url);
+                    Log.d(TAG, "Headers: " + req.headers());
+
+                    enqueue(req, cb);
+                })
+                .addOnFailureListener(e -> {
+                    Log.e(TAG, "App Check token alınamadı: " + e.getMessage());
+                    // App Check olmadan da deneyelim
+                    Request req = new Request.Builder()
+                            .url(url)
+                            .post(RequestBody.create(onCallWrapper.toString(), JSON))
+                            .header("Content-Type", "application/json")
+                            .header("Accept", "application/json")
+                            .build();
+                    enqueue(req, cb);
+                });
     }
 
     private void enqueue(@NonNull Request req, @NonNull JsonCallback cb) {
         http.newCall(req).enqueue(new Callback() {
             @Override public void onFailure(@NonNull Call call, @NonNull IOException e) {
+                Log.e(TAG, "Request failed: " + e.getMessage());
                 postErr(cb, e);
             }
 
             @Override public void onResponse(@NonNull Call call, @NonNull Response response) {
                 try (Response resp = response) {
+                    // ⭐ DEBUG: Response detaylarını logla
+                    Log.d(TAG, "Response Code: " + resp.code());
+                    Log.d(TAG, "Response Message: " + resp.message());
+
                     String respBody = (resp.body() != null) ? resp.body().string() : "";
+                    Log.d(TAG, "Response Body: " + respBody);
+
                     if (!resp.isSuccessful()) {
                         String msg = "CF HTTP " + resp.code();
                         if (respBody != null && !respBody.isEmpty()) {
                             msg += " " + respBody;
                         }
+                        Log.e(TAG, "Request unsuccessful: " + msg);
                         throw new IOException(msg);
                     }
+
                     JSONObject obj = (respBody == null || respBody.isEmpty())
                             ? new JSONObject()
                             : new JSONObject(respBody);
                     postOk(cb, obj);
                 } catch (Throwable t) {
+                    Log.e(TAG, "Response processing error: " + t.getMessage());
                     postErr(cb, t);
                 }
             }
@@ -484,29 +544,67 @@ public class CFClient {
         }
     }
 
-    @WorkerThread
-    public static UploadResult uploadImageAndGetUrlBlockingResult(Context ctx,
-                                                                  Request req,
-                                                                  String endpoint,
-                                                                  String dataUriB64,
-                                                                  String path) throws Exception {
-        // (kimlik & appcheck alma kodu – mevcut uploadImageAndGetUrlBlocking ile aynı)
-        // ...
-        try (Response resp = http().newCall(req).execute()) {
-            if (!resp.isSuccessful()) {
-                String err = resp.body() != null ? resp.body().string() : ("HTTP " + resp.code());
-                throw new RuntimeException("saveBase64Image failed: " + err);
+// CFClient.java içine eklenecek:
+
+    /**
+     * Görsel yükleme callback interface'i
+     */
+    public interface ImageUploadCallback {
+        void onSuccess(String imageUrl);
+        void onError(Throwable t);
+    }
+
+    /**
+     * URI'dan görsel yükler ve URL'yi callback ile döndürür
+     *
+     * @param context     Context
+     * @param uri         Görsel URI'sı
+     * @param endpoint    Cloud Functions endpoint
+     * @param storagePath Storage path (örn: "images/iye/avatar/timestamp")
+     * @param callback    Sonuç callback'i
+     */
+    public void uploadImage(
+            @NonNull Context context,
+            @NonNull Uri uri,
+            @NonNull String endpoint,
+            @NonNull String storagePath,
+            @NonNull ImageUploadCallback callback) {
+
+        io.execute(() -> {
+            try {
+                // 1) URI'dan görsel verisini oku
+                byte[] imageBytes;
+                try (java.io.InputStream is = context.getContentResolver().openInputStream(uri)) {
+                    if (is == null) {
+                        throw new IllegalStateException("Dosya açılamadı: " + uri);
+                    }
+                    ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                    byte[] buf = new byte[8192];
+                    int bytesRead;
+                    while ((bytesRead = is.read(buf)) != -1) {
+                        baos.write(buf, 0, bytesRead);
+                    }
+                    imageBytes = baos.toByteArray();
+                }
+
+                // 2) Base64 data URI'ya dönüştür
+                String mimeType = context.getContentResolver().getType(uri);
+                if (mimeType == null) mimeType = "image/jpeg";
+
+                String base64 = android.util.Base64.encodeToString(imageBytes, android.util.Base64.NO_WRAP);
+                String dataUri = "data:" + mimeType + ";base64," + base64;
+
+                // 3) Görseli yükle ve URL'yi al
+                String imageUrl = uploadImageAndGetUrlBlocking(context, endpoint, dataUri, storagePath);
+
+                // 4) Başarılı sonucu callback ile döndür
+                main.post(() -> callback.onSuccess(imageUrl));
+
+            } catch (Exception e) {
+                // 5) Hatayı callback ile döndür
+                main.post(() -> callback.onError(e));
             }
-            String respStr = resp.body() != null ? resp.body().string() : "{}";
-            JSONObject json = new JSONObject(respStr);
-            String url = json.optString("url", null);
-            String objectPath = json.optString("objectPath", null);
-            String contentType = json.optString("contentType", null);
-            if (objectPath == null || objectPath.isEmpty()) {
-                throw new RuntimeException("Missing 'objectPath' in response: " + respStr);
-            }
-            return new UploadResult(url, objectPath, contentType);
-        }
+        });
     }
 
     /**
@@ -522,7 +620,7 @@ public class CFClient {
     @WorkerThread
     public static String uploadImageAndGetUrlBlocking(Context ctx,
                                                       String endpoint,
-                                                      String dataUriB64,
+                                                      String dataUriB64,  // dataUriB64 -> dataUri
                                                       String path) throws Exception {
         // 1) Kimlik ve App Check
         FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
@@ -539,6 +637,7 @@ public class CFClient {
         // 2) Gövde
         JSONObject opts = new JSONObject();
         opts.put("path", path); // backend ownerUid’i kendisi enjekte ediyor
+        opts.put("bucketName", "iyesi-e8d4f.firebasestorage.app"); // ← bucket name ekle
 
         JSONObject body = new JSONObject();
         body.put("b64", dataUriB64);

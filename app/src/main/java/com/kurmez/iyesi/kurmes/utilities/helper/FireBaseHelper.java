@@ -11,9 +11,13 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.annotation.RequiresApi;
 
+import com.google.android.gms.tasks.OnCompleteListener;
+import com.google.android.gms.tasks.Task;
 import com.google.android.gms.tasks.Tasks;
 import com.google.firebase.appcheck.AppCheckToken;
 import com.google.firebase.appcheck.FirebaseAppCheck;
+import com.google.firebase.auth.AuthCredential;
+import com.google.firebase.auth.EmailAuthProvider;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.auth.GetTokenResult;
@@ -129,6 +133,57 @@ public class FireBaseHelper {
             e.printStackTrace();
         }
         return null;
+    }
+    public interface PasswordChangeCallback {
+        void onSuccess();
+        void onFailure(Exception e);
+    }
+
+
+    /**
+     * Mevcut oturum açmış kullanıcı için önce yeniden kimlik doğrulama yapar, sonra şifreyi günceller.
+     * @param oldPassword mevcut (eski) şifre
+     * @param newPassword yeni şifre
+     * @param callback sonuç bildirimi için çağrılacak geri çağırma
+     */
+    public static void changePassword(@NonNull final String oldPassword,
+                                      @NonNull final String newPassword,
+                                      @NonNull final PasswordChangeCallback callback) {
+        FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
+        if (user == null) {
+            callback.onFailure(new IllegalStateException("Kullanıcı oturumu yok."));
+            return;
+        }
+
+
+        String email = user.getEmail();
+        if (email == null || email.isEmpty()) {
+            callback.onFailure(new IllegalStateException("Kullanıcı e-posta bilgisi bulunamadı."));
+            return;
+        }
+
+
+        AuthCredential credential = EmailAuthProvider.getCredential(email, oldPassword);
+        user.reauthenticate(credential).addOnCompleteListener(new OnCompleteListener<Void>() {
+            @Override
+            public void onComplete(@NonNull Task<Void> task) {
+                if (task.isSuccessful()) {
+                    user.updatePassword(newPassword).addOnCompleteListener(new OnCompleteListener<Void>() {
+                        @Override
+                        public void onComplete(@NonNull Task<Void> task2) {
+                            if (task2.isSuccessful()) {
+                                callback.onSuccess();
+                            } else {
+                                callback.onFailure(task2.getException());
+                            }
+                        }
+                    });
+                } else {
+// Yeniden kimlik doğrulama başarısız
+                    callback.onFailure(task.getException());
+                }
+            }
+        });
     }
     // ----------------------------- TOKEN/HEADER UTILS -----------------------------
     // Eğer interceptor'ların zaten bunu yapıyorsa, aşağıdakiler ek işlem gerektirmez.
