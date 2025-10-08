@@ -12,11 +12,13 @@ import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.Typeface;
+import android.location.Location;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
 import android.provider.OpenableColumns;
 import android.text.InputType;
 import android.text.TextUtils;
@@ -42,8 +44,15 @@ import androidx.annotation.RequiresApi;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
 
+import com.bumptech.glide.Glide;
 import com.google.android.gms.location.FusedLocationProviderClient;
+import com.google.android.gms.location.LocationAvailability;
+import com.google.android.gms.location.LocationCallback;
+import com.google.android.gms.location.LocationRequest;
+import com.google.android.gms.location.LocationResult;
+import com.google.android.gms.location.LocationServices;
 import com.google.firebase.FirebaseApp;
 import com.google.firebase.appcheck.FirebaseAppCheck;
 import com.google.firebase.auth.FirebaseAuth;
@@ -118,6 +127,13 @@ public class IyeActivity extends AppCompatActivity {
     private volatile boolean uploadInProgress = false;
     private volatile boolean saveQueued = false;
     private volatile String uploadedObjectPath = null;
+    private String role;
+    private String username;
+    private String emailLike;
+    private String loc;
+    private String phone;
+    private String url;
+private Boolean failSafe = false;
     // ====== Claim keys ======
     public static final class ClaimsKeys {
         public static final String UID        = "uid";
@@ -167,6 +183,7 @@ public class IyeActivity extends AppCompatActivity {
     }
     // ====== Membership Dialog ======
     private void showMembershipDialog() {
+
         if (membershipDialog != null && membershipDialog.isShowing()) return;
         // EditText’i programatik oluşturuyoruz (şifre gibi davranır)
         final EditText et = new EditText(this);
@@ -185,6 +202,8 @@ public class IyeActivity extends AppCompatActivity {
                         @Override
                         public void onSuccess() {
                             Toast.makeText(getApplicationContext(), "Şifre başarıyla değiştirildi.", Toast.LENGTH_SHORT).show();
+                            iyeImage.performClick();
+
                         }
 
                         @Override
@@ -194,7 +213,8 @@ public class IyeActivity extends AppCompatActivity {
                         }
 
                     });
-                    iyeImage.performClick();
+                    //iyeImage.performClick();
+                    failSafe = true;
                 })
                 .setNegativeButton("İptal", (d, w) -> {
                     // Guard başarısız/iptal → aktiviteden çık
@@ -244,6 +264,7 @@ public class IyeActivity extends AppCompatActivity {
                             pendingNewPassword = text;
                             Toast.makeText(IyeActivity.this, "Şifre başarıyla değiştirildi.", Toast.LENGTH_SHORT).show();
                             membershipDialog.dismiss();
+                            iyeImage.performClick();
                         });
                     }
 
@@ -272,7 +293,10 @@ public class IyeActivity extends AppCompatActivity {
             });
         });
 
-        membershipDialog.show();
+
+        //if (username != null && url != null ){membershipDialog.dismiss();}
+        if (username == null || url == null ){membershipDialog.show();}
+        if (failSafe){membershipDialog.dismiss();}
     }
 
     // Dilersen guard’tan başlatmak için bu yardımcıyı kullan:
@@ -315,12 +339,12 @@ public class IyeActivity extends AppCompatActivity {
     }
 
     private void renderUIFromClaims(Map<String, Object> claims) {
-        String role      = getStringClaim(claims, ClaimsKeys.ROLE);
-        String username  = getStringClaim(claims, ClaimsKeys.USERNAME);
-        String emailLike = getStringClaim(claims, ClaimsKeys.EMAIL);
-        String loc       = getStringClaim(claims, ClaimsKeys.LOCATION);
-        String phone     = getStringClaim(claims, ClaimsKeys.PHONE);
-        String url       = getStringClaim(claims, ClaimsKeys.AVATAR_URL);
+        role      = getStringClaim(claims, ClaimsKeys.ROLE);
+        username  = getStringClaim(claims, ClaimsKeys.USERNAME);
+        emailLike = getStringClaim(claims, ClaimsKeys.EMAIL);
+        loc       = getStringClaim(claims, ClaimsKeys.LOCATION);
+        phone     = getStringClaim(claims, ClaimsKeys.PHONE);
+        url       = getStringClaim(claims, ClaimsKeys.AVATAR_URL);
         //headerTitle.setImageResource(R.drawable.ic_user);
         tvCompanion.setText(nonEmptyOrDash(username));
         tvCompanion.setTypeface(Typeface.MONOSPACE, Typeface.BOLD);
@@ -334,6 +358,22 @@ public class IyeActivity extends AppCompatActivity {
         rows.add(Map.entry(ClaimsKeys.LOCATION,  new RowMeta("Konum",         loc,       InputType.TYPE_CLASS_TEXT)));
         rows.add(Map.entry(ClaimsKeys.PHONE,     new RowMeta("Telefon",       phone,     InputType.TYPE_CLASS_PHONE)));
         rows.add(Map.entry(ClaimsKeys.AVATAR_URL,new RowMeta("Avatar URL",    getStringClaim(claims, ClaimsKeys.AVATAR_URL), InputType.TYPE_TEXT_VARIATION_URI)));
+// renderUIFromClaims içinde, url değişkenini aldıktan sonra:
+        if (!TextUtils.isEmpty(url)) {
+            try {
+                // Basit ve güvenli: Glide otomatik olarak asenkron indirir ve cache'ler
+                Glide.with(this)
+                        .load(url)
+                        .placeholder(R.drawable.ic_iye)    // isteğe bağlı
+                        .error(R.drawable.ic_follow)          // isteğe bağlı
+                        .into(iyeImage);
+            } catch (Exception e) {
+                Log.w(TAG, "Glide yükleme hatası: " + e.getMessage(), e);
+                iyeImage.setImageResource(R.drawable.ic_delete);
+            }
+        } else {
+            iyeImage.setImageResource(R.drawable.holder);
+        }
 
         editAdapter = new EditAdapter(rows);
         listViewIye.setAdapter(editAdapter);
@@ -496,8 +536,8 @@ public class IyeActivity extends AppCompatActivity {
                 // Claims'i yenile ve UI'ı güncelle
                 refreshClaimsAndRender(FirebaseAuth.getInstance(app).getCurrentUser());
                 // Yönlendirme YAPMIYORUZ - kullanıcı burada kalıyor
-                // startActivity(new Intent(IyeActivity.this, MainActivity.class));
-                // finish();
+                startActivity(new Intent(IyeActivity.this, MainActivity.class));
+                finish();
             }
 
             @Override public void onError(@NonNull Throwable t) {
@@ -628,6 +668,7 @@ public class IyeActivity extends AppCompatActivity {
                             target.setText(imageUrl);
                             target.setTag(uri);
                         }
+                        iyeImage.setImageURI(uri);
                         uploadedObjectPath = imageUrl;
                         Helpers.showToastSafe(IyeActivity.this, "Görsel yüklendi");
                         setUiBusy(false, null); // ÖNEMLİ: overlay'i kapat
@@ -708,121 +749,53 @@ public class IyeActivity extends AppCompatActivity {
             ((android.widget.LinearLayout) layout).setOrientation(android.widget.LinearLayout.VERTICAL);
             layout.addView(label);
             layout.addView(et);
+// EditAdapter içindeki karmaşık konum kodunu basitleştir
             if (ClaimsKeys.LOCATION.equals(key)) {
-                // non-editable görünüm, dokununca Harita veya izin akışı başlasın
                 et.setFocusable(false);
                 et.setFocusableInTouchMode(false);
                 et.setCursorVisible(false);
                 et.setHint("Konum seçmek için dokun");
-                et.setTag(lastLat != null && lastLng != null ?
-                        new Iye.Location(et.getText().toString(), lastLat, lastLng) :
-                        new Iye.Location(et.getText().toString(), null, null));
+
                 final long[] lastClick = {0L};
                 View.OnClickListener openMapWithPermission = v -> {
                     long now = System.currentTimeMillis();
-                    if (now - lastClick[0] < 600) return;
+                    if (now - lastClick[0] < 1000) return; // 1 saniye debounce
                     lastClick[0] = now;
 
-                    // Eğer Android < M ise izin kontrolü gerekmez
+                    // Basit konum alma akışı
                     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
+                        // Android 6.0 altı için doğrudan harita aç
                         Harita.askAndFill(IyeActivity.this, et);
                         return;
                     }
 
-                    Context localCtx = v.getContext();
-                    boolean fine = androidx.core.content.ContextCompat.checkSelfPermission(localCtx, Manifest.permission.ACCESS_FINE_LOCATION)
-                            == PackageManager.PERMISSION_GRANTED;
-                    boolean coarse = androidx.core.content.ContextCompat.checkSelfPermission(localCtx, Manifest.permission.ACCESS_COARSE_LOCATION)
-                            == PackageManager.PERMISSION_GRANTED;
+                    // İzin kontrolü
+                    boolean hasFineLocation = ContextCompat.checkSelfPermission(ctx,
+                            Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED;
+                    boolean hasCoarseLocation = ContextCompat.checkSelfPermission(ctx,
+                            Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED;
 
-                    if (fine || coarse) {
-                        // Eğer lastLat/lastLng daha önce doğru şekilde set edilmişse kullan
-                        boolean haveCoords =
-                                (lastLat != null && lastLng != null)
-                                        && !Double.isNaN(lastLat) && !Double.isNaN(lastLng)
-                                        && !Double.isInfinite(lastLat) && !Double.isInfinite(lastLng);
-
-                        if (haveCoords) {
-                            //getAddressAndFill(et, lastLat.doubleValue(), lastLng.doubleValue());
-                            getAddressAndFill(et, lastLat, lastLng);
-                            return;
-                        }
-
-                        // Aksi halde fusedLocationClient ile aktif olarak konum iste
-                        if (fusedLocationClient == null) {
-                            fusedLocationClient = com.google.android.gms.location.LocationServices.getFusedLocationProviderClient(IyeActivity.this);
-                        }
-
-                        et.post(() -> et.setText("Konum alınıyor..."));
-                        try {
-                            fusedLocationClient.getCurrentLocation(
-                                    com.google.android.gms.location.Priority.PRIORITY_BALANCED_POWER_ACCURACY,
-                                    placeCts.getToken()
-                            ).addOnSuccessListener(loc -> {
-                                if (loc != null) {
-                                    lastLat = loc.getLatitude();
-                                    lastLng = loc.getLongitude();
-                                    getAddressAndFill(et, lastLat, lastLng);
-                                } else {
-                                    // getCurrentLocation null döndü -> deneyebileceğimiz fallback: getLastLocation
-                                    fusedLocationClient.getLastLocation()
-                                            .addOnSuccessListener(last -> {
-                                                if (last != null) {
-                                                    lastLat = last.getLatitude();
-                                                    lastLng = last.getLongitude();
-                                                    getAddressAndFill(et, lastLat, lastLng);
-                                                } else {
-                                                    et.post(() -> {
-                                                        et.setText("");
-                                                        Toast.makeText(IyeActivity.this, "Konum alınamadı.", Toast.LENGTH_SHORT).show();
-                                                    });
-                                                }
-                                            })
-                                            .addOnFailureListener(e -> et.post(() -> {
-                                                et.setText("");
-                                                Toast.makeText(IyeActivity.this, "Konum alınamadı: " + e.getMessage(), Toast.LENGTH_SHORT).show();
-                                            }));
-                                }
-                            }).addOnFailureListener(e -> {
-                                et.post(() -> {
-                                    et.setText("");
-                                    Toast.makeText(IyeActivity.this, "Konum isteği başarısız: " + e.getMessage(), Toast.LENGTH_SHORT).show();
-                                });
-                            });
-                        } catch (SecurityException se) {
-                            et.post(() -> {
-                                et.setText("");
-                                Toast.makeText(IyeActivity.this, "Konum izni yok.", Toast.LENGTH_SHORT).show();
-                            });
-                        }
-                        return;
+                    if (hasFineLocation || hasCoarseLocation) {
+                        // İzin varsa hızlı konum alma
+                        requestLocationWithTimeout(et, 15000); // 15 saniye timeout
+                    } else {
+                        // İzin yoksa hedefi sakla ve izin iste
+                        pendingTargets.put(IyeActivity.this, new WeakReference<>(et));
+                        ActivityCompat.requestPermissions(IyeActivity.this,
+                                new String[]{
+                                        Manifest.permission.ACCESS_FINE_LOCATION,
+                                        Manifest.permission.ACCESS_COARSE_LOCATION
+                                },
+                                REQ_LOC_FOR_PLACE);
                     }
-                    // izin yok: hedefi sakla ve izin iste
-                    pendingTargets.put(IyeActivity.this, new WeakReference<>(et));
-                    ActivityCompat.requestPermissions(IyeActivity.this,
-                            new String[]{ Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION },
-                            REQ_LOC_FOR_PLACE);
                 };
 
                 et.setOnClickListener(openMapWithPermission);
 
-                // uzun basınca elle düzenleme izni (klavyeyi aç)
+                // Uzun basınca harita açma seçeneği
                 et.setOnLongClickListener(v -> {
-                    et.setFocusable(true);
-                    et.setFocusableInTouchMode(true);
-                    et.setCursorVisible(true);
-                    et.requestFocus();
-                    InputMethodManager imm = (InputMethodManager) v.getContext().getSystemService(Context.INPUT_METHOD_SERVICE);
-                    if (imm != null) imm.showSoftInput(et, InputMethodManager.SHOW_IMPLICIT);
+                    Harita.askAndFill(IyeActivity.this, et);
                     return true;
-                });
-
-                et.setOnFocusChangeListener((v, hasFocus) -> {
-                    if (!hasFocus) {
-                        et.setFocusable(false);
-                        et.setFocusableInTouchMode(false);
-                        et.setCursorVisible(false);
-                    }
                 });
             }
 
@@ -842,41 +815,105 @@ public class IyeActivity extends AppCompatActivity {
             return out;
         }
     }
-    private void tryFillLastLocation() {
-        // Eğer izin yoksa hemen dön
-        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-            Log.d(TAG, "tryFillLastLocation() → permission missing");
+    // IyeActivity.java - Konum alma metodunu güncelle
+    private void requestLocationWithTimeout(@NonNull EditText target, long timeoutMs) {
+        if (fusedLocationClient == null) {
+            fusedLocationClient = LocationServices.getFusedLocationProviderClient(this);
+        }
+
+        target.post(() -> target.setText("Konum aranıyor..."));
+
+        // Timeout kontrolü
+        final Handler timeoutHandler = new Handler();
+        final Runnable timeoutRunnable = () -> {
+            Log.w(TAG, "Konum alma timeout oldu");
+            target.post(() -> {
+                target.setText("");
+                Toast.makeText(IyeActivity.this, "Konum alınamadı - zaman aşımı", Toast.LENGTH_SHORT).show();
+            });
+        };
+
+        // İzin kontrolü
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
+                != PackageManager.PERMISSION_GRANTED &&
+                ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION)
+                        != PackageManager.PERMISSION_GRANTED) {
+
+            target.post(() -> {
+                target.setText("");
+                Toast.makeText(IyeActivity.this, "Konum izni gerekli", Toast.LENGTH_SHORT).show();
+            });
             return;
         }
 
-        // fusedLocationClient'in null olmamasını garanti et
-        if (fusedLocationClient == null) {
-            fusedLocationClient = com.google.android.gms.location.LocationServices.getFusedLocationProviderClient(this);
-        }
-
+        // Öncelikle son bilinen konumu hızlıca al
         fusedLocationClient.getLastLocation()
-                .addOnSuccessListener(loc -> {
-                    if (loc != null) {
-                        lastLat = loc.getLatitude();
-                        lastLng = loc.getLongitude();
-
-                        // Bekleyen EditText hedefini al (askAndPick/izin akışıyla saklanan)
-                        EditText target = deref(this);
-                        if (target != null) {
-                            // Basit ama güvenilir format: "lat, lng"
-                            String text = String.format(java.util.Locale.US, "%.6f, %.6f", lastLat, lastLng);
-                            target.setText(text);
-                            Log.d(TAG, "tryFillLastLocation -> wrote to target: " + text);
-                        } else {
-                            Log.d(TAG, "tryFillLastLocation -> no pending target to write to");
-                        }
-                    } else {
-                        Log.d(TAG, "lastLocation is null");
+                .addOnSuccessListener(location -> {
+                    if (location != null) {
+                        timeoutHandler.removeCallbacks(timeoutRunnable);
+                        lastLat = location.getLatitude();
+                        lastLng = location.getLongitude();
+                        getAddressAndFill(target, lastLat, lastLng);
+                        return;
                     }
-                })
-                .addOnFailureListener(e -> Log.e(TAG, "lastLocation err: " + e.getMessage()));
-    }
 
+                    // Son konum yoksa, yeni konum iste
+                    LocationRequest locationRequest = LocationRequest.create();
+                    locationRequest.setPriority(LocationRequest.PRIORITY_BALANCED_POWER_ACCURACY);
+                    locationRequest.setInterval(10000);
+                    locationRequest.setFastestInterval(5000);
+                    locationRequest.setNumUpdates(1);
+                    locationRequest.setMaxWaitTime(15000);
+
+                    LocationCallback locationCallback = new LocationCallback() {
+                        @Override
+                        public void onLocationResult(LocationResult locationResult) {
+                            timeoutHandler.removeCallbacks(timeoutRunnable);
+                            if (locationResult == null) {
+                                target.post(() -> {
+                                    target.setText("");
+                                    Toast.makeText(IyeActivity.this, "Konum alınamadı", Toast.LENGTH_SHORT).show();
+                                });
+                                return;
+                            }
+                            Location location = locationResult.getLastLocation();
+                            lastLat = location.getLatitude();
+                            lastLng = location.getLongitude();
+                            getAddressAndFill(target, lastLat, lastLng);
+
+                            // Callback'i kaldır
+                            fusedLocationClient.removeLocationUpdates(this);
+                        }
+
+                        @Override
+                        public void onLocationAvailability(LocationAvailability locationAvailability) {
+                            if (!locationAvailability.isLocationAvailable()) {
+                                timeoutHandler.removeCallbacks(timeoutRunnable);
+                                target.post(() -> {
+                                    target.setText("");
+                                    Toast.makeText(IyeActivity.this, "Konum servisi kullanılamıyor", Toast.LENGTH_SHORT).show();
+                                });
+                                fusedLocationClient.removeLocationUpdates(this);
+                            }
+                        }
+                    };
+
+                    // Timeout'u başlat
+                    timeoutHandler.postDelayed(timeoutRunnable, timeoutMs);
+
+                    // Konum güncellemelerini iste
+                    fusedLocationClient.requestLocationUpdates(locationRequest, locationCallback, null);
+
+                })
+                .addOnFailureListener(e -> {
+                    timeoutHandler.removeCallbacks(timeoutRunnable);
+                    Log.e(TAG, "getLastLocation failed: " + e.getMessage());
+                    target.post(() -> {
+                        target.setText("");
+                        Toast.makeText(IyeActivity.this, "Konum alınamadı: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                    });
+                });
+    }
     private void runPendingAfterLocation() {
         Log.d(TAG, "[LOC] runPendingAfterLocation()");
         Runnable r = pendingAfterLocation;

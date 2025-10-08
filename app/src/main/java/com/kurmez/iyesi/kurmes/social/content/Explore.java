@@ -34,6 +34,7 @@ import com.google.firebase.functions.FirebaseFunctions;
 import com.google.firebase.functions.HttpsCallableResult;
 import com.kurmez.iyesi.BuildConfig;
 import com.kurmez.iyesi.R;
+import com.kurmez.iyesi.kayra.Classes.data.Iye;
 import com.kurmez.iyesi.kayra.Classes.data.Soul;
 import com.kurmez.iyesi.kurmes.utilities.Helpers;
 import com.kurmez.iyesi.kurmes.utilities.adapters.CompanionAdapter;
@@ -139,8 +140,8 @@ public class Explore extends AppCompatActivity {
             finish();
             return;
         }
-        headerHelper.refreshHeader(Explore.this);
-
+        //headerHelper.refreshHeader(Explore.this,null);
+headerHelper.refreshHeaderWithIye(null, new Iye());
         // 2) Firestore init (profil/rol vb.)
         firestore = FirebaseFirestore.getInstance();
         this.cf = new CFClient(BuildConfig.CF_BASE_URL);

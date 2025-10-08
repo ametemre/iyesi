@@ -14,7 +14,6 @@ import androidx.appcompat.app.AppCompatActivity;
 import com.google.firebase.appcheck.FirebaseAppCheck;
 import com.google.firebase.auth.FirebaseAuth;
 import com.kurmez.iyesi.kurmes.utilities.Helpers;
-import com.kurmez.iyesi.umay.Welcome;
 
 public class Login extends AppCompatActivity {
 
@@ -91,7 +90,7 @@ public class Login extends AppCompatActivity {
                     submitButton.setEnabled(true);
                     if (task.isSuccessful()) {
                         Helpers.showToastSafe(Login.this, "Login successful");
-                        startActivity(new Intent(Login.this, Welcome.class));
+                        startActivity(new Intent(Login.this, MainActivity.class));
                         finish();
                     } else {
                         String msg = task.getException() != null

@@ -17,6 +17,7 @@ import com.bumptech.glide.Glide;
 import com.google.firebase.database.DataSnapshot;
 import com.google.firebase.database.FirebaseDatabase;
 import com.kurmez.iyesi.R;
+import com.kurmez.iyesi.kayra.Classes.data.Iye;
 import com.kurmez.iyesi.kurmes.utilities.helper.HeaderHelper;
 
 import org.json.JSONObject;
@@ -87,7 +88,8 @@ public class Companion extends AppCompatActivity {
         if (node.isEmpty()) node = "soul_inneed";
         requestKey = nz(getIntent().getStringExtra(EXTRA_REQUESTKEY));
         try {
-            headerHelper.refreshHeader(Companion.this);
+            //headerHelper.refreshHeader(Companion.this,null);
+            headerHelper.refreshHeaderWithIye(null, new Iye());
         } catch (Exception e) {
             Log.e("UserError",e.getMessage());
         }

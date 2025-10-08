@@ -37,7 +37,7 @@
             android:layout_gravity="center"
             android:layout_weight="2"
             android:contentDescription="pres or pres and hold"
-            android:src="@drawable/iye"
+            android:src="@drawable/ic_iye"
             tools:ignore="HardcodedText"
             android:clickable="true"
             android:focusable="true"/>

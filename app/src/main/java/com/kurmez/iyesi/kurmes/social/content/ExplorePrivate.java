@@ -110,7 +110,8 @@ public class ExplorePrivate extends AppCompatActivity {
             return;
         }
         Log.d(L, "onCreate() user=" + user.getUid() + " email=" + user.getEmail());
-        headerHelper.refreshHeader(ExplorePrivate.this);
+        //headerHelper.refreshHeader(ExplorePrivate.this,null);
+        headerHelper.refreshHeaderWithIye(null, new Iye());
 
         FirebaseDatabase db = FirebaseDatabase.getInstance(RTDB_URL);
         pendingRef = db.getReference("Pending/Companion/soul_inneed");

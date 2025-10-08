@@ -1,4 +1,4 @@
-// app/build.gradle — OOM fix + tek App Check sağlayıcı
+// app/build.gradle — OOM fix + tek App Check sağlayıcı /D2: 𐰚𐰃𐰤
 
 plugins {
     alias(libs.plugins.android.application)
@@ -15,8 +15,8 @@ android {
         minSdk 23
         //noinspection EditedTargetSdkVersion
         targetSdk 36
-        versionCode 27
-        versionName "Cat"
+        versionCode 28
+        versionName "Börü"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
 
