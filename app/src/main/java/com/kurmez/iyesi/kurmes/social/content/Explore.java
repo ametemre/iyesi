@@ -275,7 +275,7 @@ headerHelper.refreshHeaderWithIye(null, new Iye());
                 try {
                     String pretty;
                     try { pretty = json.toString(2); } catch (Exception e) { pretty = json.toString(); }
-                    logChunked("raw json:", pretty);
+                    //logChunked("raw json:", pretty);
 
                     // Souls'u parse et
                     List<Soul> parsed = parseSouls(json);

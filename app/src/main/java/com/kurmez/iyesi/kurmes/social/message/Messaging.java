@@ -60,9 +60,9 @@ public class Messaging extends AppCompatActivity {
 
     private final OkHttpClient httpClient = new OkHttpClient.Builder().addInterceptor(chain -> {
         Request req = chain.request();
-        Log.d("HTTP-REQ", req.method() + " " + req.url());
+        //Log.d("HTTP-REQ", req.method() + " " + req.url());
         for (String name : req.headers().names()) {
-            Log.d("HTTP-REQ", name + ": " + req.header(name));
+            //Log.d("HTTP-REQ", name + ": " + req.header(name));
         }
         return chain.proceed(req);
     }).build();

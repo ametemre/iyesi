@@ -6,6 +6,7 @@ import android.net.Uri;
 import android.os.Handler;
 import android.os.Looper;
 import android.provider.Settings;
+import android.util.Base64;
 import android.util.Log;
 
 import androidx.annotation.NonNull;
@@ -18,13 +19,17 @@ import com.google.firebase.appcheck.AppCheckTokenResult;
 import com.google.firebase.appcheck.FirebaseAppCheck;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
+import com.kurmez.iyesi.kurmes.utilities.helper.CFHelper;
 
 import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.Objects;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -416,7 +421,7 @@ public class CFClient {
                 // Bağlantı havuzu
                 .connectionPool(new ConnectionPool(5, 5, TimeUnit.MINUTES))
                 // HTTP 1.1 tercih (gerekirse)
-                .protocols(java.util.Arrays.asList(Protocol.HTTP_1_1))
+                .protocols(Arrays.asList(Protocol.HTTP_1_1))
                 // Kimlik ve başlıklar
                 .authenticator(new FirebaseAuthenticator())               // 401'lerde token tazele
                 .addInterceptor(new FirebaseHeadersInterceptor())          // Authorization, AppCheck, Device-Id vs.
@@ -438,14 +443,17 @@ public class CFClient {
         }
     }
 
-
+    public void refreshRole(@NonNull CFHelper.RoleCallback callback, Context context) {
+        CFHelper cfHelper = new CFHelper(context, "iyesi-e8d4f","us-central1", new CFHelper.Listener(){});
+        cfHelper.refreshRole(callback);
+    }
     // ----------------------------- WhereBuilder (opsiyonel) -----------------------------
     // Welcome.java gibi sınıflardaki basit filtreleme kullanımını derletecek minimal sürüm.
     public static class WhereBuilder {
         private final StringBuilder sb = new StringBuilder();
         private static String enc(String s){
             try {
-                return java.net.URLEncoder.encode(s, StandardCharsets.UTF_8.name());
+                return URLEncoder.encode(s, StandardCharsets.UTF_8.name());
             } catch (Exception e) { return s; }
         }
 
@@ -499,7 +507,7 @@ public class CFClient {
                     String pretty = json.toString(2);
 
                     // Parçalı log (kesilmeden gör)
-                    logChunked(TAG, "JSON:", pretty);
+                    //logChunked(TAG, "JSON:", pretty);
 
                     postOk(cb, json);
                 }
@@ -525,13 +533,13 @@ public class CFClient {
     private static String toDataUriJpeg(Bitmap bmp, int quality) {
         ByteArrayOutputStream bos = new ByteArrayOutputStream();
         bmp.compress(Bitmap.CompressFormat.JPEG, quality, bos);
-        String b64 = android.util.Base64.encodeToString(bos.toByteArray(), android.util.Base64.NO_WRAP);
+        String b64 = Base64.encodeToString(bos.toByteArray(), Base64.NO_WRAP);
         return "data:image/jpeg;base64," + b64;
     }
 
     /** bytes → data URI (JPEG varsayımı) */
     private static String toDataUriJpeg(byte[] jpegBytes) {
-        String b64 = android.util.Base64.encodeToString(jpegBytes, android.util.Base64.NO_WRAP);
+        String b64 = Base64.encodeToString(jpegBytes, Base64.NO_WRAP);
         return "data:image/jpeg;base64," + b64;
     }
     // CFClient.java (ek parça)
@@ -574,7 +582,7 @@ public class CFClient {
             try {
                 // 1) URI'dan görsel verisini oku
                 byte[] imageBytes;
-                try (java.io.InputStream is = context.getContentResolver().openInputStream(uri)) {
+                try (InputStream is = context.getContentResolver().openInputStream(uri)) {
                     if (is == null) {
                         throw new IllegalStateException("Dosya açılamadı: " + uri);
                     }
@@ -591,7 +599,7 @@ public class CFClient {
                 String mimeType = context.getContentResolver().getType(uri);
                 if (mimeType == null) mimeType = "image/jpeg";
 
-                String base64 = android.util.Base64.encodeToString(imageBytes, android.util.Base64.NO_WRAP);
+                String base64 = Base64.encodeToString(imageBytes, Base64.NO_WRAP);
                 String dataUri = "data:" + mimeType + ";base64," + base64;
 
                 // 3) Görseli yükle ve URL'yi al

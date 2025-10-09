@@ -2,16 +2,22 @@ package com.kurmez.iyesi.umay;
 
 import static com.kurmez.iyesi.kayra.AppCheckTokenProvider.runMembershipGuard;
 import static com.kurmez.iyesi.kayra.Classes.data.Soul.parseSouls;
+import static com.kurmez.iyesi.kurmes.utilities.helper.FireBaseHelper.customClaims;
+import static com.kurmez.iyesi.kurmes.utilities.helper.FireBaseHelper.fetchUserClaims;
+import static com.kurmez.iyesi.kurmes.utilities.helper.FireBaseHelper.getCustomClaims;
 
+import com.google.android.gms.tasks.Tasks;
 import com.kurmez.iyesi.kurmes.Kurmes;
 import com.kurmez.iyesi.kurmes.utilities.helper.CFHelper;
 import com.kurmez.iyesi.kayra.Classes.data.Soul; // tek ve doğru Soul
 import androidx.annotation.NonNull;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.List;
 
 
+import android.Manifest;
 import android.content.Context;
 import android.content.Intent;
 import android.net.ConnectivityManager;
@@ -25,6 +31,7 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.Nullable;
+import androidx.annotation.RequiresPermission;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.google.firebase.auth.FirebaseAuth;
@@ -40,8 +47,13 @@ import com.kurmez.iyesi.kurmes.utilities.helper.net.CFClient;
 import com.kurmez.iyesi.kurmes.utilities.helper.net.FirebaseAuthenticator;
 import com.kurmez.iyesi.kurmes.utilities.helper.net.FirebaseHeadersInterceptor;
 
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
+
 import java.util.ArrayList;
 import java.util.Objects;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 
 import okhttp3.OkHttpClient;
@@ -75,9 +87,15 @@ public class Welcome extends AppCompatActivity {
             })
             .build();
     private CFClient cf = new CFClient("https://us-central1-iyesi-e8d4f.cloudfunctions.net");
+    private String claimsJson;
+    private FirebaseAuth mAuth;
+    private FirebaseUser user;
+    private String role;
+
     public static String nz(String s) { return s == null ? "" : s; }
 
 
+    @RequiresPermission(Manifest.permission.ACCESS_NETWORK_STATE)
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -103,17 +121,65 @@ public class Welcome extends AppCompatActivity {
             Helpers.showToastSafe(this, "İnternet bağlantısı yok. Lütfen bağlantınızı kontrol edin.");
         }
 
-        // Login kontrolü
-        FirebaseAuth mAuth = FirebaseAuth.getInstance();
-        FirebaseUser user = mAuth.getCurrentUser();
-        if (user == null || user.isAnonymous()) {
-            Toast.makeText(this, "Devam etmek için giriş yapmalısınız.", Toast.LENGTH_LONG).show();
-            startActivity(new Intent(this, Login.class));
-            finish();
-            return;
-        } else {
-            username.setText(user.getEmail());
-        }
+            // Login kontrolü
+            mAuth = FirebaseAuth.getInstance();
+            user = mAuth.getCurrentUser();
+            if (user == null || user.isAnonymous()) {
+                Toast.makeText(this, "Devam etmek için giriş yapmalısınız.", Toast.LENGTH_LONG).show();
+                startActivity(new Intent(this, Login.class));
+                finish();
+                return;
+            } else {
+                new Thread(() -> {
+                    Log.i("ThreadBaşladı", "Role: ... ");
+                    try {
+                        // ID token'ı al ve claims'leri logla
+                        FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
+                        if (user != null) {
+                            idToken = Tasks.await(user.getIdToken(true)).getToken();
+                            String claimsJson = CFHelper.getCustomClaims(idToken);
+                            Log.d("CustomClaimsRaw", "Raw claims: " + claimsJson);
+                            // JSON parse et (opsiyonel)
+                            if (claimsJson != null) {
+                                JSONObject claims = new JSONObject(claimsJson);
+                                role = claims.optString("role", "unknown");
+                                JSONArray roles = claims.optJSONArray("roles");
+                                Log.d("CustomClaimsParsed", "Role: " + role + ", Roles: " + (roles != null ? roles.toString() : "null"));
+                            }
+                        }
+                        // Mevcut rol kontrolü
+                        cf.refreshRole(role -> {
+                            Log.i("CustomClaims", "Role: " + role);
+                            this.role = role;
+                            if (Objects.equals(role, "Ülgen") || Objects.equals(role, "Tengri")) {
+                                Toast.makeText(this, "Ülgen Yada Tanrı", Toast.LENGTH_LONG).show();
+                            } else {
+                                Toast.makeText(this, "Bu işlemi sadece Ülgen ve Tengri yapabilir.", Toast.LENGTH_LONG).show();
+                            }
+                            // Refresh the ID token to get updated claims
+                            //user = FirebaseAuth.getInstance().getCurrentUser();
+                            if (user != null) {
+                                user.getIdToken(true).addOnSuccessListener(tokenResult -> {
+                                    idToken = tokenResult.getToken(); // Update idToken with the new value
+                                    runOnUiThread(() -> {
+                                        // Use the refreshed role and updated token data
+                                        username.setText(role + ":" + user.getEmail() + "\n" + user.getUid() + "\n" + getCustomClaims(idToken));
+                                    });
+                                }).addOnFailureListener(e -> {
+                                    Log.e("TokenRefresh", "Failed to refresh token", e);
+                                    runOnUiThread(() -> {
+                                        // Fallback to the role from refreshRole if token refresh fails
+                                        //username.setText(role + ":" + user.getEmail() + "\n" + user.getUid() + "\n" + getCustomClaims(idToken));
+                                    });
+                                });
+                            }
+                        },this);
+                    } catch (Exception e) {
+                        Log.e("Messaging", "Token/Claims fetch failed", e);
+                    }
+                }).start();
+                //username.setText(role + ":" + claimsJson + user.getEmail() + user.getUid());
+            }
 
         // CFHelper
 
@@ -140,7 +206,7 @@ public class Welcome extends AppCompatActivity {
                     }
                 }
 
-                @Override public void onSuccess(@NonNull org.json.JSONObject json) {
+                @Override public void onSuccess(@NonNull JSONObject json) {
                     // Pretty + chunked
                     String pretty;
                     try {
@@ -148,10 +214,10 @@ public class Welcome extends AppCompatActivity {
                     } catch (Exception e) {          // JSONException veya herhangi bir checked/unchecked
                         pretty = json.toString();    // indent olmadan düz string
                     }
-                    logChunked("raw json:", pretty);
+                    //logChunked("raw json:", pretty);
 
                     List<Soul> parsed = parseSouls(json);
-                    if (parsed == null) parsed = java.util.Collections.emptyList();
+                    if (parsed == null) parsed = Collections.emptyList();
                     Log.d(TAG, "parsed.size=" + parsed.size());
 
                     if (parsed.isEmpty()) {
@@ -170,11 +236,11 @@ public class Welcome extends AppCompatActivity {
                                 + " Souls.length=" + soulsLen);
 
                         // İlk eleman probesi
-                        org.json.JSONArray probe = json.optJSONArray("data");
+                        JSONArray probe = json.optJSONArray("data");
                         if (probe == null) probe = json.optJSONArray("items");
                         if (probe == null) probe = json.optJSONArray("souls");
                         if (probe != null && probe.length() > 0) {
-                            org.json.JSONObject first = probe.optJSONObject(0);
+                            JSONObject first = probe.optJSONObject(0);
                             Log.d(TAG, "first item probe=" + (first != null ? first.toString() : "null"));
                         }
 
@@ -192,7 +258,7 @@ public class Welcome extends AppCompatActivity {
                     finish();
                 }
             });
-        }, e -> android.util.Log.e("TOK", "token fail", e));
+        }, e -> Log.e("TOK", "token fail", e));
         runMembershipGuard(this);
     }
     private void setupUIListeners() {

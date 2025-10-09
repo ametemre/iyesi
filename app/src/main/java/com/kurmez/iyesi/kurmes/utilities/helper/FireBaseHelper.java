@@ -121,7 +121,7 @@ public class FireBaseHelper {
     }
 
 
-    private static String getCustomClaims(String idToken) {
+    public static String getCustomClaims(String idToken) {
         try {
             String[] parts = idToken.split("\\.");
             if (parts.length >= 2) {

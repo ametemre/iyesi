@@ -37,7 +37,7 @@ public class WelcomeClient {
             .addInterceptor(chain -> {
 
                 Request req = chain.request();
-                Log.d(TAG, "HTTP Request: " + req.method() + " " + req.url());
+                //Log.d(TAG, "HTTP Request: " + req.method() + " " + req.url());
                 Log.d(TAG, "Authorization Header: " + req.header("Authorization"));
                 return chain.proceed(req);
             })
