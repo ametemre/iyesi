@@ -19,8 +19,8 @@ import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.functions.FirebaseFunctions;
 import com.google.firebase.functions.HttpsCallableReference;
-import com.kurmez.iyesi.kayra.Classes.data.Soul;
-import com.kurmez.iyesi.kayra.Classes.data.Iye;
+import com.kurmez.iyesi.kayra.Classes.Souls.Soul;
+import com.kurmez.iyesi.kayra.Classes.Souls.Iye;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -38,7 +38,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
-import okhttp3.Callback;
 import okhttp3.Headers;
 import okhttp3.MediaType;
 import okhttp3.OkHttpClient;

@@ -1,4 +1,4 @@
-package com.kurmez.iyesi.kayra.Classes.data;
+package com.kurmez.iyesi.kayra.Classes.Souls;
 
 import static org.opencv.android.NativeCameraView.TAG;
 

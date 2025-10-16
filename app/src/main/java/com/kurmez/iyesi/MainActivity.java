@@ -112,11 +112,12 @@ public class MainActivity extends AppCompatActivity {
     private PermissionHelper permissionHelper;
     private PrivateCom privateCom;
     private String response = null;
+    private String role;
 
     private volatile boolean hasAppCheckToken = false;
     private volatile boolean hasAuthIdToken  = false;
-
     private static volatile boolean appCheckProviderInstalled = false;
+    boolean isUlgen = false;
 
     private enum PreflightStatus {
         RETRIABLE_INPUT_ERROR,
@@ -131,8 +132,7 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         if (android.os.Build.VERSION.SDK_INT >= 33) {
-            if (checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)
-                    != PackageManager.PERMISSION_GRANTED) {
+            if (checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
                 requestPermissions(new String[]{android.Manifest.permission.POST_NOTIFICATIONS}, 1001);
             }
         }
@@ -239,8 +239,7 @@ public class MainActivity extends AppCompatActivity {
                 return;
             } else {
                 Log.w(TAG, "Integrity API erişilemedi veya engellendi (Play ortamı yok/uyumsuz).");
-                showPlayEnvAdvice(!playOk ? "Google Play Store kurulu değil / devre dışı"
-                        : "Uygulama resmi Play Store’dan yüklenmemiş.");
+                showPlayEnvAdvice(!playOk ? "Google Play Store kurulu değil / devre dışı" : "Uygulama resmi Play Store’dan yüklenmemiş.");
                 setLoading(false);
                 return;
             }
@@ -329,8 +328,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void maybeStartHealthCheck() {
-        Log.d(TAG, "maybeStartHealthCheck hasAppCheckToken=" + hasAppCheckToken +
-                " hasAuthIdToken=" + hasAuthIdToken);
+        Log.d(TAG, "maybeStartHealthCheck hasAppCheckToken=" + hasAppCheckToken + " hasAuthIdToken=" + hasAuthIdToken);
         if (!hasAppCheckToken || !hasAuthIdToken) return;
         sendStartupHealthCheck();
     }
@@ -342,14 +340,12 @@ public class MainActivity extends AppCompatActivity {
         payload.put("kind", "health_check");
         payload.put("ts", System.currentTimeMillis());
         payload.put("note", "startup_warmup");
-
-        Log.d(TAG, "Calling healthCheck with hasAppCheckToken=" + hasAppCheckToken +
-                ", hasAuthIdToken=" + hasAuthIdToken + ", idTokenNull=" + (idToken == null));
+        Log.i(TAG,"idToken :" + idToken);
+        Log.d(TAG, "Calling healthCheck with hasAppCheckToken=" + hasAppCheckToken + ", hasAuthIdToken=" + hasAuthIdToken + ", idTokenNull=" + (idToken == null));
 
         functions.getHttpsCallable("healthCheck")
                 .call(payload)
-                .addOnSuccessListener((HttpsCallableResult r) ->
-                        Log.i(TAG, "health_check callable OK: " + r.getData()))
+                .addOnSuccessListener((HttpsCallableResult r) -> Log.i(TAG, "health_check callable OK: " + r.getData()))
                 .addOnFailureListener(e -> {
                     String msg = e.getMessage() == null ? "" : e.getMessage();
                     if (msg.contains("NOT_FOUND")) {
@@ -382,11 +378,10 @@ public class MainActivity extends AppCompatActivity {
                                                     // --- NEW: customClaims -> FCM topic abonelikleri
                                                     try {
                                                         Map<String, Object> claims = tokenResult.getClaims();
-                                                        String role = (claims != null && claims.get("role") != null)
-                                                                ? String.valueOf(claims.get("role")) : null;
-                                                        String adminPath = (claims != null && claims.get("adminPath") != null)
-                                                                ? String.valueOf(claims.get("adminPath")) : null;
-
+                                                        Log.d(TAG,"Role : " + role);
+                                                        role = (claims != null && claims.get("role") != null) ? String.valueOf(claims.get("role")) : null;
+                                                        String adminPath = (claims != null && claims.get("adminPath") != null) ? String.valueOf(claims.get("adminPath")) : null;
+                                                        Log.d(TAG,"Role : " + role);
                                                         // aksan kırp + lower
                                                         Function<String, String> fold = s -> {
                                                             if (s == null) return "";
@@ -394,7 +389,7 @@ public class MainActivity extends AppCompatActivity {
                                                             return n.replaceAll("\\p{M}", "").toLowerCase(Locale.ROOT);
                                                         };
 
-                                                        boolean isUlgen = false;
+
                                                         String fr = fold.apply(role);
                                                         if (!fr.isEmpty()) {
                                                             isUlgen = fr.equals("ulgen")
@@ -480,11 +475,7 @@ public class MainActivity extends AppCompatActivity {
                                         Log.e(TAG, "Bluetooth connect failed", e);
                                     }
                                 } else {
-                                    if (user.isAnonymous()) {
-                                        startActivity(new Intent(this, SokakActivity.class));
-                                    } else {
-                                        startActivity(new Intent(this, Welcome.class));
-                                    }
+                                    QRScannerActivity.launchForResult(this, 2001);
                                 }
                             } else {
                                 startActivity(new Intent(this, Kurmes.class));
@@ -493,7 +484,12 @@ public class MainActivity extends AppCompatActivity {
                             }
                         });
                         patiEnterButton.setOnLongClickListener(v -> {
-                            QRScannerActivity.launchForResult(this, 2001);
+                            if (user.isAnonymous()) {
+                                startActivity(new Intent(this, Welcome.class));
+                            } else {
+                                startActivity(new Intent(this, SokakActivity.class));
+                            }
+
                             //openQRScannerForRegistration();
                             //handleLongClickForQRCode();
                             return true;

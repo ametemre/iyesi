@@ -35,6 +35,7 @@ public final class QrRouteResolver implements QR.TargetResolver {
     private static final String CLS_EXPLORE         = "com.kurmez.iyesi.kurmes.social.content.Explore";
     private static final String CLS_QR_ADMIN        = "com.kurmez.iyesi.kayra.QR.QRAdmin";
     private static final String CLS_WELCOME         = "com.kurmez.iyesi.umay.Welcome"; // Yeni ekle
+    private static final String CLS_FOUNDED         = "com.kurmez.iyesi.umay.sahiplendirme.Founded";
 
     public static void resolveTarget(String target, Context ctx) {
         Intent i = null;
@@ -126,6 +127,18 @@ public final class QrRouteResolver implements QR.TargetResolver {
                     i.putExtra("route", "qr");
                     i.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
                     Helpers.showToastSafe(ctx, "QR feature not available");
+                }
+                break;
+            }
+            case "𐰆𐰍𐰔": {
+                i = safeIntent(ctx, CLS_FOUNDED);
+                if (i != null) {
+                    i.putExtra("route", target);
+                } else {
+                    i = safeIntent(ctx, CLS_MAIN);
+                    i.putExtra("route", "founded");
+                    i.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
+                    Helpers.showToastSafe(ctx, "Founded feature not available");
                 }
                 break;
             }

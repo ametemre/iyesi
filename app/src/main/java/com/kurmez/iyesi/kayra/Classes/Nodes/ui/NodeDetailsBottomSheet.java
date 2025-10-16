@@ -1,4 +1,4 @@
-package com.kurmez.iyesi.kayra.Classes.ui;
+package com.kurmez.iyesi.kayra.Classes.Nodes.ui;
 
 import android.content.Context;
 import android.content.res.Resources;
@@ -15,7 +15,7 @@ import com.google.android.material.bottomsheet.BottomSheetDialogFragment;
 import com.google.android.material.chip.Chip;
 import com.google.android.material.chip.ChipGroup;
 import com.kurmez.iyesi.R;
-import com.kurmez.iyesi.umay.sokak.Nodes.NodeType;
+import com.kurmez.iyesi.kayra.Classes.Nodes.NodeType;
 
 import org.json.JSONArray;
 import org.json.JSONException;

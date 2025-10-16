@@ -1,18 +1,14 @@
 package com.kurmez.iyesi.umay;
 
 import static com.kurmez.iyesi.kayra.AppCheckTokenProvider.runMembershipGuard;
-import static com.kurmez.iyesi.kayra.Classes.data.Soul.parseSouls;
-import static com.kurmez.iyesi.kurmes.utilities.helper.FireBaseHelper.customClaims;
-import static com.kurmez.iyesi.kurmes.utilities.helper.FireBaseHelper.fetchUserClaims;
+import static com.kurmez.iyesi.kayra.Classes.Souls.Soul.parseSouls;
 import static com.kurmez.iyesi.kurmes.utilities.helper.FireBaseHelper.getCustomClaims;
 
 import com.google.android.gms.tasks.Tasks;
-import com.kurmez.iyesi.kurmes.Kurmes;
 import com.kurmez.iyesi.kurmes.utilities.helper.CFHelper;
-import com.kurmez.iyesi.kayra.Classes.data.Soul; // tek ve doğru Soul
+import com.kurmez.iyesi.kayra.Classes.Souls.Soul; // tek ve doğru Soul
 import androidx.annotation.NonNull;
 
-import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
 
@@ -30,7 +26,6 @@ import android.widget.ListView;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import androidx.annotation.Nullable;
 import androidx.annotation.RequiresPermission;
 import androidx.appcompat.app.AppCompatActivity;
 
@@ -39,7 +34,6 @@ import com.google.firebase.auth.FirebaseUser;
 import com.kurmez.iyesi.Login;
 import com.kurmez.iyesi.R;
 import com.kurmez.iyesi.kurmes.social.content.Explore;
-import com.kurmez.iyesi.kurmes.social.content.ExplorePrivate;
 import com.kurmez.iyesi.kurmes.social.message.Messaging;
 import com.kurmez.iyesi.kurmes.utilities.Helpers;
 import com.kurmez.iyesi.kurmes.utilities.adapters.CompanionAdapter;
@@ -48,17 +42,14 @@ import com.kurmez.iyesi.kurmes.utilities.helper.net.FirebaseAuthenticator;
 import com.kurmez.iyesi.kurmes.utilities.helper.net.FirebaseHeadersInterceptor;
 
 import org.json.JSONArray;
-import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.util.ArrayList;
 import java.util.Objects;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
-import okhttp3.Response;
 
 public class Welcome extends AppCompatActivity {
     private static final String TAG = "WelcomeActivity";
@@ -163,7 +154,8 @@ public class Welcome extends AppCompatActivity {
                                     idToken = tokenResult.getToken(); // Update idToken with the new value
                                     runOnUiThread(() -> {
                                         // Use the refreshed role and updated token data
-                                        username.setText(role + ":" + user.getEmail() + "\n" + user.getUid() + "\n" + getCustomClaims(idToken));
+                                        username.setText(role + ":" + user.getEmail() + "\n" + user.getUid());
+                                        Log.v("Claims",getCustomClaims(idToken));
                                     });
                                 }).addOnFailureListener(e -> {
                                     Log.e("TokenRefresh", "Failed to refresh token", e);

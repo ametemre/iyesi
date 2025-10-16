@@ -1,4 +1,4 @@
-package com.kurmez.iyesi.umay.sokak.Nodes;// ShelterMarker.java
+package com.kurmez.iyesi.kayra.Classes.Nodes;// ShelterMarker.java
 // package com.kurmez.iyesi.model;
 
 public class ShelterNode extends Node {

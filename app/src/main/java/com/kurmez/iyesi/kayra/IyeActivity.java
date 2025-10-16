@@ -10,7 +10,6 @@ import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
-import android.graphics.Bitmap;
 import android.graphics.Typeface;
 import android.location.Location;
 import android.net.ConnectivityManager;
@@ -33,6 +32,7 @@ import android.view.inputmethod.InputMethodManager;
 import android.widget.BaseAdapter;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.ListView;
 import android.widget.TextView;
@@ -62,7 +62,7 @@ import com.kurmez.iyesi.MainActivity;
 import com.kurmez.iyesi.R;
 import com.kurmez.iyesi.kurmes.utilities.helper.FireBaseHelper;
 import com.kurmez.iyesi.umay.sokak.Harita;
-import com.kurmez.iyesi.kayra.Classes.data.Iye;
+import com.kurmez.iyesi.kayra.Classes.Souls.Iye;
 import com.kurmez.iyesi.kurmes.utilities.Helpers;
 import com.kurmez.iyesi.kurmes.utilities.LoadingOverlay;
 import com.kurmez.iyesi.kurmes.utilities.helper.net.CFClient;
@@ -75,10 +75,10 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.WeakHashMap;
-import com.kurmez.iyesi.kurmes.utilities.helper.ImagePick;
+
 import android.location.Address;
 import android.location.Geocoder;
-import java.util.List;
+
 import java.util.Locale;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -100,6 +100,12 @@ public class IyeActivity extends AppCompatActivity {
     private static final int REQ_LOC_FOR_PLACE = 2013;
     @Nullable private Runnable pendingAfterLocation = null;
     @Nullable private Double lastLat = Double.NaN, lastLng = Double.NaN;
+    // --- sınıf seviyesinde (IyeActivity class body içinde), alanlar:
+    private View rootView;
+    private FrameLayout keyboardEditor;
+    private EditText editorInput;
+    private Button editorOk;
+    private EditText activeTargetEditText; // şu anda düzenlenen hedef
 
     // Activity -> hedef EditText (leak önlemek için WeakReference)
     private static final WeakHashMap<Activity, WeakReference<EditText>> pendingTargets = new WeakHashMap<>();
@@ -127,13 +133,14 @@ public class IyeActivity extends AppCompatActivity {
     private volatile boolean uploadInProgress = false;
     private volatile boolean saveQueued = false;
     private volatile String uploadedObjectPath = null;
-    private String role;
     private String username;
     private String emailLike;
     private String loc;
     private String phone;
     private String url;
-private Boolean failSafe = false;
+    private Boolean failSafe = false;
+    private String role;
+
     // ====== Claim keys ======
     public static final class ClaimsKeys {
         public static final String UID        = "uid";
@@ -152,49 +159,145 @@ private Boolean failSafe = false;
         setContentView(R.layout.activity_iye);
         // Firebase
         app = FirebaseApp.getInstance();
+        u = FirebaseAuth.getInstance(app).getCurrentUser();
+        Log.d(TAG, "[onCreate] currentUser=" + (u == null ? "null" : u.getUid()) + " anon=" + (u != null && u.isAnonymous()));
         profileClient = new IyeClient(app, FUNCTIONS_REGION);
         Log.i(TAG, "[onCreate] app=" + app.getName() + " projectId=" + app.getOptions().getProjectId() + " region=" + FUNCTIONS_REGION);
 
         // Views
-        iyeImage     = findViewById(R.id.iye_image);
-        headerTitle  = findViewById(R.id.header_title);
-        tvCompanion  = findViewById(R.id.iye_companion);
-        tvFoundDate  = findViewById(R.id.iye_found_Date);
-        tvPlace      = findViewById(R.id.iye_place);
-        tvWho        = findViewById(R.id.who);
-        listViewIye  = findViewById(R.id.list_view_iye);
+        iyeImage = findViewById(R.id.iye_image);
+        headerTitle = findViewById(R.id.header_title);
+        tvCompanion = findViewById(R.id.iye_companion);
+        tvFoundDate = findViewById(R.id.iye_found_Date);
+        tvPlace = findViewById(R.id.iye_place);
+        tvWho = findViewById(R.id.who);
+        listViewIye = findViewById(R.id.list_view_iye);
 
         fusedLocationClient = com.google.android.gms.location.LocationServices.getFusedLocationProviderClient(this);
         // Gestures
-        iyeImage.setOnLongClickListener(v -> { if (!isEditing) enterEditMode(); return true; });
+        iyeImage.setOnLongClickListener(v -> {
+            if (!isEditing) enterEditMode();
+            return true;
+        });
         iyeImage.setOnClickListener(this::onClickSaveProfile);
-        // İlk yükleme
-        u = FirebaseAuth.getInstance(app).getCurrentUser();
-        Log.d(TAG, "[onCreate] currentUser=" + (u==null? "null" : u.getUid()) + " anon=" + (u!=null && u.isAnonymous()));
+
         // Eğer intent'te edit flag'i yoksa normal modda başla
         boolean startInEditMode = getIntent().getBooleanExtra("edit", false);
         refreshClaimsAndRender(u);
-        if (startInEditMode) {
-            // Sadece edit intent'i ile gelindiyse düzenleme modunda başla
-            enterEditMode();
-        }
-        // Sadece guard ile gelindiyse aç
-        if (getIntent().getBooleanExtra(EXTRA_VIA_GUARD, false)) {showMembershipDialog();}
+        if (startInEditMode) {enterEditMode();}// Sadece edit intent'i ile gelindiyse düzenleme modunda başla
+
+        if (getIntent().getBooleanExtra(EXTRA_VIA_GUARD, false)) {
+            Log.i(TAG,u.getDisplayName());
+            if (u.getDisplayName().isBlank()||u.getDisplayName().isEmpty()) showMembershipDialog();
+        }// Sadece guard ile gelindiyse aç
+        /*
+        // Listen for IME insets (keyboard) and move/show container accordingly
+// --- onCreate içinde setContentView'den sonra initialize et:
+        rootView = findViewById(android.R.id.content); // veya layout root id'n
+        keyboardEditor = findViewById(R.id.keyboardEditor);
+        editorInput = findViewById(R.id.editorInput);
+        editorOk = findViewById(R.id.editorOk);
+
+// IME insets dinlemesi (API 30+ style). Fallback için null-check yap.
+        rootView.setOnApplyWindowInsetsListener(new View.OnApplyWindowInsetsListener() {
+            @Override
+            public WindowInsets onApplyWindowInsets(View v, WindowInsets insets) {
+                // API 30+ : WindowInsets.Type.ime()
+                WindowInsets imeInsets = v.onApplyWindowInsets(insets);
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+                    Insets ime = insets.getInsets(WindowInsets.Type.ime());
+                    int bottom = ime.bottom;
+                    if (bottom > 0) {
+                        // Klavye açık
+                        keyboardEditor.setVisibility(View.VISIBLE);
+                        // container'ı klavyenin hemen üstüne taşı / padding ver
+                        keyboardEditor.setPadding(
+                                keyboardEditor.getPaddingLeft(),
+                                keyboardEditor.getPaddingTop(),
+                                keyboardEditor.getPaddingRight(),
+                                bottom
+                        );
+                        keyboardEditor.setAlpha(1f);
+                    } else {
+                        // Klavye kapalı
+                        keyboardEditor.animate().alpha(0f).setDuration(120).withEndAction(new Runnable() {
+                            @Override
+                            public void run() {
+                                keyboardEditor.setVisibility(View.GONE);
+                            }
+                        }).start();
+                    }
+                } else {
+                    // Eski cihazlar için: basit fallback (klavye değişimini IME visibility ile ayrı takip edebilirsiniz)
+                }
+                return insets;
+            }
+        });
+        // --- editorOk butonunun davranışı (onCreate içinde ya da init metodunda set et)
+        editorOk.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                // Metni hedef alana aktar
+                if (activeTargetEditText != null) {
+                    String newText = editorInput.getText().toString();
+                    activeTargetEditText.setText(newText);
+                    activeTargetEditText.clearFocus();
+                }
+                // Klavyeyi kapat -> overlay insets listener ile kaybolacak
+                hideKeyboard(editorInput);
+                // Güvenlik olarak overlay'i gizle (ince ayar)
+                keyboardEditor.setVisibility(View.GONE);
+                activeTargetEditText = null;
+            }
+        });
+// --- IME action (Done) ile aynı davranışı sağlamak için:
+        editorInput.setOnEditorActionListener(new TextView.OnEditorActionListener() {
+            @Override
+            public boolean onEditorAction(TextView v, int actionId, KeyEvent event) {
+                if (actionId == EditorInfo.IME_ACTION_DONE) {
+                    editorOk.performClick();
+                    return true;
+                }
+                return false;
+            }
+        });
+*/
     }
+
+    // --- onBackPressed override: overlay açıksa önce onu kapat
+    @Override
+    public void onBackPressed() {
+        if (keyboardEditor != null && keyboardEditor.getVisibility() == View.VISIBLE) {
+            hideKeyboard(editorInput);
+            keyboardEditor.setVisibility(View.GONE);
+            activeTargetEditText = null;
+            return;
+        }
+        super.onBackPressed();
+    }
+
+    private void hideKeyboard(View view) {
+        InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
+        if (view == null) view = getCurrentFocus();
+        if (view != null && imm != null) {
+            imm.hideSoftInputFromWindow(view.getWindowToken(), 0);
+        }
+    }
+
     // ====== Membership Dialog ======
     private void showMembershipDialog() {
-
+        if (u.isEmailVerified())return;
         if (membershipDialog != null && membershipDialog.isShowing()) return;
         // EditText’i programatik oluşturuyoruz (şifre gibi davranır)
         final EditText et = new EditText(this);
         et.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
-        et.setHint("Yeni Şifre Belirle...");
+        et.setHint("Yeni Şifreni Belirle...");
         et.setPadding(dp(20), dp(12), dp(20), dp(12));
         et.setSingleLine(true);
         et.setImeOptions(EditorInfo.IME_ACTION_DONE);
 
         membershipDialog = new AlertDialog.Builder(this)
-                .setTitle("Üyelik Doğrulama")
+                .setTitle("Üyelik Tamamlama")
                 .setView(et)
                 .setCancelable(false)               // geri tuşu ile kapanmasın
                 .setPositiveButton("Devam", (d,w)-> {
@@ -203,7 +306,6 @@ private Boolean failSafe = false;
                         public void onSuccess() {
                             Toast.makeText(getApplicationContext(), "Şifre başarıyla değiştirildi.", Toast.LENGTH_SHORT).show();
                             iyeImage.performClick();
-
                         }
 
                         @Override
@@ -221,14 +323,12 @@ private Boolean failSafe = false;
                     //finish();
                     d.dismiss();
                     iyeImage.performClick();
-                })
-                .create();
+                }).create();
 
         membershipDialog.setCanceledOnTouchOutside(false); // dışarı dokununca kapanmasın
         membershipDialog.setOnShowListener(d -> {
             // IME’yi aç
-            membershipDialog.getWindow().setSoftInputMode(
-                    WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE);
+            membershipDialog.getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE);
 
             final Button positive = membershipDialog.getButton(AlertDialog.BUTTON_POSITIVE);
             final Button negative = membershipDialog.getButton(AlertDialog.BUTTON_NEGATIVE);
@@ -261,10 +361,14 @@ private Boolean failSafe = false;
                     @Override
                     public void onSuccess() {
                         runOnUiThread(() -> {
-                            pendingNewPassword = text;
-                            Toast.makeText(IyeActivity.this, "Şifre başarıyla değiştirildi.", Toast.LENGTH_SHORT).show();
-                            membershipDialog.dismiss();
-                            iyeImage.performClick();
+                            u.sendEmailVerification().addOnCompleteListener(task -> {
+                                runOnUiThread(() -> {
+                                    pendingNewPassword = text;
+                                    Toast.makeText(IyeActivity.this, "Şifre başarıyla değiştirildi. E-posta doğrulaması gönderildi.", Toast.LENGTH_SHORT).show();
+                                    membershipDialog.dismiss();
+                                    iyeImage.performClick();
+                                });
+                            });
                         });
                     }
 
@@ -339,7 +443,7 @@ private Boolean failSafe = false;
     }
 
     private void renderUIFromClaims(Map<String, Object> claims) {
-        role      = getStringClaim(claims, ClaimsKeys.ROLE);
+        role = getStringClaim(claims, ClaimsKeys.ROLE);
         username  = getStringClaim(claims, ClaimsKeys.USERNAME);
         emailLike = getStringClaim(claims, ClaimsKeys.EMAIL);
         loc       = getStringClaim(claims, ClaimsKeys.LOCATION);
@@ -686,7 +790,34 @@ private Boolean failSafe = false;
             }).start();
         }
     }
+    // --- attachEditorTo fonksiyonu (IyeActivity içinde yardımcı method)
+    private void attachEditorTo(final EditText target) {
+        target.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                openKeyboardEditorFor(target);
+            }
+        });
+        target.setOnFocusChangeListener(new View.OnFocusChangeListener() {
+            @Override
+            public void onFocusChange(View v, boolean hasFocus) {
+                if (hasFocus) openKeyboardEditorFor(target);
+            }
+        });
+    }
 
+    // --- openKeyboardEditorFor helper
+    private void openKeyboardEditorFor(EditText target) {
+        activeTargetEditText = target;
+        // editorInput'a mevcut içeriği koy
+        editorInput.setText(target.getText().toString());
+        editorInput.setSelection(editorInput.getText().length());
+
+        // show overlay and keyboard
+        keyboardEditor.setVisibility(View.VISIBLE);
+        editorInput.requestFocus();
+        showKeyboard(editorInput);
+    }
 
     private static EditText deref(Activity act) {
         WeakReference<EditText> ref = pendingTargets.get(act);
@@ -694,8 +825,13 @@ private Boolean failSafe = false;
     }
 
     private static String tryGetDisplayName(Activity act, Uri uri) {
-        try (android.database.Cursor c = act.getContentResolver()
-                .query(uri, new String[]{OpenableColumns.DISPLAY_NAME}, null, null, null)) {
+        try (android.database.Cursor c =
+                     act.getContentResolver().query(
+                             uri,
+                             new String[]{OpenableColumns.DISPLAY_NAME},
+                             null,
+                             null,
+                             null)) {
             if (c != null && c.moveToFirst()) return c.getString(0);
         } catch (Exception ignore) {}
         return null;

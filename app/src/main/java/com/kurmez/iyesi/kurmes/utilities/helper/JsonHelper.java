@@ -8,7 +8,7 @@ import static com.kurmez.iyesi.kurmes.utilities.helper.net.CFClient.JSON;
 import android.os.Build;
 import android.text.TextUtils;
 import android.util.Log;
-import com.kurmez.iyesi.kayra.Classes.data.Iye;
+import com.kurmez.iyesi.kayra.Classes.Souls.Iye;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;

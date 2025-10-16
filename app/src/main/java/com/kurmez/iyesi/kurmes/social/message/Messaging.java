@@ -27,7 +27,7 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 import com.kurmez.iyesi.Login;
-import com.kurmez.iyesi.kayra.Classes.data.Iye;
+import com.kurmez.iyesi.kayra.Classes.Souls.Iye;
 import com.kurmez.iyesi.kayra.IyeActivity;
 import com.kurmez.iyesi.R;
 

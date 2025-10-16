@@ -5,7 +5,7 @@ import android.widget.*;
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 import com.kurmez.iyesi.R;
-import com.kurmez.iyesi.kayra.Classes.data.Soul;
+import com.kurmez.iyesi.kayra.Classes.Souls.Soul;
 
 import java.util.List;
 

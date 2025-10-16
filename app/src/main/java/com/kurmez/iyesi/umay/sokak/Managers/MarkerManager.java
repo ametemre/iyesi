@@ -9,7 +9,7 @@ import androidx.core.content.ContextCompat;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.model.*;
 import com.kurmez.iyesi.R;
-import com.kurmez.iyesi.kayra.Classes.ui.NodeIconFactory;
+import com.kurmez.iyesi.kayra.Classes.Nodes.ui.NodeIconFactory;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;

@@ -1,10 +1,8 @@
 // UlgenProfile.java
-package com.kurmez.iyesi.kayra.Classes.data;
+package com.kurmez.iyesi.kayra.Classes.Souls;
 
 import java.text.Normalizer;
-import java.util.ArrayList;
 import java.util.EnumSet;
-import java.util.List;
 import java.util.Locale;
 
 import androidx.annotation.Keep;

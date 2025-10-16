@@ -44,7 +44,7 @@ import com.google.firebase.storage.StorageMetadata;
 import com.google.firebase.storage.StorageReference;
 import com.google.firebase.storage.UploadTask;
 import com.kurmez.iyesi.R;
-import com.kurmez.iyesi.kayra.Classes.data.Soul;
+import com.kurmez.iyesi.kayra.Classes.Souls.Soul;
 import com.kurmez.iyesi.kurmes.utilities.adapters.ImageSliderAdapter;
 import com.kurmez.iyesi.kurmes.utilities.helper.CFObligations;
 import com.kurmez.iyesi.kayra.AppCheckTokenProvider;

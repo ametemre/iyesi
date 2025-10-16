@@ -23,15 +23,12 @@ import com.google.firebase.appcheck.FirebaseAppCheck;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 import com.kurmez.iyesi.R;
-import com.kurmez.iyesi.kayra.Classes.data.Iye;
 import com.kurmez.iyesi.kurmes.utilities.helper.CFHelper;
 
-import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
@@ -77,6 +74,7 @@ public class Helpers {
             }
         })).start();
     }
+
     private void handleRole(String role, Activity activity,Context ctx) {
         long t0 = System.currentTimeMillis();
         Log.i(L, "handleRole() → GİRİŞ roleRaw=" + role);

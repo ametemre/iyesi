@@ -1,10 +1,10 @@
-package com.kurmez.iyesi.kayra.Classes.ui;
+package com.kurmez.iyesi.kayra.Classes.Nodes.ui;
 
 import android.content.Context;
 
 import com.google.android.gms.maps.model.BitmapDescriptor;
 import com.google.android.gms.maps.model.BitmapDescriptorFactory;
-import com.kurmez.iyesi.umay.sokak.Nodes.NodeType;
+import com.kurmez.iyesi.kayra.Classes.Nodes.NodeType;
 
 import java.util.HashMap;
 import java.util.Locale;

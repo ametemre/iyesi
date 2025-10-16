@@ -1,4 +1,4 @@
-package com.kurmez.iyesi.kayra.Classes.data;
+package com.kurmez.iyesi.kayra.Classes.Souls;
 
 import java.util.Map;
 

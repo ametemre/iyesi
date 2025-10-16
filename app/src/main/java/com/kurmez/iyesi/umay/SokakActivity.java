@@ -27,7 +27,7 @@ import com.google.firebase.auth.FirebaseUser;
 import com.kurmez.iyesi.Login;
 import com.kurmez.iyesi.R;
 import com.kurmez.iyesi.umay.sokak.Harita;
-import com.kurmez.iyesi.kayra.Classes.ui.NodeDetailsBottomSheet;
+import com.kurmez.iyesi.kayra.Classes.Nodes.ui.NodeDetailsBottomSheet;
 import com.kurmez.iyesi.kurmes.Kurmes;
 import com.kurmez.iyesi.kurmes.utilities.MiniFabs;
 import com.kurmez.iyesi.kurmes.utilities.helper.Actions;
@@ -83,6 +83,7 @@ public class SokakActivity extends FragmentActivity implements NodeDetailsBottom
         harita = new Harita(this);
         harita.setLockModeListener(this);
         harita.setNodeCreationListener(this);
+        setupMapWithMarkers();
     }
 
     private void initializeLockModeOverlay() {

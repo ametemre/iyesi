@@ -12,7 +12,7 @@ import com.bumptech.glide.Glide;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 import com.kurmez.iyesi.R;
-import com.kurmez.iyesi.kayra.Classes.data.Iye;
+import com.kurmez.iyesi.kayra.Classes.Souls.Iye;
 
 import java.util.Map;
 

@@ -17,7 +17,7 @@ import com.bumptech.glide.Glide;
 import com.google.firebase.database.DataSnapshot;
 import com.google.firebase.database.FirebaseDatabase;
 import com.kurmez.iyesi.R;
-import com.kurmez.iyesi.kayra.Classes.data.Iye;
+import com.kurmez.iyesi.kayra.Classes.Souls.Iye;
 import com.kurmez.iyesi.kurmes.utilities.helper.HeaderHelper;
 
 import org.json.JSONObject;

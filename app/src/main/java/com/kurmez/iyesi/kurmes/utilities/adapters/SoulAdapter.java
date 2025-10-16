@@ -11,7 +11,7 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.bumptech.glide.Glide;
 import com.kurmez.iyesi.BuildConfig;
 import com.kurmez.iyesi.R;
-import com.kurmez.iyesi.kayra.Classes.data.Soul;
+import com.kurmez.iyesi.kayra.Classes.Souls.Soul;
 import java.util.List;
 
 public class SoulAdapter extends RecyclerView.Adapter<SoulAdapter.VH> {

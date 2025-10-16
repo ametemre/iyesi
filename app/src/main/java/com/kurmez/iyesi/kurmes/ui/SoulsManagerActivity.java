@@ -7,8 +7,6 @@ import android.util.Log;
 import android.view.View;
 import android.widget.*;
 import androidx.annotation.Nullable;
-import androidx.annotation.NonNull;
-import androidx.annotation.Nullable;
 
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
@@ -17,7 +15,7 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import com.google.firebase.auth.FirebaseAuth;
 import com.kurmez.iyesi.Login;
 import com.kurmez.iyesi.R;
-import com.kurmez.iyesi.kayra.Classes.data.Soul;
+import com.kurmez.iyesi.kayra.Classes.Souls.Soul;
 import com.kurmez.iyesi.kurmes.seed.SeedService;
 import com.kurmez.iyesi.kurmes.utilities.helper.net.CFClient;
 
