@@ -18,6 +18,14 @@ import android.widget.LinearLayout;
 import android.widget.Spinner;
 import android.widget.Toast;
 
+import com.google.android.gms.maps.model.MarkerOptions;
+import com.google.firebase.firestore.FirebaseFirestore;
+import com.google.firebase.firestore.GeoPoint;
+import com.google.android.gms.maps.model.LatLng;
+import com.google.android.material.textfield.TextInputEditText;
+import androidx.appcompat.app.AlertDialog;
+import android.text.TextUtils;
+import com.kurmez.iyesi.R;
 import androidx.annotation.RequiresPermission;
 import androidx.fragment.app.FragmentActivity;
 
@@ -32,6 +40,9 @@ import com.kurmez.iyesi.kurmes.Kurmes;
 import com.kurmez.iyesi.kurmes.utilities.MiniFabs;
 import com.kurmez.iyesi.kurmes.utilities.helper.Actions;
 import com.kurmez.iyesi.kurmes.utilities.helper.CFHelper;
+
+import java.util.HashMap;
+import java.util.Map;
 
 public class SokakActivity extends FragmentActivity implements NodeDetailsBottomSheet.Host, Harita.LockModeListener, Harita.NodeCreationListener {
     private FloatingActionButton selectedFab = null;
@@ -104,6 +115,102 @@ public class SokakActivity extends FragmentActivity implements NodeDetailsBottom
         }
     }
 
+    // Mevcut kodda, onCreate ve diğer metotlardan sonra ekle
+    public void createYuvaMarker(LatLng location) {
+        // Tengri yetki kontrolü
+        CFHelper cf = new CFHelper(this, "iyesi-e8d4f", "us-central1", new CFHelper.Listener() {});
+        cf.refreshRole(role -> {
+            if ("Tengri".equals(role)) {
+                // Pop-up dialog göster
+                showYuvaNodeDialog(location);
+            } else {
+                Toast.makeText(this, "Bu işlem için Tengri yetkisi gerekli", Toast.LENGTH_LONG).show();
+                Log.e("RoleCheckFailed", "Tengri rolü gerekli");
+            }
+        });
+    }
+
+    private void showYuvaNodeDialog(LatLng location) {
+        // Dialog oluştur
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        View dialogView = getLayoutInflater().inflate(R.layout.dialog_create_yuva_node, null);
+        builder.setView(dialogView);
+
+        TextInputEditText nameInput = dialogView.findViewById(R.id.input_node_name);
+        TextInputEditText descInput = dialogView.findViewById(R.id.input_node_description);
+
+        // Varsayılan değer (örneğin Adana-DokuzOluk için)
+        //nameInput.setText("Adana-DokuzOluk Mesire Alanı");
+        //  descInput.setText("Dokuzoluk Kanyonu mesire alanı, doğal piknik ve yuva noktası.");
+
+        builder.setTitle("Yuva Node Oluştur")
+                .setPositiveButton("Kaydet", (dialog, which) -> {
+                    String name = nameInput.getText().toString().trim();
+                    String description = descInput.getText().toString().trim();
+
+                    if (TextUtils.isEmpty(name)) {
+                        Toast.makeText(this, "Node adı gerekli", Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+
+                    // Firestore'a kaydet
+                    saveYuvaNodeToFirestore(location, name, description);
+                })
+                .setNegativeButton("İptal", (dialog, which) -> {
+                    dialog.dismiss();
+                    stopMarkerPlacement();
+                })
+                .setCancelable(false);
+
+        AlertDialog dialog = builder.create();
+        dialog.show();
+    }
+
+    private void saveYuvaNodeToFirestore(LatLng location, String name, String description) {
+        FirebaseFirestore db = FirebaseFirestore.getInstance();
+        Map<String, Object> node = new HashMap<>();
+        node.put("type", "Yuva");
+        node.put("location", new GeoPoint(location.latitude, location.longitude));
+        node.put("name", name);
+        node.put("description", description);
+        node.put("createdAt", com.google.firebase.firestore.FieldValue.serverTimestamp());
+
+        db.collection("nodes")
+                .add(node)
+                .addOnSuccessListener(documentReference -> {
+                    String nodeId = documentReference.getId();
+                    Log.d("SokakActivity", "YuvaNode eklendi, ID: " + nodeId);
+                    Toast.makeText(this, "YuvaNode oluşturuldu: " + name, Toast.LENGTH_SHORT).show();
+
+                    // Haritaya marker ekle
+                    if (harita != null && harita.getNodeManager() != null) {
+                        MarkerOptions options = new MarkerOptions()
+                                .position(location)
+                                .title("Yuva: " + name)
+                                .icon(harita.getNodeManager().getCustomIcon("Yuva"));
+                        harita.getNodeManager().addMarker(options, "Yuva", nodeId);
+
+                        // Kamerayı konuma odakla
+                        harita.animateCameraTo(location, 15f);
+                    }
+/*
+                    // NodeCreationListener bildirimi
+                    if (harita.nodeCreationListener != null) {
+                        harita.nodeCreationListener.onNodeCreated(nodeId, "Yuva");
+                    }
+*/
+                    // Marker yerleştirme modunu kapat
+                    stopMarkerPlacement();
+                })
+                .addOnFailureListener(e -> {
+                    Log.e("SokakActivity", "YuvaNode ekleme hatası: " + e.getMessage());
+                    Toast.makeText(this, "Hata: " + e.getMessage(), Toast.LENGTH_LONG).show();/*
+                    if (harita.nodeCreationListener != null) {
+                        harita.nodeCreationListener.onNodeCreationFailed(e.getMessage());
+                    }*/
+                    stopMarkerPlacement();
+                });
+    }
     @Override
     public void onLockModeChanged(boolean locked) {
         isLockedMode = locked;

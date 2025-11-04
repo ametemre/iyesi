@@ -75,8 +75,7 @@ public class Welcome extends AppCompatActivity {
                 android.util.Log.d("HTTP", "Authorization: " + req.header("Authorization"));
                 android.util.Log.d("HTTP", "X-Firebase-AppCheck: " + req.header("X-Firebase-AppCheck"));
                 return chain.proceed(req);
-            })
-            .build();
+            }).build();
     private CFClient cf = new CFClient("https://us-central1-iyesi-e8d4f.cloudfunctions.net");
     private String claimsJson;
     private FirebaseAuth mAuth;
@@ -84,7 +83,6 @@ public class Welcome extends AppCompatActivity {
     private String role;
 
     public static String nz(String s) { return s == null ? "" : s; }
-
 
     @RequiresPermission(Manifest.permission.ACCESS_NETWORK_STATE)
     @Override
@@ -108,76 +106,69 @@ public class Welcome extends AppCompatActivity {
         // İnternet kontrolü
         ConnectivityManager cm = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
         NetworkInfo netInfo = cm != null ? cm.getActiveNetworkInfo() : null;
-        if (netInfo == null || !netInfo.isConnected()) {
-            Helpers.showToastSafe(this, "İnternet bağlantısı yok. Lütfen bağlantınızı kontrol edin.");
+        if (netInfo == null || !netInfo.isConnected()) {Helpers.showToastSafe(this, "İnternet bağlantısı yok. Lütfen bağlantınızı kontrol edin.");}
+        // Login kontrolü
+        mAuth = FirebaseAuth.getInstance();
+        user = mAuth.getCurrentUser();
+        if (user == null || user.isAnonymous()) {
+            Toast.makeText(this, "Devam etmek için giriş yapmalısınız.", Toast.LENGTH_LONG).show();
+            startActivity(new Intent(this, Login.class));
+            finish();
+            return;
+        } else {
+            new Thread(() -> {
+                Log.i("ThreadBaşladı", "Role: ... ");
+                try {
+                    // ID token'ı al ve claims'leri logla
+                    FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
+                    if (user != null) {
+                        idToken = Tasks.await(user.getIdToken(true)).getToken();
+                        String claimsJson = CFHelper.getCustomClaims(idToken);
+                        Log.d("CustomClaimsRaw", "Raw claims: " + claimsJson);
+                        // JSON parse et (opsiyonel)
+                        if (claimsJson != null) {
+                            JSONObject claims = new JSONObject(claimsJson);
+                            role = claims.optString("role", "unknown");
+                            JSONArray roles = claims.optJSONArray("roles");
+                            Log.d("CustomClaimsParsed", "Role: " + role + ", Roles: " + (roles != null ? roles.toString() : "null"));
+                        }
+                    }
+                    // Mevcut rol kontrolü
+                    cf.refreshRole(role -> {
+                        Log.i("CustomClaims", "Role: " + role);
+                        this.role = role;
+                        if (Objects.equals(role, "Ülgen") || Objects.equals(role, "Tengri")) {
+                            Toast.makeText(this, "Ülgen Yada Tanrı", Toast.LENGTH_LONG).show();
+                        } else {
+                            Toast.makeText(this, "Bu işlemi sadece Ülgen ve Tengri yapabilir.", Toast.LENGTH_LONG).show();
+                        }
+                        // Refresh the ID token to get updated claims
+                        //user = FirebaseAuth.getInstance().getCurrentUser();
+                        if (user != null) {
+                            user.getIdToken(true).addOnSuccessListener(tokenResult -> {
+                                idToken = tokenResult.getToken(); // Update idToken with the new value
+                                runOnUiThread(() -> {
+                                    // Use the refreshed role and updated token data
+                                    username.setText(role + ":" + user.getEmail() + "\n" + user.getUid());
+                                    Log.v("Claims",getCustomClaims(idToken));
+                                });
+                            }).addOnFailureListener(e -> {
+                                Log.e("TokenRefresh", "Failed to refresh token", e);
+                                runOnUiThread(() -> {
+                                    // Fallback to the role from refreshRole if token refresh fails
+                                    //username.setText(role + ":" + user.getEmail() + "\n" + user.getUid() + "\n" + getCustomClaims(idToken));
+                                });
+                            });
+                        }
+                    },this);
+                } catch (Exception e) {
+                    Log.e("Messaging", "Token/Claims fetch failed", e);
+                }
+            }).start();
+            //username.setText(role + ":" + claimsJson + user.getEmail() + user.getUid());
         }
 
-            // Login kontrolü
-            mAuth = FirebaseAuth.getInstance();
-            user = mAuth.getCurrentUser();
-            if (user == null || user.isAnonymous()) {
-                Toast.makeText(this, "Devam etmek için giriş yapmalısınız.", Toast.LENGTH_LONG).show();
-                startActivity(new Intent(this, Login.class));
-                finish();
-                return;
-            } else {
-                new Thread(() -> {
-                    Log.i("ThreadBaşladı", "Role: ... ");
-                    try {
-                        // ID token'ı al ve claims'leri logla
-                        FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
-                        if (user != null) {
-                            idToken = Tasks.await(user.getIdToken(true)).getToken();
-                            String claimsJson = CFHelper.getCustomClaims(idToken);
-                            Log.d("CustomClaimsRaw", "Raw claims: " + claimsJson);
-                            // JSON parse et (opsiyonel)
-                            if (claimsJson != null) {
-                                JSONObject claims = new JSONObject(claimsJson);
-                                role = claims.optString("role", "unknown");
-                                JSONArray roles = claims.optJSONArray("roles");
-                                Log.d("CustomClaimsParsed", "Role: " + role + ", Roles: " + (roles != null ? roles.toString() : "null"));
-                            }
-                        }
-                        // Mevcut rol kontrolü
-                        cf.refreshRole(role -> {
-                            Log.i("CustomClaims", "Role: " + role);
-                            this.role = role;
-                            if (Objects.equals(role, "Ülgen") || Objects.equals(role, "Tengri")) {
-                                Toast.makeText(this, "Ülgen Yada Tanrı", Toast.LENGTH_LONG).show();
-                            } else {
-                                Toast.makeText(this, "Bu işlemi sadece Ülgen ve Tengri yapabilir.", Toast.LENGTH_LONG).show();
-                            }
-                            // Refresh the ID token to get updated claims
-                            //user = FirebaseAuth.getInstance().getCurrentUser();
-                            if (user != null) {
-                                user.getIdToken(true).addOnSuccessListener(tokenResult -> {
-                                    idToken = tokenResult.getToken(); // Update idToken with the new value
-                                    runOnUiThread(() -> {
-                                        // Use the refreshed role and updated token data
-                                        username.setText(role + ":" + user.getEmail() + "\n" + user.getUid());
-                                        Log.v("Claims",getCustomClaims(idToken));
-                                    });
-                                }).addOnFailureListener(e -> {
-                                    Log.e("TokenRefresh", "Failed to refresh token", e);
-                                    runOnUiThread(() -> {
-                                        // Fallback to the role from refreshRole if token refresh fails
-                                        //username.setText(role + ":" + user.getEmail() + "\n" + user.getUid() + "\n" + getCustomClaims(idToken));
-                                    });
-                                });
-                            }
-                        },this);
-                    } catch (Exception e) {
-                        Log.e("Messaging", "Token/Claims fetch failed", e);
-                    }
-                }).start();
-                //username.setText(role + ":" + claimsJson + user.getEmail() + user.getUid());
-            }
-
-        // CFHelper
-
-
         CFClient.WhereBuilder wb = new CFClient.WhereBuilder().eq("status", "adoptable");
-
 
         cf.getTokens((idTok, appTok) -> {
             String url = "https://us-central1-iyesi-e8d4f.cloudfunctions.net/listSoulsByFields?col=Souls&where=status:eq:adoptable&limit=3";
@@ -186,7 +177,6 @@ public class Welcome extends AppCompatActivity {
             if (appTok != null && !appTok.isEmpty()) {
                 rb.addHeader("X-Firebase-AppCheck", appTok);
             }
-// YENİ (DOĞRU - async)
             cf.listSoulsByFields(wb, 100, new CFClient.JsonCallback() {
                 private static final String TAG = "CF";
 
@@ -197,7 +187,6 @@ public class Welcome extends AppCompatActivity {
                         Log.d(TAG, prefix + " " + text.substring(i, Math.min(i + MAX, text.length())));
                     }
                 }
-
                 @Override public void onSuccess(@NonNull JSONObject json) {
                     // Pretty + chunked
                     String pretty;
@@ -254,25 +243,9 @@ public class Welcome extends AppCompatActivity {
         runMembershipGuard(this);
     }
     private void setupUIListeners() {
-        imgWelcome.setOnClickListener(v -> {
-            startActivity(new Intent(this, Explore.class));
-        });
-
-        imgWelcome.setOnLongClickListener(v -> {
-            //if (Objects.equals(role, "Ülgen")) {
-                startActivity(new Intent(this, SokakActivity.class));
-                finish();
-            //} else {
-                //startActivity(new Intent(this, ExplorePrivate.class));
-            //}
-            return true;
-        });
-
-        quitButton.setOnClickListener(v -> {
-            FirebaseAuth.getInstance().signOut();
-            finish();
-        });
-
+        imgWelcome.setOnClickListener(v -> {startActivity(new Intent(this, Explore.class));});
+        imgWelcome.setOnLongClickListener(v -> {startActivity(new Intent(this, SokakActivity.class));finish();return true;});
+        quitButton.setOnClickListener(v -> {FirebaseAuth.getInstance().signOut();finish();});
         listView.setOnItemClickListener((parent, view, position, id) -> {
             if (position < 0 || position >= companions.size()) {
                 Log.w(TAG, "onItemClick: bad position=" + position + " size=" + companions.size());
@@ -288,23 +261,18 @@ public class Welcome extends AppCompatActivity {
 
             Intent intent = new Intent(Welcome.this, com.kurmez.iyesi.umay.sahiplendirme.Companion.class);
             // ⚠️ DÜZELTİLENLER:
-            intent.putExtra("species", nz(s.getSpecies()));          // önce breed gönderiliyordu
-            intent.putExtra("breed",   nz(s.getBreed()));            // breed’i ayrıca yolla
+            intent.putExtra("species",    nz(s.getSpecies()));          // önce breed gönderiliyordu
+            intent.putExtra("breed",      nz(s.getBreed()));            // breed’i ayrıca yolla
             intent.putExtra("foundDate",  nz(s.getFoundDate()));
-            intent.putExtra("foundPlace", nz(s.getFoundLocation())); // model alanıyla uyumlu
+            intent.putExtra("foundPlace", nz(s.getFoundLocation()));    // model alanıyla uyumlu
             intent.putExtra("photoUrl",   nz(s.getImageUrl()));
             intent.putExtra("profileId",  nz(s.getFinderName()));
             intent.putExtra("status",     nz(s.getStatus()));
-            intent.putExtra("id",         nz(s.getId()));            // detay ekranı için faydalı
+            intent.putExtra("id",         nz(s.getId()));               // detay ekranı için faydalı
 
             startActivity(intent);
         });
-
-        // Diğer butonlar için basit işlevler
-        messageButton.setOnClickListener(v ->
-                startActivity(new Intent(this, Messaging.class))
-        );
+        messageButton.setOnClickListener(v -> startActivity(new Intent(this, Messaging.class)));
         notificationButton.setOnClickListener(v -> Helpers.showToastSafe(this,"Bildirim özelliği yakında gelecek"));
     }
-
 }
