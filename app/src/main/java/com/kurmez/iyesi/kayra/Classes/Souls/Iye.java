@@ -67,6 +67,23 @@ public class Iye {
 
         return new Iye(uid, username, email, location, phone, role, avatarUrl);
     }
+    public Map<String, Object> toMap() {
+        Map<String, Object> map = new java.util.HashMap<>();
+        map.put("uid", uid);
+        map.put("username", username);
+        map.put("email", email);
+        map.put("phone", phone);
+        map.put("role", role);
+        map.put("avatarUrl", avatarUrl);
+        if (location != null) {
+            Map<String, Object> locMap = new java.util.HashMap<>();
+            locMap.put("address", location.getAddress());
+            locMap.put("lat", location.getLat());
+            locMap.put("lng", location.getLng());
+            map.put("location", locMap);
+        }
+        return map;
+    }
 
     private static Iye.Location parseLocationFromClaims(Object locationObj) {
         if (locationObj == null) {
@@ -103,6 +120,7 @@ public class Iye {
     }
 
     // getters & setters
+    public void setRole(String role) { this.role = role; }
     public void setLocation(String address) {
         this.location = new Location(address, null, null);
     }

@@ -19,7 +19,7 @@ import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.model.LatLng;
 import com.kurmez.iyesi.umay.sokak.Managers.HaritaManager;
 import com.kurmez.iyesi.umay.sokak.Managers.LocationManager;
-import com.kurmez.iyesi.umay.sokak.Managers.MarkerManager;
+import com.kurmez.iyesi.umay.sokak.Managers.NodeManager;
 
 /**
  * Harita - map wrapper / coordinator
@@ -38,7 +38,7 @@ public class Harita implements OnMapReadyCallback {
 
     private HaritaManager haritaManager;
     private LocationManager locationManager;
-    private MarkerManager markerManager;
+    private NodeManager nodeManager;
     private FragmentActivity activity;
 
     private boolean hasCenteredOnce = false; // ilk lokasyonda kamerayı taşıma kontrolü
@@ -78,7 +78,7 @@ public class Harita implements OnMapReadyCallback {
     public void onMapReady(@NonNull GoogleMap googleMap) {
         Log.d(TAG, "onMapReady called. googleMap != null ? " + (googleMap != null));
         try {
-            this.markerManager = new MarkerManager(googleMap, activity);
+            this.nodeManager = new NodeManager(googleMap, activity);
             Log.d(TAG, "MarkerManager oluşturuldu.");
         } catch (Exception e) {
             Log.e(TAG, "MarkerManager oluşturulurken hata: ", e);
@@ -175,14 +175,14 @@ public class Harita implements OnMapReadyCallback {
         Log.d(TAG, "fetchNodesNearby çağrıldı. center=" + center + " radius=" + radius + " limit=" + limit);
 
         // 1) Önce markerManager mevcut mu kontrol et
-        if (markerManager == null) {
+        if (nodeManager == null) {
             Log.w(TAG, "fetchNodesNearby: markerManager null - marker eklenemiyor");
             return;
         }
 
         // 2) Mevcut marker'ları temizleyin (MarkerManager API'sine göre değiştir)
         try {
-            markerManager.clearAllMarkers(); // Eğer MarkerManager böyle bir method içeriyorsa kullan.
+            nodeManager.clearAllMarkers(); // Eğer MarkerManager böyle bir method içeriyorsa kullan.
             Log.d(TAG, "markerManager.clearAllMarkers() çağrıldı.");
         } catch (Throwable t) {
             Log.w(TAG, "markerManager.clearAllMarkers() çağrısı başarısız veya method yok: " + t.getMessage());
@@ -314,7 +314,7 @@ public class Harita implements OnMapReadyCallback {
                 LatLng testPos = new LatLng(41.008239, 28.978359); // İstanbul (örnek)
                 // MarkerManager üzerinden eklemeyi tercih et, yoksa doğrudan googleMap.addMarker() çağr
                 try {
-                    markerManager.addDebugMarker(testPos, "TEST"); // MarkerManager böyle bir method içerebilir
+                    nodeManager.addDebugMarker(testPos, "TEST"); // MarkerManager böyle bir method içerebilir
                     Log.d(TAG, "addDebugTestMarker: MarkerManager ile test marker istendi");
                 } catch (Throwable t) {
                     // Fallback: doğrudan googleMap.addMarker (MarkerManager yoksa)
@@ -331,10 +331,10 @@ public class Harita implements OnMapReadyCallback {
     }
 
     public void placeDraggableNode(LatLng location) {
-        if (markerManager != null) {
+        if (nodeManager != null) {
             Log.d(TAG, "placeDraggableMarker çağrıldı: " + location);
             try {
-                markerManager.placeDraggableMarker(location,null,null);
+                nodeManager.placeDraggableMarker(location,null,null);
             } catch (Throwable t) {
                 Log.w(TAG, "placeDraggableMarker: MarkerManager.placeDraggableMarker yok veya hata: " + t.getMessage());
             }
@@ -342,8 +342,8 @@ public class Harita implements OnMapReadyCallback {
             Log.w(TAG, "placeDraggableMarker: markerManager null");
         }
     }
-    public MarkerManager getNodeManager() {
-        return markerManager;
+    public NodeManager getNodeManager() {
+        return nodeManager;
     }
     public static void askAndFill(Context context, EditText editText) {
         // Konum izni kontrolü
@@ -450,9 +450,9 @@ public class Harita implements OnMapReadyCallback {
                 Log.w(TAG, "locationManager.cleanup hata: " + t.getMessage());
             }
         }
-        if (markerManager != null) {
+        if (nodeManager != null) {
             try {
-                markerManager.cleanup();
+                nodeManager.cleanup();
             } catch (Throwable t) {
                 Log.w(TAG, "markerManager.cleanup hata: " + t.getMessage());
             }

@@ -13,26 +13,35 @@ import androidx.core.content.ContextCompat;
 
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.model.*;
+import com.google.firebase.firestore.DocumentSnapshot;
+import com.google.firebase.firestore.FirebaseFirestore;
+import com.google.firebase.firestore.QuerySnapshot;
 import com.kurmez.iyesi.R;
+import com.kurmez.iyesi.kayra.Classes.Souls.Baksi;
 import com.kurmez.iyesi.kayra.Classes.Nodes.ui.NodeIconFactory;
 
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * MarkerManager
+ * NodeManager
  *
  * - Thread-safe marker registry (ConcurrentHashMap)
  * - UI-thread güvenli marker ekleme/fırlatma helper'ları
  * - icon cache ConcurrentHashMap ile güvenli erişim
  * - debug/test marker, clearAllMarkers, find/remove, highlight/clear vs. metodlar eklendi
  *
- * Not: MarkerManager doğrudan GoogleMap referansı ile çalışır; GoogleMap null ise metotlar no-op/log yapar.
+ * - Revizyon: Baksi (Veteriner) ve genel Node fetch (Firestore) desteği eklendi.
+ *
+ * Not: NodeManager doğrudan GoogleMap referansı ile çalışır; GoogleMap null ise metotlar no-op/log yapar.
  */
-public class MarkerManager {
-    private static final String TAG = "MarkerManager";
+public class NodeManager {
+
+    private static final String TAG = "NodeManager";
 
     private GoogleMap mMap;
     private final Context context;
@@ -54,10 +63,14 @@ public class MarkerManager {
     // Main thread handler for UI operations
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
 
-    public MarkerManager(GoogleMap map, Context context) {
+    // Firestore instance for node fetching
+    private final FirebaseFirestore firestore;
+
+    public NodeManager(GoogleMap map, Context context) {
         this.mMap = map;
         this.context = context;
-        Log.d(TAG, "MarkerManager constructed. googleMap != null? " + (map != null));
+        this.firestore = FirebaseFirestore.getInstance();
+        Log.d(TAG, "NodeManager constructed. googleMap != null? " + (map != null));
     }
 
     private boolean mapAvailable() {
@@ -95,17 +108,15 @@ public class MarkerManager {
                     }
                 }
             });
-            // waiting a short time is optional; avoid blocking too long
             try {
                 synchronized (lock) {
-                    lock.wait(250); // 250ms wait for best-effort (non-blocking design preferred)
+                    lock.wait(250);
                 }
             } catch (InterruptedException ignored) { }
             return out[0];
         }
     }
 
-    // internal add that must run on UI thread
     private Marker internalAddMarker(MarkerOptions options, String type, String id) {
         try {
             Marker marker = mMap.addMarker(options);
@@ -121,9 +132,6 @@ public class MarkerManager {
         }
     }
 
-    /**
-     * Marker register: id -> marker ve type map'lenir.
-     */
     public void registerMarker(String markerId, Marker marker, String type) {
         if (markerId == null || marker == null) {
             Log.w(TAG, "registerMarker: markerId veya marker null");
@@ -144,9 +152,6 @@ public class MarkerManager {
         return markerById.values();
     }
 
-    /**
-     * removeMarker: marker varsa haritadan kaldır ve map'lerden sil.
-     */
     public void removeMarker(String markerId) {
         if (markerId == null) return;
         Marker marker = markerById.remove(markerId);
@@ -162,16 +167,36 @@ public class MarkerManager {
             Log.w(TAG, "removeMarker: marker bulunamadı id=" + markerId);
         }
     }
+    // NodeManager sınıfına bu metodu ekleyin
+    public void removeMarkersByType(final String type) {
+        if (!mapAvailable()) return;
 
-    /**
-     * clearAllMarkers - tüm kayıtlı marker'ları temizler (UI thread'te çalışır).
-     */
+        mainHandler.post(() -> {
+            try {
+                List<String> toRemove = new ArrayList<>();
+                for (Map.Entry<String, Marker> entry : markerById.entrySet()) {
+                    Marker marker = entry.getValue();
+                    String markerType = markerTypeMap.get(marker);
+                    if (type.equals(markerType)) {
+                        toRemove.add(entry.getKey());
+                    }
+                }
+
+                for (String id : toRemove) {
+                    removeMarker(id);
+                }
+                Log.d(TAG, "removeMarkersByType: " + type + " - " + toRemove.size() + " marker temizlendi");
+            } catch (Throwable t) {
+                Log.e(TAG, "removeMarkersByType hata: ", t);
+            }
+        });
+    }
     public void clearAllMarkers() {
         if (!mapAvailable()) return;
         mainHandler.post(() -> {
             try {
                 for (Marker m : markerById.values()) {
-                    try { m.remove(); } catch (Throwable t) { /* ignore per-marker errors */ }
+                    try { m.remove(); } catch (Throwable t) { }
                 }
                 markerById.clear();
                 markerTypeMap.clear();
@@ -183,9 +208,6 @@ public class MarkerManager {
         });
     }
 
-    /**
-     * highlightMarker - seçili marker'ı vurgular (ikon değişikliği)
-     */
     public void highlightMarker(final Marker marker) {
         if (marker == null) return;
         mainHandler.post(() -> {
@@ -203,9 +225,6 @@ public class MarkerManager {
         });
     }
 
-    /**
-     * clearMarkerHighlight - önceki vurguyu geri alır
-     */
     public void clearMarkerHighlight() {
         mainHandler.post(() -> {
             try {
@@ -221,14 +240,9 @@ public class MarkerManager {
         });
     }
 
-    /**
-     * getCustomIcon - tip bazlı BitmapDescriptor döndürür, cache'li.
-     */
     public BitmapDescriptor getCustomIcon(String type) {
         if (type == null) type = "default";
-        if (iconCache.containsKey(type)) {
-            return iconCache.get(type);
-        }
+        if (iconCache.containsKey(type)) return iconCache.get(type);
 
         BitmapDescriptor bd = createIconForType(type);
         if (bd != null) {
@@ -252,11 +266,14 @@ public class MarkerManager {
             case "Barınak":
                 fgRes = R.drawable.icon_barinak;
                 break;
+            case "Sağlık": // Baksi tipi için ikon öngörüldü
+            case "Baksi":
+                fgRes = R.drawable.icon_saglik;
+                break;
             default:
                 return BitmapDescriptorFactory.defaultMarker();
         }
 
-        // create composite descriptor safely
         try {
             return createCompositeDescriptor(R.drawable.ic_map_marker, fgRes);
         } catch (Throwable t) {
@@ -265,13 +282,8 @@ public class MarkerManager {
         }
     }
 
-    /**
-     * createCompositeDescriptor - drawable'ları birleştirip BitmapDescriptor üretir.
-     * Drawable bulunamazsa güvenli fallback sağlar.
-     */
     private BitmapDescriptor createCompositeDescriptor(int bgRes, int fgRes) {
         float d = context.getResources().getDisplayMetrics().density;
-
         int markerWidthPx = (int) (MARKER_WIDTH_DP * d + .5f);
         int iconPx = (int) (ICON_DP * d + .5f);
         int offsetYPx = (int) (ICON_OFFSET_Y_DP * d + .5f);
@@ -306,9 +318,63 @@ public class MarkerManager {
     }
 
     /**
-     * Debug helper - harita hazırken test marker ekler.
-     * Eğer MarkerManager#addDebugMarker kullanılabiliyorsa onu tercih edin.
+     * Firestore'dan VetNodes koleksiyonunu çek ve haritaya ekle.
+     * Bu metot her kullanıcı SokakActivity'ye girdiğinde çağrılmalı.
      */
+    public void loadVetNodes() {
+        if (!mapAvailable()) {
+            Log.w(TAG, "loadVetNodes: map hazır değil, atlandı");
+            return;
+        }
+
+        // Önce var olan veteriner marker'larını temizlemek isteyebilirsin (opsiyonel)
+        // clearAllMarkers(); // eğer diğer tipleri korumak istiyorsan bunu kullanma
+
+        Log.d(TAG, "loadVetNodes: Firestore'dan VetNodes çekiliyor...");
+        firestore.collection("VetNodes")
+                .get()
+                .addOnSuccessListener((QuerySnapshot queryDocumentSnapshots) -> {
+                    if (queryDocumentSnapshots == null || queryDocumentSnapshots.isEmpty()) {
+                        Log.d(TAG, "loadVetNodes: VetNodes koleksiyonu boş.");
+                        return;
+                    }
+
+                    for (DocumentSnapshot doc : queryDocumentSnapshots.getDocuments()) {
+                        try {
+                            // Evrensel alan isimleri: lat, lng, name, type, baksiId (isteğe bağlı), registered
+                            Double latD = doc.getDouble("lat");
+                            Double lngD = doc.getDouble("lng");
+                            String name = doc.getString("name");
+                            String type = doc.getString("type");
+                            String baksiId = doc.contains("baksiId") ? doc.getString("baksiId") : doc.getId();
+                            boolean registered = doc.contains("registered") && Boolean.TRUE.equals(doc.getBoolean("registered"));
+
+                            if (latD == null || lngD == null) {
+                                Log.w(TAG, "loadVetNodes: lat/lng eksik docId=" + doc.getId());
+                                continue;
+                            }
+
+                            LatLng pos = new LatLng(latD, lngD);
+
+                            // Basit MarkerOptions kullanarak NodeManager'ın mevcut addMarker akışını kullan
+                            MarkerOptions options = new MarkerOptions()
+                                    .position(pos)
+                                    .title(name != null ? name : "Veteriner Noktası")
+                                    .snippet(type != null ? type : "Veteriner")
+                                    .icon(getCustomIcon("Sağlık")); // Baksi tipi için ikon
+
+                            // UI-thread güvenli: addMarker zaten UI thread'e post ediyor
+                            addMarker(options, "Baksi", baksiId);
+
+                        } catch (Throwable t) {
+                            Log.e(TAG, "loadVetNodes: node işlenirken hata: " + t.getMessage(), t);
+                        }
+                    }
+                })
+                .addOnFailureListener(e -> Log.e(TAG, "loadVetNodes: Firestore hatası: " + e.getMessage(), e));
+    }
+
+
     public void addDebugMarker(final LatLng pos, final String title) {
         if (!mapAvailable()) return;
         mainHandler.post(() -> {
@@ -319,12 +385,9 @@ public class MarkerManager {
                         .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE));
                 Marker m = mMap.addMarker(options);
                 if (m != null) {
-                    // benzersiz id üret (debug)
                     String id = "debug-" + System.currentTimeMillis();
                     registerMarker(id, m, "debug");
                     Log.d(TAG, "addDebugMarker: eklendi id=" + id + " pos=" + pos);
-                } else {
-                    Log.w(TAG, "addDebugMarker: mMap.addMarker null");
                 }
             } catch (Throwable t) {
                 Log.e(TAG, "addDebugMarker hata: ", t);
@@ -332,13 +395,9 @@ public class MarkerManager {
         });
     }
 
-    /**
-     * placeDraggableMarker - MarkerManager'ın draggable marker API çağrısı (MarkerManager içinde implement varsa kullan)
-     * Fallback: doğrudan normal marker ekler ve draggable true ayarlar.
-     */
     public void placeDraggableMarker(final LatLng location, @Nullable final String id, @Nullable final String type) {
-        if (id ==null){Objects.equals(id, "𐰚𐰃𐰼𐰇");}
-        if (type ==null){Objects.equals(id, "𐰼");}
+        if (id == null) { Objects.equals("𐰚𐰃𐰼𐰇", id); }
+        if (type == null) { Objects.equals("𐰼", id); }
         if (!mapAvailable()) return;
         mainHandler.post(() -> {
             try {
@@ -350,8 +409,6 @@ public class MarkerManager {
                 if (marker != null && id != null) {
                     registerMarker(id, marker, type);
                     Log.d(TAG, "placeDraggableMarker: eklendi id=" + id + " loc=" + location);
-                } else {
-                    Log.w(TAG, "placeDraggableMarker: marker null veya id null");
                 }
             } catch (Throwable t) {
                 Log.e(TAG, "placeDraggableMarker hata: ", t);
@@ -359,14 +416,11 @@ public class MarkerManager {
         });
     }
 
-    /**
-     * cleanup - tüm marker'ları kaldır ve kaynakları temizle
-     */
     public void cleanup() {
         try {
             if (mMap != null) {
                 for (Marker m : markerById.values()) {
-                    try { m.remove(); } catch (Throwable ignored) {}
+                    try { m.remove(); } catch (Throwable ignored) { }
                 }
             }
         } catch (Throwable t) {
@@ -376,22 +430,15 @@ public class MarkerManager {
             markerTypeMap.clear();
             iconCache.clear();
             highlightedMarker = null;
-            // not nulling mMap intentionally; if owner wants to replace map it can call setMap(null) or new MarkerManager
             Log.d(TAG, "cleanup tamamlandı");
         }
     }
 
-    /**
-     * Set new GoogleMap instance (ör. map yeniden oluşturulduğunda)
-     */
     public void setMap(GoogleMap map) {
         this.mMap = map;
         Log.d(TAG, "setMap: yeni googleMap != null? " + (map != null));
     }
 
-    /**
-     * Eğer ikon cache temizlenmek istenirse
-     */
     public static void clearIconCache() {
         iconCache.clear();
         Log.d(TAG, "clearIconCache: tamam");
