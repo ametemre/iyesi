@@ -329,7 +329,13 @@ public class Harita implements OnMapReadyCallback {
             Log.e(TAG, "addDebugTestMarker hata: ", e);
         }
     }
-
+    // Add this method to Harita.java
+    public GoogleMap getGoogleMap() {
+        if (haritaManager != null) {
+            return haritaManager.getGoogleMap();
+        }
+        return null;
+    }
     public void placeDraggableNode(LatLng location) {
         if (nodeManager != null) {
             Log.d(TAG, "placeDraggableMarker çağrıldı: " + location);

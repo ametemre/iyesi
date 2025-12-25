@@ -5,9 +5,12 @@ import android.annotation.SuppressLint;
 import android.content.Intent;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.graphics.Color;
 import android.os.Bundle;
 import android.os.Handler;
+import android.os.Looper;
 import android.util.Log;
 import android.view.MotionEvent;
 import android.view.View;
@@ -22,8 +25,11 @@ import android.widget.Toast;
 
 import android.text.TextUtils;
 
+import com.google.android.gms.maps.model.BitmapDescriptor;
+import com.google.android.gms.maps.model.BitmapDescriptorFactory;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.Marker;
+import com.google.android.gms.maps.model.MarkerOptions;
 import com.google.android.libraries.places.api.Places;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.google.android.material.textfield.TextInputEditText;
@@ -40,16 +46,16 @@ import com.kurmez.iyesi.kurmes.utilities.helper.CFHelper;
 import com.kurmez.iyesi.umay.sokak.Harita;
 import com.kurmez.iyesi.umay.sokak.Managers.LocationManager;
 
+import androidx.annotation.RequiresPermission;
 import androidx.appcompat.app.AlertDialog;
-import androidx.core.app.ActivityCompat;
 import androidx.fragment.app.FragmentActivity;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import com.google.firebase.firestore.GeoPoint;
-
-import androidx.annotation.RequiresPermission;
 
 public class SokakActivity extends FragmentActivity implements NodeDetailsBottomSheet.Host, Harita.LockModeListener, Harita.NodeCreationListener {
     private String TAG = "SokakActivity";
@@ -57,7 +63,8 @@ public class SokakActivity extends FragmentActivity implements NodeDetailsBottom
     public Kurmes kurmes;
     private LocationManager locationManager;
     private BaksiHelper baksiHelper;
-
+    private int baksiInitRetryCount = 0;
+    private static final int MAX_BAKSI_INIT_RETRY = 5;
     // Simplified marker mode state
     private boolean isMarkerMode = false;
 
@@ -93,7 +100,6 @@ public class SokakActivity extends FragmentActivity implements NodeDetailsBottom
 
         // Places API başlatma
         initializePlacesAPI();
-
         initializeHarita();
         initializeSpinners();
         initializeFABs();
@@ -118,8 +124,6 @@ public class SokakActivity extends FragmentActivity implements NodeDetailsBottom
                 Log.d(TAG, "Manifest'ten API key alındı: " + (apiKey != null ? "EVET" : "HAYIR"));
             } catch (Exception e) {
                 Log.e(TAG, "Manifest'ten API key alınamadı: " + e.getMessage());
-                // Fallback: string resources'tan al
-                //apiKey = getString(R.string.google_maps_key);
             }
 
             if (apiKey == null || apiKey.isEmpty()) {
@@ -144,23 +148,29 @@ public class SokakActivity extends FragmentActivity implements NodeDetailsBottom
         harita = new Harita(this);
         harita.setLockModeListener(this);
         harita.setNodeCreationListener(this);
+
+        // LocationManager'ı başlat - EKLENDİ
+        locationManager = new LocationManager(this);
+
         setupMapWithMarkers();
     }
 
     private void initializeBaksiHelper() {
         Log.d(TAG, "BaksiHelper başlatılıyor...");
 
-        if (harita == null) {
-            Log.e(TAG, "Harita null, BaksiHelper başlatılamadı!");
+        if (harita == null || harita.getNodeManager() == null) {
+            if (baksiInitRetryCount < MAX_BAKSI_INIT_RETRY) {
+                baksiInitRetryCount++;
+                Log.w(TAG, "NodeManager hazır değil, tekrar deneme " + baksiInitRetryCount + "/" + MAX_BAKSI_INIT_RETRY);
+                new Handler(Looper.getMainLooper()).postDelayed(this::initializeBaksiHelper, 2000);
+            } else {
+                Log.e(TAG, "BaksiHelper başlatılamadı: Max deneme aşıldı");
+                Toast.makeText(this, "Harita bileşenleri yüklenemedi", Toast.LENGTH_LONG).show();
+            }
             return;
         }
 
-        // NodeManager kontrolü - eğer null ise bekle
-        if (harita.getNodeManager() == null) {
-            Log.w(TAG, "NodeManager henüz hazır değil, 2sn bekleniyor...");
-            new Handler().postDelayed(this::initializeBaksiHelper, 2000);
-            return;
-        }
+        baksiInitRetryCount = 0;
 
         try {
             baksiHelper = new BaksiHelper(this, harita.getNodeManager(), new BaksiHelper.BaksiHelperListener() {
@@ -175,7 +185,6 @@ public class SokakActivity extends FragmentActivity implements NodeDetailsBottom
                             }
                             Toast.makeText(SokakActivity.this, count + " veteriner bulundu (" + radiusText + ")", Toast.LENGTH_SHORT).show();
                         } else {
-                            // Veteriner bulunamadı, kullanıcıya daha geniş arama öner
                             suggestWiderSearch(radius);
                         }
                     });
@@ -185,7 +194,16 @@ public class SokakActivity extends FragmentActivity implements NodeDetailsBottom
                 public void onVetsLoadFailed(String error) {
                     runOnUiThread(() -> {
                         Log.e(TAG, "BaksiHelper hatası: " + error);
-                        // Firebase hatası ise kullanıcıyı rahatsız etme, sadece logla
+
+                        // PERMISSION_DENIED hatası durumunda tekrar deneme yapma
+                        if (error.contains("PERMISSION_DENIED") || error.contains("insufficient permissions")) {
+                            Toast.makeText(SokakActivity.this,
+                                    "Veteriner verilerine erişim izniniz yok. Lütfen yetkilendirme ayarlarını kontrol edin.",
+                                    Toast.LENGTH_LONG).show();
+                            return; // Daha fazla işlem yapma
+                        }
+
+                        // Diğer hatalar için
                         if (!error.contains("Firebase") && !error.contains("permission")) {
                             Toast.makeText(SokakActivity.this, "Veteriner yükleme hatası: " + error, Toast.LENGTH_LONG).show();
                         }
@@ -214,7 +232,100 @@ public class SokakActivity extends FragmentActivity implements NodeDetailsBottom
             });
         }
     }
+    private void loadNearbyBaksiVetsFromFirestore(LatLng userLocation, double radiusInMeters) {
+        if (userLocation == null) {
+            Log.w(TAG, "Kullanıcı konumu yok, veteriner yüklenemedi");
+            return;
+        }
 
+        com.google.firebase.firestore.FirebaseFirestore db = com.google.firebase.firestore.FirebaseFirestore.getInstance();
+        com.google.firebase.firestore.GeoPoint geoPoint = new com.google.firebase.firestore.GeoPoint(
+                userLocation.latitude, userLocation.longitude
+        );
+
+        // Yakınlık sorgusu (GeoFire veya manuel sınır kutusu ile)
+        double lat = userLocation.latitude;
+        double lng = userLocation.longitude;
+
+        // Basit sınır kutusu (bounding box) ile yaklaşık sorgu
+        double distanceKm = radiusInMeters / 1000.0;
+        double earthRadius = 6371; // km
+        double latDelta = (distanceKm / earthRadius) * (180 / Math.PI);
+        double lngDelta = latDelta / Math.cos(Math.toRadians(lat));
+
+        com.google.firebase.firestore.GeoPoint southwest = new com.google.firebase.firestore.GeoPoint(
+                lat - latDelta, lng - lngDelta
+        );
+        com.google.firebase.firestore.GeoPoint northeast = new com.google.firebase.firestore.GeoPoint(
+                lat + latDelta, lng + lngDelta
+        );
+        db.collection("Bakşi")
+                .whereEqualTo("hasClinic", true) // sadece klinikler
+                .whereGreaterThanOrEqualTo("location.lat", southwest.getLatitude())
+                .whereLessThanOrEqualTo("location.lat", northeast.getLatitude())
+                .whereGreaterThanOrEqualTo("location.lng", southwest.getLongitude())
+                .whereLessThanOrEqualTo("location.lng", northeast.getLongitude())
+                .get()
+                .addOnSuccessListener(queryDocumentSnapshots -> {
+                    List<Marker> addedMarkers = new ArrayList<>();
+
+                    for (com.google.firebase.firestore.DocumentSnapshot doc : queryDocumentSnapshots) {
+                        try {
+                            Map<String, Object> locationMap = (Map<String, Object>) doc.get("location");
+                            if (locationMap == null) continue;
+
+                            Double latDoc = (Double) locationMap.get("lat");
+                            Double lngDoc = (Double) locationMap.get("lng");
+                            if (latDoc == null || lngDoc == null) continue;
+
+                            String name = doc.getString("username");
+                            if (name == null || name.isEmpty()) name = "Veteriner Kliniği";
+
+                            Boolean verified = doc.getBoolean("verified");
+                            Long colorLong = doc.getLong("markerColor");
+                            int markerColor = (colorLong != null) ? colorLong.intValue() : 0xFF0000FF; // mavi varsayılan
+
+                            LatLng vetLocation = new LatLng(latDoc, lngDoc);
+
+                            // Mesafe kontrolü (bounding box sonrası kesin kontrol)
+                            double distance = calculateDistance(userLocation, vetLocation);
+                            if (distance > radiusInMeters) continue;
+
+                            // Özel ikon (örneğin mavi haç)
+                            BitmapDescriptor icon = getVeterinerIcon(markerColor, verified == Boolean.TRUE);
+
+                            MarkerOptions markerOptions = new MarkerOptions()
+                                    .position(vetLocation)
+                                    .title(name)
+                                    .snippet("Veteriner Kliniği" + (verified == Boolean.TRUE ? " ✓ Doğrulanmış" : ""))
+                                    .icon(icon);
+
+                            Marker marker = harita.getGoogleMap().addMarker(markerOptions);
+                            if (marker != null) {
+                                marker.setTag(doc.getId()); // place_id veya doc id
+                                addedMarkers.add(marker);
+                            }
+
+                        } catch (Exception e) {
+                            Log.e(TAG, "Veteriner marker eklenirken hata: " + doc.getId(), e);
+                        }
+                    }
+
+                    Log.d(TAG, addedMarkers.size() + " veteriner markerı eklendi (" + radiusInMeters + "m)");
+                    runOnUiThread(() -> {
+                        if (addedMarkers.isEmpty()) {
+                            suggestWiderSearch(radiusInMeters / 1000.0);
+                        } else {
+                            Toast.makeText(this, addedMarkers.size() + " veteriner bulundu", Toast.LENGTH_SHORT).show();
+                        }
+                    });
+
+                })
+                .addOnFailureListener(e -> {
+                    Log.e(TAG, "Bakşi veterinerleri yüklenemedi", e);
+                    runOnUiThread(() -> Toast.makeText(this, "Veterinerler yüklenemedi", Toast.LENGTH_SHORT).show());
+                });
+    }
     /**
      * Daha geniş arama öneren dialog
      */
@@ -230,7 +341,36 @@ public class SokakActivity extends FragmentActivity implements NodeDetailsBottom
             Toast.makeText(this, "15km çapında da veteriner bulunamadı", Toast.LENGTH_LONG).show();
         }
     }
+    private double calculateDistance(LatLng a, LatLng b) {
+        double earthRadius = 6371000; // metre
+        double dLat = Math.toRadians(b.latitude - a.latitude);
+        double dLng = Math.toRadians(b.longitude - a.longitude);
+        double sindLat = Math.sin(dLat / 2);
+        double sindLng = Math.sin(dLng / 2);
+        double va1 = Math.pow(sindLat, 2) + Math.pow(sindLng, 2)
+                * Math.cos(Math.toRadians(a.latitude)) * Math.cos(Math.toRadians(b.latitude));
+        double va2 = 2 * Math.atan2(Math.sqrt(va1), Math.sqrt(1 - va1));
+        return earthRadius * va2;
+    }
 
+    private BitmapDescriptor getVeterinerIcon(int colorArgb, boolean verified) {
+        // Check if the color is primarily blue/black (red and green components are 0)
+        if (Color.red(colorArgb) == 0 && Color.green(colorArgb) == 0) {
+            // Use default blue marker
+            return BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_BLUE);
+        } else {
+            // Create custom bitmap for other colors
+            Bitmap bitmap = createVeterinerBitmap(colorArgb, verified);
+            return BitmapDescriptorFactory.fromBitmap(bitmap);
+        }
+    }
+
+    // Daha güzel ikon için (opsiyonel)
+    private Bitmap createVeterinerBitmap(int color, boolean verified) {
+        // Burada drawable'dan bir ikon alıp renklendirebilirsin
+        // Örnek: R.drawable.ic_veteriner
+        return BitmapFactory.decodeResource(getResources(), R.drawable.map_marker);
+    }
     /**
      * Yarıçap arama dialog'u göster
      */
@@ -432,6 +572,7 @@ public class SokakActivity extends FragmentActivity implements NodeDetailsBottom
     private void setupMapWithMarkers() {
         final Handler handler = new Handler();
         final Runnable checkMapReady = new Runnable() {
+            @RequiresPermission(allOf = {Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION})
             @Override
             public void run() {
                 Log.d(TAG, "Harita hazırlık kontrolü...");
@@ -441,6 +582,12 @@ public class SokakActivity extends FragmentActivity implements NodeDetailsBottom
                     try {
                         harita.fetchNodesNearby(null, 5000, 200);
                         harita.setMyLocationIconEnabled(true);
+
+                        // LocationManager null kontrolü - EKLENDİ
+                        if (locationManager == null) {
+                            locationManager = new LocationManager(SokakActivity.this);
+                            Log.d(TAG, "setupMapWithMarkers: LocationManager başlatıldı");
+                        }
 
                         // BaksiHelper'ı harita hazır olduğunda başlat
                         initializeBaksiHelper();
@@ -461,6 +608,50 @@ public class SokakActivity extends FragmentActivity implements NodeDetailsBottom
         handler.postDelayed(checkMapReady, 1000);
     }
 
+    private void loadNearbyVets() {
+        // locationManager null kontrolü
+        if (locationManager == null) {
+            locationManager = new LocationManager(this);
+            Log.d(TAG, "LocationManager başlatıldı");
+        }
+
+        locationManager.setListener(new LocationManager.LocationManagerListener() {
+            @Override
+            public void onLocationReceived(LatLng location) {
+                lastKnownLocation = location;
+                Log.d(TAG, "Konum alındı: " + location);
+
+                // Alternatif 1: NodeManager üzerinden veteriner yükle
+                if (harita != null && harita.getNodeManager() != null) {
+                    //harita.getNodeManager().loadVetNodes();
+                }
+
+                // Alternatif 2: Basit veteriner yükleme - DÜZELTME: Sonsuz döngüyü engelle
+                // Bu satırı silin veya yorum yapın:
+                // loadNearbyVets(); // BU SONSUZ DÖNGÜYE NEDEN OLUYOR!
+
+                // Bunun yerine doğrudan veteriner yükleme metodunu çağırın:
+                startProgressiveBaksiSearch(location);
+            }
+
+            @Override
+            public void onLocationError(String error) {
+                Log.e(TAG, "Konum alınamadı: " + error);
+                // fallback: node manager'dan veteriner yükle
+                if (harita != null && harita.getNodeManager() != null) {
+                    harita.getNodeManager().loadVetNodes();
+                }
+            }
+        });
+        locationManager.getCurrentLocation();
+    }
+    private void startProgressiveBaksiSearch(LatLng location) {
+        //loadNearbyBaksiVetsFromFirestore(location, 1500); // 1.5km başla
+        // suggestWiderSearch() içinde genişlet:
+        // loadNearbyBaksiVets(location, 5000);
+        // loadNearbyBaksiVets(location, 15000);
+    }
+/*
     @SuppressLint("MissingPermission")
     private void loadNearbyVets() {
         Log.d(TAG, "=== VETERİNER YÜKLEME BAŞLANGIÇ ===");
@@ -534,7 +725,7 @@ public class SokakActivity extends FragmentActivity implements NodeDetailsBottom
         Log.d(TAG, "Konum alınıyor...");
         locationManager.getCurrentLocation();
     }
-
+*/
     @Override
     public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
@@ -566,6 +757,13 @@ public class SokakActivity extends FragmentActivity implements NodeDetailsBottom
             if (harita != null) {
                 Log.d(TAG, "Harita hazır: " + harita.isReady());
                 Log.d(TAG, "Konum izni: " + (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED));
+
+                // LocationManager kontrolü - EKLENDİ
+                if (locationManager == null) {
+                    locationManager = new LocationManager(this);
+                    Log.d(TAG, "onResume: LocationManager başlatıldı");
+                }
+
                 // Haritayı yeniden etkinleştir
                 if (harita.isReady()) {
                     // Harita onResume işlemleri
@@ -573,7 +771,8 @@ public class SokakActivity extends FragmentActivity implements NodeDetailsBottom
             }
         } catch (Exception e) {
             Log.e(TAG, "onResume hatası: " + e.getMessage());
-        }
+        }        Log.d(TAG, "onResume - Harita durumu: " + (harita != null ? "Mevcut" : "Null"));
+
     }
 
     @Override
