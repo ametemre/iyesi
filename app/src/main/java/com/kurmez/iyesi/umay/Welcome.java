@@ -37,7 +37,7 @@ import com.kurmez.iyesi.kurmes.social.content.Explore;
 import com.kurmez.iyesi.kurmes.social.message.Messaging;
 import com.kurmez.iyesi.kurmes.utilities.Helpers;
 import com.kurmez.iyesi.kurmes.utilities.adapters.CompanionAdapter;
-import com.kurmez.iyesi.kurmes.utilities.helper.net.CFClient;
+import com.kurmez.iyesi.kurmes.utilities.clients.CFClient;
 import com.kurmez.iyesi.kurmes.utilities.helper.net.FirebaseAuthenticator;
 import com.kurmez.iyesi.kurmes.utilities.helper.net.FirebaseHeadersInterceptor;
 
@@ -53,7 +53,7 @@ import okhttp3.Request;
 
 public class Welcome extends AppCompatActivity {
     private static final String TAG = "WelcomeActivity";
-    private static final String CF_GET_PRIORITY = "https://us-central1-iyesi-e8d4f.cloudfunctions.net/getPriorityPets";
+    private static final String CF_GET_PRIORITY = "https://us-central1-iyesi-aef03.cloudfunctions.net/getPriorityPets";
     //private CFHelper cf;
     private ImageView imgWelcome;
     private ImageButton quitButton;
@@ -76,7 +76,7 @@ public class Welcome extends AppCompatActivity {
                 android.util.Log.d("HTTP", "X-Firebase-AppCheck: " + req.header("X-Firebase-AppCheck"));
                 return chain.proceed(req);
             }).build();
-    private CFClient cf = new CFClient("https://us-central1-iyesi-e8d4f.cloudfunctions.net");
+    private CFClient cf = new CFClient("https://us-central1-iyesi-aef03.cloudfunctions.net");
     private String claimsJson;
     private FirebaseAuth mAuth;
     private FirebaseUser user;
@@ -171,7 +171,7 @@ public class Welcome extends AppCompatActivity {
         CFClient.WhereBuilder wb = new CFClient.WhereBuilder().eq("status", "adoptable");
 
         cf.getTokens((idTok, appTok) -> {
-            String url = "https://us-central1-iyesi-e8d4f.cloudfunctions.net/listSoulsByFields?col=Souls&where=status:eq:adoptable&limit=3";
+            String url = "https://us-central1-iyesi-aef03.cloudfunctions.net/listSoulsByFields?col=Souls&where=status:eq:adoptable&limit=3";
             Request.Builder rb = new Request.Builder().url(url).get()
                     .addHeader("Authorization", "Bearer " + idTok);
             if (appTok != null && !appTok.isEmpty()) {

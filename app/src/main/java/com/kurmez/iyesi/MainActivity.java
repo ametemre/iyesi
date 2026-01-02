@@ -61,6 +61,7 @@ import com.journeyapps.barcodescanner.BarcodeEncoder;
 import com.kurmez.iyesi.kayra.QR.QR;
 import com.kurmez.iyesi.kayra.QR.QRAdmin;
 import com.kurmez.iyesi.kayra.QR.QRScannerActivity;
+import com.kurmez.iyesi.kayra.seed.SeedMockActivity;
 import com.kurmez.iyesi.kurmes.Kurmes;
 import com.kurmez.iyesi.kurmes.ui.SoulsManagerActivity;
 import com.kurmez.iyesi.kurmes.utilities.Helpers;
@@ -216,6 +217,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
 
+    @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
     private void preflightIntegrityOrPrompt() {
         setLoading(true);
 
@@ -647,6 +649,7 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    @RequiresPermission(allOf = {Manifest.permission.BLUETOOTH_ADVERTISE, Manifest.permission.BLUETOOTH_CONNECT})
     @SuppressLint("HardwareIds")
     private void handleLongClickForQRCode() {
         generatedQRCode = Settings.Secure.getString(getContentResolver(), Settings.Secure.ANDROID_ID);

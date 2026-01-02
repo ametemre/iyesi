@@ -1,0 +1,30 @@
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/scroll"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:fillViewport="true">
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:padding="16dp" android:orientation="vertical">
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Mock Seed (Nodes + Souls)" android:textStyle="bold" android:textSize="18sp"/>
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Şehir seç:" android:layout_marginTop="12dp"/>
+        <Spinner android:id="@+id/spCity" android:layout_width="match_parent" android:layout_height="wrap_content"/>
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Counts" android:textStyle="bold" android:layout_marginTop="12dp"/>
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
+            <EditText android:id="@+id/etFeed" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:hint="Besleme" android:inputType="number" android:text="150"/>
+            <EditText android:id="@+id/etNest" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:hint="Yuva" android:inputType="number" android:layout_marginStart="8dp" android:text="60"/>
+        </LinearLayout>
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:layout_marginTop="8dp">
+            <EditText android:id="@+id/etShelter" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:hint="Barınak" android:inputType="number" android:text="3"/>
+            <EditText android:id="@+id/etTask" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:hint="Görev" android:inputType="number" android:layout_marginStart="8dp" android:text="5"/>
+        </LinearLayout>
+        <EditText android:id="@+id/etSouls" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Souls" android:inputType="number" android:layout_marginTop="8dp" android:text="200"/>
+        <EditText android:id="@+id/etRadius" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Dağılım yarıçapı (metre)" android:inputType="number" android:layout_marginTop="8dp" android:text="1200"/>
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:layout_marginTop="12dp">
+            <Button android:id="@+id/btnStart" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="Başlat"/>
+            <Button android:id="@+id/btnStop" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:layout_marginStart="8dp" android:text="Durdur"/>
+            <Button android:id="@+id/btnReset" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:layout_marginStart="8dp" android:text="Reset (son batch)"/>
+        </LinearLayout>
+        <ProgressBar android:id="@+id/progress" style="?android:attr/progressBarStyleHorizontal" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="12dp" android:indeterminate="false" android:max="100" android:progress="0"/>
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Log" android:textStyle="bold" android:layout_marginTop="12dp"/>
+        <TextView android:id="@+id/tvLog" android:layout_width="match_parent" android:layout_height="240dp" android:background="#11000000" android:padding="8dp" android:textSize="12sp" android:typeface="monospace" android:scrollbars="vertical" android:text=""/>
+    </LinearLayout>
+</ScrollView>

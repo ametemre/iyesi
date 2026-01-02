@@ -12,10 +12,12 @@ import android.graphics.PorterDuff;
 import android.graphics.drawable.Drawable;
 import android.os.Handler;
 import android.util.Log;
+import android.view.MotionEvent;
 import android.view.VelocityTracker;
 import android.view.View;
-import android.view.MotionEvent;
+
 import androidx.interpolator.view.animation.FastOutSlowInInterpolator;
+
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.maps.android.data.geojson.GeoJsonLayer;
@@ -70,6 +72,7 @@ public class MiniFabs {
     private boolean isFabOpen = false;
     private Animation fabOpenAnim, fabCloseAnim, rotateForwardAnim, rotateBackwardAnim;
     private Handler handler = new Handler();
+
     public MiniFabs(Activity activity,
                     FloatingActionButton mainFab,
                     FloatingActionButton soundFab,
@@ -88,56 +91,61 @@ public class MiniFabs {
         }
         soundFab.setVisibility(View.GONE);
     }
+
     public void toggle() {
-        if (isExpanded) collapse(); else expand();
+        if (isExpanded) collapse();
+        else expand();
         isExpanded = !isExpanded;
     }
+
     public void expand() {
         // 1) Merkez
-        float centerX = mainFab.getX() + mainFab.getWidth()  / 2f;
+        float centerX = mainFab.getX() + mainFab.getWidth() / 2f;
         float centerY = mainFab.getY() + mainFab.getHeight() / 2f;
 
         // 2) Sabit yarıçap ve FAB sayısı
         float radius = 600f;
-        int count   = miniFabs.length;
+        int count = miniFabs.length;
 
         // 3) Ekran boyutları & FAB boyutları
         int screenW = rootView.getWidth(), screenH = rootView.getHeight();
-        float fabW  = mainFab.getWidth(), fabH = mainFab.getHeight();
+        float fabW = mainFab.getWidth(), fabH = mainFab.getHeight();
 
         // 4) Bölge tespiti: yarım/çeyrek daire
-        float leftBound  = screenW  / 3f, rightBound = 2f * screenW / 3f;
+        float leftBound = screenW / 3f, rightBound = 2f * screenW / 3f;
         double startAngle, sweep;
         if (centerX < leftBound) {
-            startAngle = -Math.PI/2;  sweep = Math.PI;
+            startAngle = -Math.PI / 2;
+            sweep = Math.PI;
         } else if (centerX > rightBound) {
-            startAngle =  Math.PI/2;  sweep = Math.PI;
+            startAngle = Math.PI / 2;
+            sweep = Math.PI;
         } else {
-            if (centerY < screenH/2f) {
-                startAngle = (centerX < screenW/2f) ? 0 : Math.PI/2;
+            if (centerY < screenH / 2f) {
+                startAngle = (centerX < screenW / 2f) ? 0 : Math.PI / 2;
             } else {
-                startAngle = (centerX < screenW/2f) ? 3*Math.PI/2 : Math.PI;
+                startAngle = (centerX < screenW / 2f) ? 3 * Math.PI / 2 : Math.PI;
             }
-            sweep = Math.PI/2;
+            sweep = Math.PI / 2;
         }
 
         // 5) Açıları “traşlamak” için başlangıç ve bitiş açıları
         double minA = startAngle;
         double maxA = startAngle + sweep;
         // adım açısı: orijinal yay uzunluğunun küçük bir parçası
-        double step = (sweep / (count-1)) * 0.5;
+        double step = (sweep / (count - 1)) * 0.5;
 
         // 5a) Başlangıcı kırp
         while (minA < maxA) {
-            float x0 = centerX + radius * (float)Math.cos(minA) - fabW/2f;
-            float y0 = centerY + radius * (float)Math.sin(minA) - fabH/2f;
+            float x0 = centerX + radius * (float) Math.cos(minA) - fabW / 2f;
+            float y0 = centerY + radius * (float) Math.sin(minA) - fabH / 2f;
             if (x0 >= 0 && x0 + fabW <= screenW && y0 >= 0 && y0 + fabH <= screenH) break;
             minA += step;
         }
         // 5b) Bitişi kırp
         while (maxA > minA) {
-            float xN = centerX + radius * (float)Math.cos(maxA) - fabW/2f;
-            float yN = centerY + radius * (float)Math.sin(maxA) - fabH/2f;
+            float xN = centerX + radius * (float) Math.cos(maxA) - fabW / 2f;
+            float yN = centerY + radius * (float) Math.sin(maxA) - fabH / 2f;
             if (xN >= 0 && xN + fabW <= screenW && yN >= 0 && yN + fabH <= screenH) break;
             maxA -= step;
         }
@@ -148,16 +156,16 @@ public class MiniFabs {
         // 7) Animasyon: traflanmış açı aralığında eşit böl
         for (int i = 0; i < count; i++) {
             double angle = minA + i * (newSweep / (count - 1));
-            float x = centerX + radius * (float)Math.cos(angle) - fabW/2f;
-            float y = centerY + radius * (float)Math.sin(angle) - fabH/2f;
+            float x = centerX + radius * (float) Math.cos(angle) - fabW / 2f;
+            float y = centerY + radius * (float) Math.sin(angle) - fabH / 2f;
 
             FloatingActionButton fab = miniFabs[i];
             fab.setVisibility(View.VISIBLE);
             AnimatorSet anim = new AnimatorSet();
             anim.playTogether(
-                    ObjectAnimator.ofFloat(fab, "x",     mainFab.getX(), x),
-                    ObjectAnimator.ofFloat(fab, "y",     mainFab.getY(), y),
-                    ObjectAnimator.ofFloat(fab, "alpha", 0f,              1f)
+                    ObjectAnimator.ofFloat(fab, "x", mainFab.getX(), x),
+                    ObjectAnimator.ofFloat(fab, "y", mainFab.getY(), y),
+                    ObjectAnimator.ofFloat(fab, "alpha", 0f, 1f)
             );
             anim.setInterpolator(new FastOutSlowInInterpolator());
             anim.setDuration(400);
@@ -173,6 +181,7 @@ public class MiniFabs {
                 .start();
         mainFab.setVisibility(View.GONE);
     }
+
     public void collapse() {
         float centerX = mainFab.getX();
         float centerY = mainFab.getY();
@@ -206,10 +215,24 @@ public class MiniFabs {
         soundAnim.start();
         mainFab.setVisibility(View.VISIBLE);
     }
+
+    /**
+     * MiniFab menüsü kapalıyken (isExpanded=false) sürükleme ile taşımada kullanılır.
+     *
+     * Not:
+     * Eski implementasyon fabPositions[][] üzerine kurulu ama bu dizi hiçbir yerde doldurulmadığı için
+     * sürüklemede zıplama / saçma konumlanma yapabiliyordu. Bu yüzden "relative delta" uygularız.
+     */
     public void move(float deltaX, float deltaY) {
-        for (int i = 0; i < miniFabs.length; i++) {
-            miniFabs[i].setX(fabPositions[i][0] + deltaX);
-            miniFabs[i].setY(fabPositions[i][1] + deltaY);
+        for (FloatingActionButton fab : miniFabs) {
+            fab.setX(fab.getX() + deltaX);
+            fab.setY(fab.getY() + deltaY);
+        }
+
+        // Güvenlik: soundFab görünürse (başka bir kullanımda) onun da merkezden kopmaması için.
+        if (soundFab.getVisibility() == View.VISIBLE) {
+            soundFab.setX(soundFab.getX() + deltaX);
+            soundFab.setY(soundFab.getY() + deltaY);
         }
     }
 
@@ -220,18 +243,24 @@ public class MiniFabs {
         this.rotateForwardAnim = rotateForward;
         this.rotateBackwardAnim = rotateBackward;
     }
+
     public boolean handleOutsideTouch(MotionEvent ev) {
         if (ev.getAction() != MotionEvent.ACTION_DOWN || !isExpanded) return false;
-        int x = (int)ev.getRawX(), y = (int)ev.getRawY();
+        int x = (int) ev.getRawX(), y = (int) ev.getRawY();
         if (isInsideView(mainFab, x, y) || isInsideView(soundFab, x, y)) return false;
         for (FloatingActionButton fab : miniFabs) if (isInsideView(fab, x, y)) return false;
-        collapse(); isExpanded = false; return true;
+        collapse();
+        isExpanded = false;
+        return true;
     }
+
     private boolean isInsideView(View v, int x, int y) {
-        int[] loc = new int[2]; v.getLocationOnScreen(loc);
+        int[] loc = new int[2];
+        v.getLocationOnScreen(loc);
         return x >= loc[0] && x <= loc[0] + v.getWidth()
                 && y >= loc[1] && y <= loc[1] + v.getHeight();
     }
+
     public void applyDefaultColors() {
         for (FloatingActionButton fab : miniFabs) {
             fab.setBackgroundTintList(
@@ -245,6 +274,7 @@ public class MiniFabs {
             }
         }
     }
+
     public FloatingActionButton selectFab(FloatingActionButton fab) {
         // Eğer aynı FAB tekrar tıklandıysa, seçimi kaldır
         if (selectedFab == fab) {
@@ -269,6 +299,7 @@ public class MiniFabs {
         }
         return selectedFab;
     }
+
     public void resetIconColor(FloatingActionButton fab) {
         fab.setBackgroundTintList(ColorStateList.valueOf(Color.parseColor("#FF40C4FF"))); // Teal
         Drawable drawable = fab.getDrawable();
@@ -278,6 +309,7 @@ public class MiniFabs {
             fab.setImageDrawable(drawable);
         }
     }
+
     public void applyWhiteColorFilter(FloatingActionButton fab) {
         Drawable drawable = fab.getDrawable();
         if (drawable != null) {
@@ -286,15 +318,16 @@ public class MiniFabs {
             fab.setImageDrawable(drawable);
         }
     }
+
     public void animateMomentumGravity(View v, float velocityX, float velocityY, FrameLayout rootLayout) {
         float screenHeight, screenWidth;
         if (rootLayout != null) {
             screenHeight = rootLayout.getHeight();
-            screenWidth  = rootLayout.getWidth();
+            screenWidth = rootLayout.getWidth();
         } else {
             // rootLayout null ise, ana view’in boyutlarını kullan
             screenHeight = v.getHeight();
-            screenWidth  = v.getWidth();
+            screenWidth = v.getWidth();
         }
         // Calculate projected landing position based on velocity
         float projectedX = v.getX() + (velocityX * 0.2f); // Multiply for "throw" effect
@@ -320,26 +353,38 @@ public class MiniFabs {
         animatorX.start();
         animatorY.start();
     }
+
     public FloatingActionButton[] getFabs() {
         return miniFabs;
     }
+
     public void takeSnapshot(Bitmap bmp) {
         if (snapshotListener != null && bmp != null) {
             snapshotListener.onSnapshot(bmp.copy(bmp.getConfig(), false));
         }
     }
+
     private MiniFabs.OnSnapshotListener snapshotListener;
+
     public interface OnSnapshotListener {
         void onSnapshot(Bitmap bitmap);
     }
+
     public void setOnSnapshotListener(MiniFabs.OnSnapshotListener listener) {
         this.snapshotListener = listener;
     }
+
     @SuppressLint("ClickableViewAccessibility")
     public void setupDraggableFAB(Context context, MiniFabs miniFabs, FloatingActionButton fabDraggable) {
         mAuth = FirebaseAuth.getInstance();
 
         fabDraggable.setOnTouchListener((v, event) -> {
+            // ✅ İSTEK: Menü açıkken sürükleme olmasın (kapalıyken draggable).
+            // Menü açıkken bu listener event’i ele almasın ki “açık menü” bozulmasın.
+            if (event.getActionMasked() == MotionEvent.ACTION_DOWN && MiniFabs.this.isExpanded) {
+                return false;
+            }
+
             switch (event.getActionMasked()) {
                 case MotionEvent.ACTION_DOWN:
                     // Başlangıç pozisyonlarını ve zaman damgasını ayarla
@@ -360,6 +405,9 @@ public class MiniFabs {
                     return true;
 
                 case MotionEvent.ACTION_MOVE:
+                    // ✅ Menü açıkken sürükleme yok
+                    if (MiniFabs.this.isExpanded) return false;
+
                     // Yeni pozisyonu hesapla
                     float newX = event.getRawX() + dX;
                     float newY = event.getRawY() + dY;
@@ -396,7 +444,7 @@ public class MiniFabs {
                                     // cameraView’den snapshot alıp listener'a ileten metodun:
                                     miniFabs.takeSnapshot(kurmes.reusableBitmap);
                                 } else {
-                                    handleLongClick(context,fabDraggable);
+                                    handleLongClick(context, fabDraggable);
                                 }
                             } catch (Exception e) {
                                 Log.w("Error", e.getMessage());
@@ -406,7 +454,7 @@ public class MiniFabs {
                         // Sürükleme sonrası momentumlu animasyon
                         float vx = velocityTracker.getXVelocity();
                         float vy = velocityTracker.getYVelocity();
-                        miniFabs.animateMomentumGravity(v, vx, vy,this.rootLayout);
+                        miniFabs.animateMomentumGravity(v, vx, vy, this.rootLayout);
                     }
                     return true;
 
@@ -415,6 +463,7 @@ public class MiniFabs {
             }
         });
     }
+
     @SuppressLint("ClickableViewAccessibility")
     public void setupDraggableOnly(Context context, FloatingActionButton fabDraggable) {
         mAuth = FirebaseAuth.getInstance();
@@ -433,6 +482,10 @@ public class MiniFabs {
 
                 switch (action) {
                     case MotionEvent.ACTION_DOWN:
+                        // ✅ İSTEK: Menü AÇIKKEN sürüklenebilir olmasın.
+                        // Bu listener ACTION_DOWN'u yakalamazsa, view'ın normal click/onClick akışı çalışabilir.
+                        if (MiniFabs.this.isExpanded) return false;
+
                         // Başlangıç pozisyonlarını ve zamanını kaydet
                         initialX = event.getRawX();
                         initialY = event.getRawY();
@@ -456,6 +509,9 @@ public class MiniFabs {
                         return true;
 
                     case MotionEvent.ACTION_MOVE:
+                        // ✅ Menü açıkken sürükleme yok
+                        if (MiniFabs.this.isExpanded) return false;
+
                         // Hareketi velocity tracker'a ekle
                         if (velocityTracker != null) {
                             velocityTracker.addMovement(event);
@@ -547,10 +603,10 @@ public class MiniFabs {
                         }
                     } else if (context instanceof com.kurmez.iyesi.umay.SokakActivity) {
                         // SokakActivity context'inde node oluşturma sürecini başlat
-                        ((com.kurmez.iyesi.umay.SokakActivity) context).startNodeCreationProcess();
+                        //-------------------Artık Çalışmıyor-------------------((com.kurmez.iyesi.umay.SokakActivity) context).startNodeCreationProcess();
                     } else {
                         // Diğer context'ler için genel uzun basış işlemi
-                        Log.e("Minifabs","Tanımlı değil");//handleLongClick(context, fab);
+                        Log.e("Minifabs", "Tanımlı değil");//handleLongClick(context, fab);
                     }
                 } catch (Exception e) {
                     Log.w("MiniFabs", "Uzun basış işlenirken hata: " + e.getMessage());
@@ -583,7 +639,8 @@ public class MiniFabs {
         }
         collapse(); // Mevcut collapse mantığını koru
     }
-    private void handleLongClick(Context context,FloatingActionButton fabDraggable) {
+
+    private void handleLongClick(Context context, FloatingActionButton fabDraggable) {
         animateButtonPress(fabDraggable);
         if (mAuth.getCurrentUser() != null) {
             context.startActivity(new Intent(context, Welcome.class));
@@ -591,13 +648,15 @@ public class MiniFabs {
             context.startActivity(new Intent(context, Login.class));
         }
     }
+
     /**
      * @return Şu anda seçili olan FloatingActionButton,
-     *         eğer hiç seçim yapılmadıysa null döner.
+     * eğer hiç seçim yapılmadıysa null döner.
      */
     public FloatingActionButton getSelectedFab() {
         return selectedFab;
     }
+
     private void animateButtonPress(FloatingActionButton fabDraggable) {
         fabDraggable.setEnabled(false);
 

@@ -24,7 +24,7 @@ import okhttp3.Response;
 
 public class WelcomeClient {
     private static final String TAG = "WelcomeClient";
-    private static final String CF_GET_PRIORITY = "https://us-central1-iyesi-e8d4f.cloudfunctions.net/getPriorityPets";
+    private static final String CF_GET_PRIORITY = "https://us-central1-iyesi-aef03.cloudfunctions.net/getPriorityPets";
 
     private String idToken;
     // Diğer gerekli değişkenler (adapter, companions vb.)

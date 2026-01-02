@@ -294,11 +294,11 @@ public class CFHelper {
         void onError(Throwable error);
     }
 
-    private void endpointAsync(@NonNull String path,
-                               @Nullable Map<String,String> query,
-                               @Nullable JSONObject body,
-                               boolean post,
-                               @NonNull EndpointCallback cb) {
+    public void endpointAsync(@NonNull String path,
+                              @Nullable Map<String, String> query,
+                              @Nullable JSONObject body,
+                              boolean post,
+                              @NonNull EndpointCallback cb) {
         new Thread(() -> {
             try {
                 JSONObject resp = post ? doPostJson(path, body) : doGetJson(path, query);
@@ -409,6 +409,20 @@ public class CFHelper {
                 main.post(() -> callback.onRoleFetched(null));
             }
         }).start();
+    }
+    public void findNearbyBaksi(String adminPath, int radiusM, double lat, double lng, EndpointCallback cb) {
+        JSONObject body = new JSONObject();
+        try {
+            body.put("adminPath", adminPath);
+            body.put("radiusM", radiusM);
+            body.put("lat", lat);
+            body.put("lng", lng);
+        } catch (JSONException e) {
+            cb.onError(e);
+            return;
+        }
+
+        endpointAsync("/findNearbyBaksi", null, body, /*post=*/true, cb);
     }
 
     // ---------- Messaging / Users ----------

@@ -22,10 +22,10 @@ android {
 
         // Cloud Functions URL config
         buildConfigField "String", "CF_PATH_SOULS_SEARCH", "\"/soulsSearch\""
-        buildConfigField "String", "CF_BASE_URL",           "\"https://us-central1-iyesi-e8d4f.cloudfunctions.net\""
+        buildConfigField "String", "CF_BASE_URL",           "\"https://us-central1-iyesi-aef03.cloudfunctions.net\""
         buildConfigField "String", "CF_URL_ENSURECLAIMS",   "\"https://ensureclaims-...a.run.app\""
         buildConfigField "String", "CF_URL_UID",            "\"https://uid-...a.run.app\""
-        buildConfigField "String", "CF_URL_APP_SEND",       "\"https://us-central1-iyesi-e8d4f.cloudfunctions.net/appSend\""
+        buildConfigField "String", "CF_URL_APP_SEND",       "\"https://us-central1-iyesi-aef03.cloudfunctions.net/appSend\""
 
         // Vector → PNG türetmeyi kapatıp destek kütüphanesini aç (mergeResources OOM’u düşürür)
         vectorDrawables {

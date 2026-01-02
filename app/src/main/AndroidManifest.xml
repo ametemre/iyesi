@@ -91,7 +91,7 @@
             android:value="@integer/google_play_services_version" />
         <meta-data
             android:name="com.google.android.geo.API_KEY"
-            android:value="AIzaSyBbU_M5LP-eJoDPJYcQaACCfDwuzGK8Cx4" />
+            android:value="AIzaSyD_2INpPwy-tjiYtgbU-09J5U8piH0a9z8" />
 
         <!-- Aktiviteler -->
         <activity android:name=".umay.SokakActivity" android:exported="false" />
@@ -112,6 +112,8 @@
         <activity android:name=".Login" android:exported="false" />
         <activity android:name=".umay.sahiplendirme.Founded" android:exported="false" />
         <activity android:name=".umay.sahiplendirme.Companion" android:exported="false" />
+        <activity android:name=".kayra.seed.SeedMockActivity" />
+
         <!-- QR derin bağlantılarını karşılayan aktivite -->
         <activity
             android:name=".kayra.QR.QRScannerActivity"

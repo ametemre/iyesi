@@ -60,7 +60,7 @@ public class Helpers {
     /* ======================= ROLE / ACCESS FLOW ======================= */
     public void resolveRoleAndFetch(Context ctx, Activity activity) {
         Log.i(L, "resolveRoleAndFetch() → GİRİŞ");
-        cf = new CFHelper(ctx,"iyesi-e8d4f",null);
+        cf = new CFHelper(ctx,"iyesi-aef03",null);
         new Thread(() -> cf.refreshRole(role -> {
             Log.d(L, "refreshRole() → ÇIKIŞ role=" + role);
             if (role != null) {
@@ -261,7 +261,7 @@ public class Helpers {
 
     /**
      * markerCreate uçuna uygun gövdeyi hazırlar ve gönderir.
-     * baseUrl ör.: "https://us-central1-iyesi-e8d4f.cloudfunctions.net"
+     * baseUrl ör.: "https://us-central1-iyesi-aef03.cloudfunctions.net"
      */
     public static void createMarkerOnCloud(
             Context ctx,

@@ -138,7 +138,7 @@ public class Companion extends AppCompatActivity {
      * ExplorePrivate ve Founded ile aynı şema.
      */
     private void fetchFromRTDB(String key, String node) {
-        FirebaseDatabase.getInstance("https://iyesi-e8d4f-default-rtdb.firebaseio.com")
+        FirebaseDatabase.getInstance("https://iyesi-aef03-default-rtdb.firebaseio.com")
                 .getReference("Pending/Companion")
                 .child(node)
                 .child(key)
@@ -188,7 +188,7 @@ public class Companion extends AppCompatActivity {
     /* ------------------------------ HTTP Fallback ----------------------------- */
 
     private void fetchFromEndpoint(String deviceId, String node) {
-        String url = "https://us-central1-iyesi-e8d4f.cloudfunctions.net/getCompanionByDevice"
+        String url = "https://us-central1-iyesi-aef03.cloudfunctions.net/getCompanionByDevice"
                 + "?deviceId=" + deviceId
                 + "&node=" + node;
 

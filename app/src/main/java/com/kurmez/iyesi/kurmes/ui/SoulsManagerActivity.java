@@ -17,7 +17,7 @@ import com.kurmez.iyesi.Login;
 import com.kurmez.iyesi.R;
 import com.kurmez.iyesi.kayra.Classes.Souls.Soul;
 import com.kurmez.iyesi.kurmes.seed.SeedService;
-import com.kurmez.iyesi.kurmes.utilities.helper.net.CFClient;
+import com.kurmez.iyesi.kurmes.utilities.clients.CFClient;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -28,7 +28,7 @@ import okhttp3.Response;
 
 public class SoulsManagerActivity extends AppCompatActivity {
 
-    //private static final String CF_BASE_URL = "https://us-central1-iyesi-e8d4f.cloudfunctions.net";
+    //private static final String CF_BASE_URL = "https://us-central1-iyesi-aef03.cloudfunctions.net";
     private static final String PATH_LIST_MY    = "/listMySouls";
     private static final String PATH_CREATE     = "/createSoul"; // or /souls
     private static final String PATH_UPDATE_ID  = "/updateSoulById?id=";

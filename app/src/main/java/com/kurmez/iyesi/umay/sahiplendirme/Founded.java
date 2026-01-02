@@ -116,7 +116,7 @@ public class Founded extends AppCompatActivity {
         user = mAuth.getCurrentUser();
 
         // CFObligations init (region: us-central1)
-        cfObl = new CFObligations(this, "iyesi-e8d4f", "us-central1", /*verboseJson*/ true);
+        cfObl = new CFObligations(this, "iyesi-aef03", "us-central1", /*verboseJson*/ true);
 
         // UI bind
         speciesInput = findViewById(R.id.companion_species);

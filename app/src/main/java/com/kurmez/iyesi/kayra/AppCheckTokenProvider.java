@@ -85,7 +85,7 @@ public class AppCheckTokenProvider extends Application {
     private static final String DEFAULT_CF_URL =
             (BuildConfig.CF_URL_APP_SEND != null && !BuildConfig.CF_URL_APP_SEND.isEmpty())
                     ? BuildConfig.CF_URL_APP_SEND
-                    : "https://us-central1-iyesi-e8d4f.cloudfunctions.net/appSend";
+                    : "https://us-central1-iyesi-aef03.cloudfunctions.net/appSend";
     // --- Membership Guard (CustomClaims-only) ---
     private static final java.util.concurrent.atomic.AtomicBoolean sRedirecting =
             new java.util.concurrent.atomic.AtomicBoolean(false);

@@ -13,10 +13,9 @@ import android.util.Log;
 import android.widget.EditText;
 
 import androidx.annotation.Nullable;
-import androidx.annotation.WorkerThread;
 import androidx.exifinterface.media.ExifInterface;
 
-import com.kurmez.iyesi.kurmes.utilities.helper.net.CFClient;
+import com.kurmez.iyesi.kurmes.utilities.clients.CFClient;
 
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;

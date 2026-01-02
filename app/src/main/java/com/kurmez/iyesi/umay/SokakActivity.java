@@ -1,984 +1,807 @@
 package com.kurmez.iyesi.umay;
+import static com.kurmez.iyesi.umay.sokak.Harita.hasLocationPermission;
+
+import com.google.android.gms.maps.model.BitmapDescriptorFactory;
+import com.google.android.gms.maps.model.MarkerOptions;
+import com.google.android.material.floatingactionbutton.FloatingActionButton;
+import com.kurmez.iyesi.kurmes.Kurmes;
+import com.kurmez.iyesi.kurmes.utilities.MiniFabs;
 
 import android.Manifest;
 import android.annotation.SuppressLint;
 import android.content.Intent;
-import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
-import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
-import android.graphics.Color;
+import android.location.Geocoder;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
 import android.view.MotionEvent;
 import android.view.View;
-import android.view.animation.Animation;
-import android.view.animation.AnimationUtils;
-import android.widget.AdapterView;
-import android.widget.ArrayAdapter;
 import android.widget.ImageButton;
 import android.widget.LinearLayout;
+import android.widget.ProgressBar;
 import android.widget.Spinner;
 import android.widget.Toast;
 
-import android.text.TextUtils;
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+import androidx.annotation.RequiresPermission;
+import androidx.core.app.ActivityCompat;
+import androidx.fragment.app.FragmentActivity;
 
-import com.google.android.gms.maps.model.BitmapDescriptor;
-import com.google.android.gms.maps.model.BitmapDescriptorFactory;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.Marker;
-import com.google.android.gms.maps.model.MarkerOptions;
-import com.google.android.libraries.places.api.Places;
-import com.google.android.material.floatingactionbutton.FloatingActionButton;
-import com.google.android.material.textfield.TextInputEditText;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
-import com.kurmez.iyesi.Login;
 import com.kurmez.iyesi.R;
 import com.kurmez.iyesi.kayra.Classes.Nodes.ui.NodeDetailsBottomSheet;
-import com.kurmez.iyesi.kurmes.Kurmes;
-import com.kurmez.iyesi.kurmes.utilities.MiniFabs;
-import com.kurmez.iyesi.kurmes.utilities.helper.Actions;
 import com.kurmez.iyesi.kurmes.utilities.helper.BaksiHelper;
 import com.kurmez.iyesi.kurmes.utilities.helper.CFHelper;
 import com.kurmez.iyesi.umay.sokak.Harita;
-import com.kurmez.iyesi.umay.sokak.Managers.LocationManager;
+import com.kurmez.iyesi.umay.sokak.Managers.NodeManager;
 
-import androidx.annotation.RequiresPermission;
-import androidx.appcompat.app.AlertDialog;
-import androidx.fragment.app.FragmentActivity;
+import org.json.JSONArray;
+import org.json.JSONObject;
 
-import java.util.ArrayList;
-import java.util.HashMap;
+import java.io.IOException;
+import java.text.Normalizer;
 import java.util.List;
-import java.util.Map;
+import java.util.Locale;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
-import com.google.firebase.firestore.GeoPoint;
+import android.location.Address;
+import android.location.Geocoder;
+// imports
+import com.google.android.gms.location.FusedLocationProviderClient;
+import com.google.android.gms.location.LocationServices;
+/**
+ * SokakActivity (Draft / Roadmap embedded)
+ *
+ * ===========================
+ *  ROLE → DEFAULT LAYER POLİTİKASI
+ * ===========================
+ * - Tengri: Sorumluluğundaki yerler ∩ "son birkaç gün" eklenenler
+ * - İye: Sadece sorumluluğundaki yerler
+ * - Körmöz: Yakındaki veterinerler + acil yardım istenen alanlar
+ * - Ülgen: 1) bakımı geciken alanlar, yoksa 2) acil yardım alanları, yoksa 3) 5km yakınındaki tüm alanlar
+ * - Anonim: Sadece yakındaki veterinerler (Layer UI kapalı)
+ *
+ * ===========================
+ *  TODO - DATA ETİKETLEME / SCHEMA NOTLARI
+ * ===========================
+ * 1) Node dokümanı (örn. "nodes"):
+ *  - id (docId)
+ *  - type: "Yuva"|"Besleme"|"Nakil"|"Bolge"|...
+ *  - adminPath: String (standart path)
+ *  - location.lat/lng/geohash
+ *  - createdAt, createdByUid
+ *  - responsibleUid OR responsibleUids[]
+ *  - emergency.isActive, emergency.requestedAt
+ *  - care.lastCareAt, care.careIntervalHours
+ *
+ * 2) Baksi (Veteriner) dokümanı (Baksi.js modeline göre):
+ *  - /Baksi/{countryKey}/Cities/{cityKey}/Baksi/{vetUid}
+ *  - adminPath: Baksi.js buildAdminPath ile birebir
+ *  - isActive
+ *  - location.lat/lng/geohash
+ *  - phone, website, place_id, updatedAt/createdAt
+ *
+ * 3) "adminPath yoksa yaz" akışı:
+ *  - App: reverseGeocode -> (country, city, district) + normalize -> adminPath
+ *  - Firestore: BaksiUpdates/adminPathDocId(adminPath) var mı?
+ *  - Yoksa: CloudFunction (Baksi.js) updateBaksi tetikle (rate-limit + lock)
+ *  - Sonra: Firestore’dan Baksi yükle
+ */
 
-public class SokakActivity extends FragmentActivity implements NodeDetailsBottomSheet.Host, Harita.LockModeListener, Harita.NodeCreationListener {
-    private String TAG = "SokakActivity";
-    private FloatingActionButton selectedFab = null;
-    public Kurmes kurmes;
-    private LocationManager locationManager;
-    private BaksiHelper baksiHelper;
-    private int baksiInitRetryCount = 0;
-    private static final int MAX_BAKSI_INIT_RETRY = 5;
-    // Simplified marker mode state
-    private boolean isMarkerMode = false;
+public class SokakActivity extends FragmentActivity
+        implements NodeDetailsBottomSheet.Host,
+        Harita.LockModeListener,
+        Harita.NodeCreationListener {
+    private CFHelper cfHelper;
+    private static final String TAG = "SokakActivity";
+    private static final int REQ_LOCATION = 1001;
+    private static final String CF_PROJECT_ID = "iyesi-aef03";
+    private static final String CF_REGION = "us-central1";
+    @Nullable
+    private String lastKnownAdminPath = null; // TODO: reverseGeocode ile set edilecek
+    private final ExecutorService geoExec = Executors.newSingleThreadExecutor();
+    private volatile boolean resolvingAdminPath = false;
+    private FusedLocationProviderClient fusedClient;
 
-    // FAB related variables
-    private View lockModeOverlay;
-    private boolean isLockedMode = false;
-    private MiniFabs miniFabs;
-    private FloatingActionButton mainFab, beslemeFab, bolgeFab, nakilFab, soundFab;
+    private interface AdminPathCb { void onResult(@Nullable String adminPath); }
+    // ===== Roles =====
+    private enum Role { TENGRI, ULGEN, KORMOZ, IYE, AGAC, ANON }
 
-    // Spinner related
+    // ===== Layers =====
+    private enum Layer {
+        VETS_NEARBY,
+        EMERGENCY_AREAS,
+        RESPONSIBLE_AREAS,
+        RESPONSIBLE_NEWLY_ADDED,
+        OVERDUE_CARE_AREAS,
+        ALL_WITHIN_5KM
+    }
+
+    // ===== State =====
+    private Role currentRole = Role.ANON;
+    private LatLng lastKnownLocation = null;
+
+    // ===== UI =====
+    private ProgressBar progressBar;
+    private View lockOverlay;
+    private View mapOverlay;
+    private LinearLayout spinnerContainer;
+
     private Spinner spinner1, spinner2, spinner3, spinner4, spinner5;
     private ImageButton clear1, clear2, clear3, clear4, clear5;
     private ImageButton toggle1, toggle2, toggle3, toggle4, toggle5;
-    private final String[] levels = {"ADM5", "ADM4", "ADM3", "ADM2", "ADM1", "ADM0", "OSM"};
 
-    // Harita instance
+    // ===== Map / Helpers =====
     private Harita harita;
-    private View touchOverlay;
-    // Animation variables
-    private Animation fabOpenAnim, fabCloseAnim, rotateForwardAnim, rotateBackwardAnim;
+    private BaksiHelper baksiHelper;
 
-    private LatLng lastKnownLocation;
-    private static final int LOCATION_PERMISSION_REQUEST_CODE = 1001;
+    // ===== MiniFabs =====
+    private MiniFabs miniFabs;
+    private View ulgenFab;
+    private View cobanFab;
+    private View acilFab;
+    private FloatingActionButton soundFab;
+    private FloatingActionButton mainFab;
+    private boolean isLockedMode = false;
 
+    @RequiresPermission(allOf = {Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION})
     @SuppressLint("ClickableViewAccessibility")
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_sokak);
-        Log.d(TAG, "=== SOKAK ACTIVITY BAŞLANGIÇ ===");
 
-        if (!ensureLoggedInOrGoLogin()) return;
+        bindViews();
+        initSpinnerUiDraftOnly();
+        initMapOverlayRouting();
+        initMiniFabs();
 
-        // Places API başlatma
-        initializePlacesAPI();
-        initializeHarita();
-        initializeSpinners();
-        initializeFABs();
-        initializeLockModeOverlay();
-
-        touchOverlay = findViewById(R.id.map_overlay);
-        if (touchOverlay != null) {
-            touchOverlay.setOnTouchListener(null);
-            touchOverlay.setClickable(false);
-            touchOverlay.setVisibility(View.GONE);
-        }
-        Log.d(TAG, "=== SOKAK ACTIVITY BAŞLANGIÇ TAMAMLANDI ===");
-    }
-
-    private void initializePlacesAPI() {
-        if (!Places.isInitialized()) {
-            String apiKey = null;
-            try {
-                ApplicationInfo ai = getPackageManager().getApplicationInfo(getPackageName(), PackageManager.GET_META_DATA);
-                Bundle bundle = ai.metaData;
-                apiKey = bundle.getString("com.google.android.geo.API_KEY");
-                Log.d(TAG, "Manifest'ten API key alındı: " + (apiKey != null ? "EVET" : "HAYIR"));
-            } catch (Exception e) {
-                Log.e(TAG, "Manifest'ten API key alınamadı: " + e.getMessage());
-            }
-
-            if (apiKey == null || apiKey.isEmpty()) {
-                Log.e(TAG, "Google Places API key bulunamadı!");
-                Toast.makeText(this, "API key yapılandırması eksik", Toast.LENGTH_LONG).show();
-                return;
-            }
-
-            try {
-                Places.initialize(getApplicationContext(), apiKey);
-                Log.d(TAG, "Places başarıyla initialize edildi");
-            } catch (Exception e) {
-                Log.e(TAG, "Places initialize hatası: " + e.getMessage());
-            }
-        } else {
-            Log.d(TAG, "Places zaten initialize edilmiş");
-        }
-    }
-
-    private void initializeHarita() {
-        Log.d(TAG, "Harita başlatılıyor...");
+        // Harita wrapper
         harita = new Harita(this);
         harita.setLockModeListener(this);
         harita.setNodeCreationListener(this);
+        fusedClient = LocationServices.getFusedLocationProviderClient(this);
+        fetchLastKnownLocation(loc -> {
+            lastKnownLocation = loc;
 
-        // LocationManager'ı başlat - EKLENDİ
-        locationManager = new LocationManager(this);
+            resolveAdminPathFromLocation(loc, adminPath -> {
+                lastKnownAdminPath = adminPath;
 
-        setupMapWithMarkers();
-    }
-
-    private void initializeBaksiHelper() {
-        Log.d(TAG, "BaksiHelper başlatılıyor...");
-
-        if (harita == null || harita.getNodeManager() == null) {
-            if (baksiInitRetryCount < MAX_BAKSI_INIT_RETRY) {
-                baksiInitRetryCount++;
-                Log.w(TAG, "NodeManager hazır değil, tekrar deneme " + baksiInitRetryCount + "/" + MAX_BAKSI_INIT_RETRY);
-                new Handler(Looper.getMainLooper()).postDelayed(this::initializeBaksiHelper, 2000);
-            } else {
-                Log.e(TAG, "BaksiHelper başlatılamadı: Max deneme aşıldı");
-                Toast.makeText(this, "Harita bileşenleri yüklenemedi", Toast.LENGTH_LONG).show();
-            }
-            return;
-        }
-
-        baksiInitRetryCount = 0;
-
-        try {
-            baksiHelper = new BaksiHelper(this, harita.getNodeManager(), new BaksiHelper.BaksiHelperListener() {
-                @Override
-                public void onVetsLoaded(int count, double radius) {
-                    runOnUiThread(() -> {
-                        Log.d(TAG, "BaksiHelper: " + count + " veteriner bulundu, yarıçap: " + radius + "m");
-                        if (count > 0) {
-                            String radiusText = radius + "m";
-                            if (radius >= 1000) {
-                                radiusText = String.format("%.1fkm", radius / 1000.0);
-                            }
-                            Toast.makeText(SokakActivity.this, count + " veteriner bulundu (" + radiusText + ")", Toast.LENGTH_SHORT).show();
-                        } else {
-                            suggestWiderSearch(radius);
-                        }
-                    });
+                if (lastKnownAdminPath == null) {
+                    Toast.makeText(this, "AdminPath üretilemedi (geocoder).", Toast.LENGTH_LONG).show();
+                    return;
                 }
 
-                @Override
-                public void onVetsLoadFailed(String error) {
-                    runOnUiThread(() -> {
-                        Log.e(TAG, "BaksiHelper hatası: " + error);
-
-                        // PERMISSION_DENIED hatası durumunda tekrar deneme yapma
-                        if (error.contains("PERMISSION_DENIED") || error.contains("insufficient permissions")) {
-                            Toast.makeText(SokakActivity.this,
-                                    "Veteriner verilerine erişim izniniz yok. Lütfen yetkilendirme ayarlarını kontrol edin.",
-                                    Toast.LENGTH_LONG).show();
-                            return; // Daha fazla işlem yapma
-                        }
-
-                        // Diğer hatalar için
-                        if (!error.contains("Firebase") && !error.contains("permission")) {
-                            Toast.makeText(SokakActivity.this, "Veteriner yükleme hatası: " + error, Toast.LENGTH_LONG).show();
-                        }
-                    });
-                }
-
-                @Override
-                public void onVetMarkerAdded(Marker marker) {
-                    Log.d(TAG, "BaksiHelper: Veteriner marker eklendi: " + marker.getTitle());
-                }
-
-                @Override
-                public void onSearchRadiusSuggested(double nextRadius, String radiusLabel) {
-                    runOnUiThread(() -> {
-                        showRadiusSearchDialog(nextRadius, radiusLabel);
-                    });
-                }
+                applyRoleDefaultLayers(currentRole, lastKnownLocation);
             });
-            Log.d(TAG, "BaksiHelper başarıyla başlatıldı");
-        } catch (Exception e) {
-            Log.e(TAG, "BaksiHelper başlatma hatası: " + e.getMessage(), e);
-            runOnUiThread(() -> {
-                Toast.makeText(SokakActivity.this,
-                        "BaksiHelper başlatılamadı: " + e.getMessage(),
-                        Toast.LENGTH_LONG).show();
-            });
-        }
-    }
-    private void loadNearbyBaksiVetsFromFirestore(LatLng userLocation, double radiusInMeters) {
-        if (userLocation == null) {
-            Log.w(TAG, "Kullanıcı konumu yok, veteriner yüklenemedi");
-            return;
-        }
+        });
 
-        com.google.firebase.firestore.FirebaseFirestore db = com.google.firebase.firestore.FirebaseFirestore.getInstance();
-        com.google.firebase.firestore.GeoPoint geoPoint = new com.google.firebase.firestore.GeoPoint(
-                userLocation.latitude, userLocation.longitude
-        );
+        // Auth/Role zinciri (anon izinli)
+        ensureUserOrAnonymousThenResolveRole(role -> {
+            currentRole = role;
+            applyLayerUiAccessPolicy(currentRole);
 
-        // Yakınlık sorgusu (GeoFire veya manuel sınır kutusu ile)
-        double lat = userLocation.latitude;
-        double lng = userLocation.longitude;
-
-        // Basit sınır kutusu (bounding box) ile yaklaşık sorgu
-        double distanceKm = radiusInMeters / 1000.0;
-        double earthRadius = 6371; // km
-        double latDelta = (distanceKm / earthRadius) * (180 / Math.PI);
-        double lngDelta = latDelta / Math.cos(Math.toRadians(lat));
-
-        com.google.firebase.firestore.GeoPoint southwest = new com.google.firebase.firestore.GeoPoint(
-                lat - latDelta, lng - lngDelta
-        );
-        com.google.firebase.firestore.GeoPoint northeast = new com.google.firebase.firestore.GeoPoint(
-                lat + latDelta, lng + lngDelta
-        );
-        db.collection("Bakşi")
-                .whereEqualTo("hasClinic", true) // sadece klinikler
-                .whereGreaterThanOrEqualTo("location.lat", southwest.getLatitude())
-                .whereLessThanOrEqualTo("location.lat", northeast.getLatitude())
-                .whereGreaterThanOrEqualTo("location.lng", southwest.getLongitude())
-                .whereLessThanOrEqualTo("location.lng", northeast.getLongitude())
-                .get()
-                .addOnSuccessListener(queryDocumentSnapshots -> {
-                    List<Marker> addedMarkers = new ArrayList<>();
-
-                    for (com.google.firebase.firestore.DocumentSnapshot doc : queryDocumentSnapshots) {
-                        try {
-                            Map<String, Object> locationMap = (Map<String, Object>) doc.get("location");
-                            if (locationMap == null) continue;
-
-                            Double latDoc = (Double) locationMap.get("lat");
-                            Double lngDoc = (Double) locationMap.get("lng");
-                            if (latDoc == null || lngDoc == null) continue;
-
-                            String name = doc.getString("username");
-                            if (name == null || name.isEmpty()) name = "Veteriner Kliniği";
-
-                            Boolean verified = doc.getBoolean("verified");
-                            Long colorLong = doc.getLong("markerColor");
-                            int markerColor = (colorLong != null) ? colorLong.intValue() : 0xFF0000FF; // mavi varsayılan
-
-                            LatLng vetLocation = new LatLng(latDoc, lngDoc);
-
-                            // Mesafe kontrolü (bounding box sonrası kesin kontrol)
-                            double distance = calculateDistance(userLocation, vetLocation);
-                            if (distance > radiusInMeters) continue;
-
-                            // Özel ikon (örneğin mavi haç)
-                            BitmapDescriptor icon = getVeterinerIcon(markerColor, verified == Boolean.TRUE);
-
-                            MarkerOptions markerOptions = new MarkerOptions()
-                                    .position(vetLocation)
-                                    .title(name)
-                                    .snippet("Veteriner Kliniği" + (verified == Boolean.TRUE ? " ✓ Doğrulanmış" : ""))
-                                    .icon(icon);
-
-                            Marker marker = harita.getGoogleMap().addMarker(markerOptions);
-                            if (marker != null) {
-                                marker.setTag(doc.getId()); // place_id veya doc id
-                                addedMarkers.add(marker);
-                            }
-
-                        } catch (Exception e) {
-                            Log.e(TAG, "Veteriner marker eklenirken hata: " + doc.getId(), e);
-                        }
-                    }
-
-                    Log.d(TAG, addedMarkers.size() + " veteriner markerı eklendi (" + radiusInMeters + "m)");
-                    runOnUiThread(() -> {
-                        if (addedMarkers.isEmpty()) {
-                            suggestWiderSearch(radiusInMeters / 1000.0);
-                        } else {
-                            Toast.makeText(this, addedMarkers.size() + " veteriner bulundu", Toast.LENGTH_SHORT).show();
-                        }
-                    });
-
-                })
-                .addOnFailureListener(e -> {
-                    Log.e(TAG, "Bakşi veterinerleri yüklenemedi", e);
-                    runOnUiThread(() -> Toast.makeText(this, "Veterinerler yüklenemedi", Toast.LENGTH_SHORT).show());
+            // Map hazır + konum al + role default layer yükle
+            waitMapReadyThen(() -> ensureLocationPermissionThen(() -> {
+                fetchLastKnownLocation(loc -> {
+                    lastKnownLocation = loc;
+                    applyRoleDefaultLayers(currentRole, lastKnownLocation);
                 });
+            }));
+        });
     }
-    /**
-     * Daha geniş arama öneren dialog
-     */
-    private void suggestWiderSearch(double currentRadius) {
-        if (currentRadius == 150) {
-            // 150m'de bulunamadı, 1.5km öner
-            showRadiusSearchDialog(1500, "1.5km");
-        } else if (currentRadius == 1500) {
-            // 1.5km'de bulunamadı, 15km öner
-            showRadiusSearchDialog(15000, "15km");
-        } else {
-            // 15km'de de bulunamadı
-            Toast.makeText(this, "15km çapında da veteriner bulunamadı", Toast.LENGTH_LONG).show();
-        }
+    private static String normalizeCode(String value) {
+        if (value == null) return "";
+        String s = value.trim().toLowerCase(Locale.ROOT);
+
+        // TR karakter normalize (Baksi.js ile aynı mantık) :contentReference[oaicite:4]{index=4}
+        s = s.replace("ı","i").replace("ğ","g").replace("ü","u")
+                .replace("ş","s").replace("ö","o").replace("ç","c");
+
+        // diacritics temizle (opsiyonel ama iyi)
+        s = Normalizer.normalize(s, Normalizer.Form.NFD)
+                .replaceAll("\\p{InCombiningDiacriticalMarks}+", "");
+
+        // boşluk/özel -> underscore
+        s = s.replaceAll("[^a-z0-9]+", "_")
+                .replaceAll("^_+|_+$", "");
+
+        if (s.length() > 60) s = s.substring(0, 60);
+        return s;
     }
-    private double calculateDistance(LatLng a, LatLng b) {
-        double earthRadius = 6371000; // metre
-        double dLat = Math.toRadians(b.latitude - a.latitude);
-        double dLng = Math.toRadians(b.longitude - a.longitude);
-        double sindLat = Math.sin(dLat / 2);
-        double sindLng = Math.sin(dLng / 2);
-        double va1 = Math.pow(sindLat, 2) + Math.pow(sindLng, 2)
-                * Math.cos(Math.toRadians(a.latitude)) * Math.cos(Math.toRadians(b.latitude));
-        double va2 = 2 * Math.atan2(Math.sqrt(va1), Math.sqrt(1 - va1));
-        return earthRadius * va2;
+    private static String buildAdminPath(String countryRaw, String cityRaw) {
+        String countryKey = normalizeCode(countryRaw);
+        String cityKey = normalizeCode(cityRaw);
+        if (countryKey.isEmpty() || cityKey.isEmpty()) return null;
+
+        // CF’nin beklediği format :contentReference[oaicite:5]{index=5}
+        return "Baksi/" + countryKey + "/Cities/" + cityKey;
     }
 
-    private BitmapDescriptor getVeterinerIcon(int colorArgb, boolean verified) {
-        // Check if the color is primarily blue/black (red and green components are 0)
-        if (Color.red(colorArgb) == 0 && Color.green(colorArgb) == 0) {
-            // Use default blue marker
-            return BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_BLUE);
-        } else {
-            // Create custom bitmap for other colors
-            Bitmap bitmap = createVeterinerBitmap(colorArgb, verified);
-            return BitmapDescriptorFactory.fromBitmap(bitmap);
+    private static String firstNonEmpty(String... xs) {
+        if (xs == null) return null;
+        for (String x : xs) {
+            if (x != null) {
+                String t = x.trim();
+                if (!t.isEmpty()) return t;
+            }
         }
+        return null;
     }
+    private void resolveAdminPathFromLocation(@NonNull LatLng loc, @NonNull AdminPathCb cb) {
+        if (resolvingAdminPath) return;
+        resolvingAdminPath = true;
 
-    // Daha güzel ikon için (opsiyonel)
-    private Bitmap createVeterinerBitmap(int color, boolean verified) {
-        // Burada drawable'dan bir ikon alıp renklendirebilirsin
-        // Örnek: R.drawable.ic_veteriner
-        return BitmapFactory.decodeResource(getResources(), R.drawable.map_marker);
-    }
-    /**
-     * Yarıçap arama dialog'u göster
-     */
-    private void showRadiusSearchDialog(double radius, String radiusLabel) {
-        try {
-            AlertDialog.Builder builder = new AlertDialog.Builder(this);
-            builder.setTitle("Arama Genişletilsin mi?")
-                    .setMessage(radiusLabel + " çapında arama yapılsın mı?")
-                    .setPositiveButton("Evet", (dialog, which) -> {
-                        if (lastKnownLocation != null && baksiHelper != null) {
-                            Log.d(TAG, radiusLabel + " çapında arama başlatılıyor");
-                            baksiHelper.searchVetsInRadius(lastKnownLocation, radius);
-                        } else {
-                            Toast.makeText(this, "Konum bilgisi mevcut değil", Toast.LENGTH_SHORT).show();
-                        }
-                    })
-                    .setNegativeButton("Hayır", (dialog, which) -> {
-                        Toast.makeText(this, "Arama " + radiusLabel + " ile sınırlandı", Toast.LENGTH_SHORT).show();
-                    })
-                    .setCancelable(true)
-                    .setOnCancelListener(dialog -> {
-                        Toast.makeText(this, "Arama iptal edildi", Toast.LENGTH_SHORT).show();
-                    })
-                    .show();
-        } catch (Exception e) {
-            Log.e(TAG, "Dialog gösterim hatası: " + e.getMessage());
-        }
-    }
+        geoExec.execute(() -> {
+            String out = null;
+            try {
+                if (!Geocoder.isPresent()) {
+                    // Emulator/cihazda geocoder yoksa null döneriz (sonra CF ile çözeriz)
+                    out = null;
+                } else {
+                    Geocoder geocoder = new Geocoder(this, new Locale("tr", "TR"));
+                    List<Address> list = geocoder.getFromLocation(loc.latitude, loc.longitude, 1);
+                    if (list != null && !list.isEmpty()) {
+                        Address a = list.get(0);
 
-    private void initializeLockModeOverlay() {
-        lockModeOverlay = findViewById(R.id.lock_mode_overlay);
-        if (lockModeOverlay == null) {
-            lockModeOverlay = new View(this);
-            lockModeOverlay.setBackgroundColor(Color.TRANSPARENT);
-        }
+                        // country: mümkünse COUNTRY CODE (TR) → normalize => "tr"
+                        String country = firstNonEmpty(a.getCountryCode(), a.getCountryName());
 
-        View touchOverlay = findViewById(R.id.map_overlay);
-        if (touchOverlay != null) {
-            touchOverlay.setOnTouchListener((v, event) -> {
-                if (isMarkerMode && harita != null) {
-                    return harita.handleOverlayTouch(event);
+                        // city: Türkiye’de çoğu zaman AdminArea = il (Adana, İstanbul)
+                        String city = firstNonEmpty(a.getAdminArea(), a.getSubAdminArea(), a.getLocality());
+
+                        out = buildAdminPath(country, city);
+                    }
                 }
-                return false;
+            } catch (IOException ignored) {
+                out = null;
+            }
+
+            final String result = out;
+            runOnUiThread(() -> {
+                resolvingAdminPath = false;
+                cb.onResult(result);
             });
+        });
+    }
+
+    // =========================
+    // UI Binding
+    // =========================
+
+    private void bindViews() {
+        progressBar = findViewById(R.id.progress_bar);
+        lockOverlay = findViewById(R.id.lock_mode_overlay);
+        mapOverlay = findViewById(R.id.map_overlay);
+        spinnerContainer = findViewById(R.id.spinner_container);
+
+        spinner1 = findViewById(R.id.spinner_level_1);
+        spinner2 = findViewById(R.id.spinner_level_2);
+        spinner3 = findViewById(R.id.spinner_level_3);
+        spinner4 = findViewById(R.id.spinner_level_4);
+        spinner5 = findViewById(R.id.spinner_level_5);
+
+        clear1 = findViewById(R.id.btn_clear_1);
+        clear2 = findViewById(R.id.btn_clear_2);
+        clear3 = findViewById(R.id.btn_clear_3);
+        clear4 = findViewById(R.id.btn_clear_4);
+        clear5 = findViewById(R.id.btn_clear_5);
+
+        toggle1 = findViewById(R.id.btn_toggle_1);
+        toggle2 = findViewById(R.id.btn_toggle_2);
+        toggle3 = findViewById(R.id.btn_toggle_3);
+        toggle4 = findViewById(R.id.btn_toggle_4);
+        toggle5 = findViewById(R.id.btn_toggle_5);
+
+        mainFab = findViewById(R.id.main_fab);
+        ulgenFab = findViewById(R.id.ülgen_fab);
+        cobanFab = findViewById(R.id.coban_fab);
+        acilFab = findViewById(R.id.acil_fab);
+        soundFab = findViewById(R.id.sound_fab);
+
+        // başlangıç
+        setProgressVisible(false);
+        lockOverlay.setVisibility(View.GONE);
+    }
+
+    /**
+     * Spinner UI şu an referans (taslak).
+     * TODO: Layer seçimini bu spinner/row yapısına bağla (multi-layer enable/disable).
+     */
+    private void initSpinnerUiDraftOnly() {
+        View.OnClickListener clearNoop = v -> Toast.makeText(this, "TODO: Clear layer", Toast.LENGTH_SHORT).show();
+        View.OnClickListener toggleNoop = v -> Toast.makeText(this, "TODO: Toggle layer", Toast.LENGTH_SHORT).show();
+
+        clear1.setOnClickListener(clearNoop);
+        clear2.setOnClickListener(clearNoop);
+        clear3.setOnClickListener(clearNoop);
+        clear4.setOnClickListener(clearNoop);
+        clear5.setOnClickListener(clearNoop);
+
+        toggle1.setOnClickListener(toggleNoop);
+        toggle2.setOnClickListener(toggleNoop);
+        toggle3.setOnClickListener(toggleNoop);
+        toggle4.setOnClickListener(toggleNoop);
+        toggle5.setOnClickListener(toggleNoop);
+    }
+
+    @SuppressLint("ClickableViewAccessibility")
+    private void initMapOverlayRouting() {
+        // Harita "marker placement / reposition" modundayken overlay dokunmayı tüketir.
+        mapOverlay.setOnTouchListener((v, event) -> harita != null && harita.handleOverlayTouch(event));
+        // lockOverlay (kilit mod) sadece “bloklayıcı perde” gibi davranır.
+        lockOverlay.setOnTouchListener((v, event) -> {
+            // kilitliyken map etkileşimini engelle
+            return true;
+        });
+    }
+
+    private void initMiniFabs() {
+        // MiniFabs: main_fab tıklanınca kapanıp mini fab’lar açılır (animasyon MiniFabs içinde)
+        // Sürükleme: mainFab kapalıyken sürüklenebilir; açılınca mainFab zaten GONE olacağı için sürükleme fiilen devre dışı kalır.
+        int[] miniFabIds = new int[]{R.id.ülgen_fab, R.id.coban_fab, R.id.acil_fab};
+        miniFabs = new MiniFabs(this, mainFab, soundFab, miniFabIds);
+
+        miniFabs.setupDraggableOnly(this, mainFab);
+
+        ulgenFab.setOnClickListener(v -> {
+            // TODO(ULGEN FAB): Ülgen aksiyon menüsü / overdue zinciri / admin işleri
+            Toast.makeText(this, "Ülgen FAB (TODO)", Toast.LENGTH_SHORT).show();
+            miniFabs.toggleWithAnimation();
+            startActivity(new Intent(this, Welcome.class));
+        });
+
+        cobanFab.setOnClickListener(v -> {
+            // TODO(COBAN FAB): Harita kilit mod / yerleştirme modu gibi bir aksiyon
+            toggleLockMode();
+            miniFabs.toggleWithAnimation();
+            startActivity(new Intent(this, Kurmes.class));
+        });
+
+        acilFab.setOnClickListener(v -> {
+            // TODO(ACIL FAB): Acil yardım layer/aksiyon
+            Toast.makeText(this, "Acil FAB (TODO)", Toast.LENGTH_SHORT).show();
+            miniFabs.toggleWithAnimation();
+        });
+
+        soundFab.setOnClickListener(v -> {
+            // TODO(SOUND): sessize al / bildirim sesi vs
+            Toast.makeText(this, "Sound (TODO)", Toast.LENGTH_SHORT).show();
+        });
+    }
+
+    private void toggleLockMode() {
+        isLockedMode = !isLockedMode;
+        onLockModeChanged(isLockedMode);
+    }
+
+    // MiniFabs dışına tıklanınca kapanma desteği
+    @Override
+    public boolean dispatchTouchEvent(MotionEvent ev) {
+        if (miniFabs != null) {
+            miniFabs.handleOutsideTouch(ev);
+        }
+        return super.dispatchTouchEvent(ev);
+    }
+
+    // =========================
+    // Auth + Role
+    // =========================
+
+    private interface RoleCallback { void onRole(Role role); }
+
+    private void ensureUserOrAnonymousThenResolveRole(RoleCallback cb) {
+        FirebaseAuth auth = FirebaseAuth.getInstance();
+        FirebaseUser user = auth.getCurrentUser();
+
+        if (user == null) {
+            // Anon sign-in (rules auth istiyorsa işe yarar; anon kullanıcıya UI kapatacağız)
+            auth.signInAnonymously()
+                    .addOnSuccessListener(r -> resolveRoleFromUser(auth.getCurrentUser(), cb))
+                    .addOnFailureListener(e -> {
+                        Log.w(TAG, "Anon sign-in failed: " + e.getMessage());
+                        cb.onRole(Role.ANON);
+                    });
+        } else {
+            resolveRoleFromUser(user, cb);
         }
     }
 
-    public void createYuvaMarker(LatLng location) {
-        CFHelper cf = new CFHelper(this, "iyesi-e8d4f", "us-central1", new CFHelper.Listener() {});
-        cf.refreshRole(role -> {
-            if ("Tengri".equals(role)) {
-                showYuvaNodeDialog(location);
-            } else {
-                Toast.makeText(this, "Bu işlem için Tengri yetkisi gerekli", Toast.LENGTH_LONG).show();
-                Log.e("RoleCheckFailed", "Tengri rolü gerekli");
+    private void resolveRoleFromUser(FirebaseUser user, RoleCallback cb) {
+        if (user == null) {
+            cb.onRole(Role.ANON);
+            return;
+        }
+
+        if (user.isAnonymous()) {
+            cb.onRole(Role.ANON);
+            return;
+        }
+
+        // TODO: Custom Claims’ten rol oku (CFHelper / user.getIdToken)
+        // Şimdilik: login var ama claim yoksa "AĞAÇ" gibi davran.
+        cb.onRole(Role.AGAC);
+    }
+
+    private void applyLayerUiAccessPolicy(Role role) {
+        // Anonim kullanıcı layer UI (spinner_container) göremeyecek
+        spinnerContainer.setVisibility(role == Role.ANON ? View.GONE : View.VISIBLE);
+
+        // Anon kullanıcı mini fab menüsünü de görmesin
+        if (role == Role.ANON) {
+            mainFab.setVisibility(View.GONE);
+            ulgenFab.setVisibility(View.GONE);
+            cobanFab.setVisibility(View.GONE);
+            acilFab.setVisibility(View.GONE);
+            soundFab.setVisibility(View.GONE);
+        } else {
+            mainFab.setVisibility(View.VISIBLE);
+            // miniFabs zaten kapalı durumda mini’leri GONE tutar; burada zorlamıyoruz
+            soundFab.setVisibility(View.GONE);
+        }
+    }
+
+    // =========================
+    // Map ready + Location
+    // =========================
+
+    private interface SimpleCb { void run(); }
+    private interface LocationCb { void onLocation(LatLng loc); }
+
+    private void waitMapReadyThen(SimpleCb cb) {
+        Handler h = new Handler(Looper.getMainLooper());
+        h.postDelayed(new Runnable() {
+            int tries = 0;
+
+            @Override
+            public void run() {
+                tries++;
+                if (harita != null && harita.isReady() && harita.getNodeManager() != null) {
+                    cb.run();
+                    return;
+                }
+                if (tries > 40) { // ~8sn
+                    Log.w(TAG, "Map not ready in time.");
+                    cb.run(); // yine de akışı bozmayalım
+                    return;
+                }
+                h.postDelayed(this, 200);
+            }
+        }, 200);
+    }
+
+    private void ensureLocationPermissionThen(SimpleCb cb) {
+        if (hasLocationPermission(this)) {
+            cb.run();
+            return;
+        }
+        ActivityCompat.requestPermissions(this,
+                new String[]{Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION},
+                REQ_LOCATION);
+
+        // izin sonucu gelince cb’yi çağırmak için basit bir “retry loop”
+        Handler h = new Handler(Looper.getMainLooper());
+        h.postDelayed(new Runnable() {
+            int tries = 0;
+            @Override
+            public void run() {
+                tries++;
+                if (hasLocationPermission(SokakActivity.this)) {
+                    cb.run();
+                    return;
+                }
+                if (tries > 30) {
+                    Toast.makeText(SokakActivity.this, "Konum izni verilmedi.", Toast.LENGTH_LONG).show();
+                    cb.run();
+                    return;
+                }
+                h.postDelayed(this, 200);
+            }
+        }, 200);
+    }
+
+    @RequiresPermission(allOf = {Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION})
+    private void fetchLastKnownLocation(LocationCb cb) {
+        if (!hasLocationPermission(this)) { // senin permission kontrolün
+            cb.onLocation(null);
+            return;
+        }
+
+        fusedClient.getLastLocation()
+                .addOnSuccessListener(loc -> {
+                    if (loc != null) cb.onLocation(new LatLng(loc.getLatitude(), loc.getLongitude()));
+                    else cb.onLocation(null);
+                })
+                .addOnFailureListener(e -> cb.onLocation(null));
+    }
+
+    // =========================
+    // Role default layers + loading
+    // =========================
+
+    private void applyRoleDefaultLayers(Role role, LatLng userLocation) {
+        if (userLocation == null) {
+            Log.w(TAG, "No location yet; cannot apply role layers.");
+            return;
+        }
+
+        // TODO: nodeManager.clearAllMarkers() / layer bazlı clear
+        // Şimdilik: sadece vets yüklemesini role göre tetikleyeceğiz.
+
+        switch (role) {
+            case ANON:
+                loadNearbyVets(userLocation);
+                break;
+            case KORMOZ:
+                loadNearbyVets(userLocation);
+                // TODO: loadEmergencyAreas(userLocation)
+                break;
+            case ULGEN:
+                // TODO: overdue -> emergency -> allWithin5km fallback zinciri
+                loadNearbyVets(userLocation); // en azından vet göster
+                break;
+            case IYE:
+                // TODO: loadResponsibleAreas(userUid)
+                loadNearbyVets(userLocation); // opsiyonel: istersen kapat
+                break;
+            case TENGRI:
+                // TODO: loadResponsibleNewlyAdded(userUid, lastDays=3..7)
+                loadNearbyVets(userLocation); // opsiyonel
+                break;
+            case AGAC:
+            default:
+                loadNearbyVets(userLocation);
+                // TODO: default layer seti
+                break;
+        }
+    }
+
+    /**
+     * Veterinerleri gösterme:
+     *  - Şu an BaksiHelper.startProgressiveVetSearch ile başlatıyor.
+     *  - TODO: adminPath cache-miss ise CloudFunction tetikle + Firestore’dan oku.
+     */
+// SokakActivity içinde bir field önerisi:
+// private CFHelper cfHelper;
+// private String lastKnownAdminPath; // (reverseGeocode adımında dolduracağız)
+
+    private void loadNearbyVets(@NonNull LatLng center) {
+        if (lastKnownAdminPath == null || lastKnownAdminPath.trim().isEmpty()) {
+            resolveAdminPathFromLocation(center, ap -> {
+                lastKnownAdminPath = ap;
+                if (ap != null) loadNearbyVets(center);
+                else Toast.makeText(this, "AdminPath üretilemedi.", Toast.LENGTH_LONG).show();
+            });
+            return;
+        }
+
+        // Layer/role kontrolünü zaten üst akışta yapıyorsun; burada sadece güvenlik:
+        if (harita == null) return;
+
+        // 1) adminPath zorunlu (bu adımı reverseGeocode ile bir önceki dilimde çözeceğiz)
+        final String adminPath = lastKnownAdminPath; // TODO: reverseGeocode -> normalize -> buildAdminPath
+        if (adminPath == null || adminPath.trim().isEmpty()) {
+            Toast.makeText(this, "AdminPath hazır değil (reverseGeocode gerekli).", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        setProgressVisible(true);
+
+        if (cfHelper == null) cfHelper = new CFHelper(this, CF_PROJECT_ID, CF_REGION, null);
+        final int radiusM = 5000; // şimdilik sabit; sonra layer’a göre değiştiririz.
+
+        cfHelper.findNearbyBaksi(adminPath, radiusM, center.latitude, center.longitude, new CFHelper.EndpointCallback() {
+            @Override
+            public void onSuccess(JSONObject resp) {
+                runOnUiThread(() -> {
+                    try {
+                        setProgressVisible(false);
+
+                        boolean ok = resp.optBoolean("ok", resp.optBoolean("success", false));
+                        if (!ok) {
+                            String msg = resp.optString("message", resp.optString("error", "unknown"));
+                            Toast.makeText(SokakActivity.this, "findNearbyBaksi hata: " + msg, Toast.LENGTH_LONG).show();
+                            return;
+                        }
+
+                        JSONArray items = resp.optJSONArray("items");
+                        if (items == null) items = new JSONArray();
+
+                        NodeManager nodeManager = harita.getNodeManager();
+                        if (nodeManager == null) {
+                            Toast.makeText(SokakActivity.this, "NodeManager null", Toast.LENGTH_SHORT).show();
+                            return;
+                        }
+
+                        int added = 0;
+
+                        for (int i = 0; i < items.length(); i++) {
+                            JSONObject it = items.optJSONObject(i);
+                            if (it == null) continue;
+
+                            // id/uid
+                            String id = it.optString("id", it.optString("uid", "vet_" + i));
+                            String markerId = "baksi_" + id;
+
+                            // clinicName
+                            String title = it.optString("clinicName",
+                                    it.optString("username", "Veteriner"));
+
+                            // address (sen “adress” demişsin; biz olası tüm alanları okuyalım)
+                            String snippet = it.optString("adress",
+                                    it.optString("clinicAddress",
+                                            it.optString("address", "")));
+
+                            // location.lat/lng (fallback: root lat/lng)
+                            double lat = Double.NaN;
+                            double lng = Double.NaN;
+
+                            JSONObject loc = it.optJSONObject("location");
+                            if (loc != null) {
+                                lat = loc.optDouble("lat", Double.NaN);
+                                lng = loc.optDouble("lng", Double.NaN);
+                            }
+                            if (!Double.isFinite(lat)) lat = it.optDouble("lat", Double.NaN);
+                            if (!Double.isFinite(lng)) lng = it.optDouble("lng", Double.NaN);
+
+                            if (!Double.isFinite(lat) || !Double.isFinite(lng)) continue;
+
+                            MarkerOptions options = new MarkerOptions()
+                                    .position(new LatLng(lat, lng))
+                                    .title(title)
+                                    .snippet(snippet)
+                                    .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_BLUE));
+
+                            Marker m = nodeManager.addMarker(options, "Baksi", markerId);
+                            if (m != null) added++;
+                        }
+
+                        Toast.makeText(SokakActivity.this,
+                                added + " veteriner yüklendi (" + (radiusM >= 1000 ? (radiusM / 1000f) + "km" : radiusM + "m") + ")",
+                                Toast.LENGTH_SHORT).show();
+
+                    } catch (Throwable t) {
+                        setProgressVisible(false);
+                        Toast.makeText(SokakActivity.this, "Parse hata: " + t.getMessage(), Toast.LENGTH_LONG).show();
+                    }
+                });
+            }
+
+            @Override
+            public void onError(Throwable error) {
+                runOnUiThread(() -> {
+                    setProgressVisible(false);
+                    String msg = (error != null ? error.getMessage() : "unknown");
+                    Toast.makeText(SokakActivity.this, "findNearbyBaksi çağrı hatası: " + msg, Toast.LENGTH_LONG).show();
+                });
             }
         });
     }
 
-    private void showYuvaNodeDialog(LatLng location) {
-        AlertDialog.Builder builder = new AlertDialog.Builder(this);
-        View dialogView = getLayoutInflater().inflate(R.layout.dialog_create_yuva_node, null);
-        builder.setView(dialogView);
 
-        TextInputEditText nameInput = dialogView.findViewById(R.id.input_node_name);
-        TextInputEditText descInput = dialogView.findViewById(R.id.input_node_description);
+    private void initBaksiHelperIfNeeded() {
+        if (baksiHelper != null) return;
+        if (harita == null || harita.getNodeManager() == null) return;
 
-        builder.setTitle("Yuva Node Oluştur")
-                .setPositiveButton("Kaydet", (dialog, which) -> {
-                    String name = nameInput.getText().toString().trim();
-                    String description = descInput.getText().toString().trim();
+        baksiHelper = new BaksiHelper(this, harita.getNodeManager(), new BaksiHelper.BaksiHelperListener() {
+            @Override
+            public void onVetsLoaded(int count, double radius) {
+                runOnUiThread(() -> {
+                    setProgressVisible(false);
+                    String radiusText = (radius >= 1000) ? String.format("%.1fkm", radius / 1000.0) : (radius + "m");
+                    Toast.makeText(SokakActivity.this, count + " veteriner (" + radiusText + ")", Toast.LENGTH_SHORT).show();
 
-                    if (TextUtils.isEmpty(name)) {
-                        Toast.makeText(this, "Node adı gerekli", Toast.LENGTH_SHORT).show();
-                        return;
-                    }
-
-                    saveYuvaNodeToFirestore(location, name, description);
-                })
-                .setNegativeButton("İptal", (dialog, which) -> {
-                    dialog.dismiss();
-                    stopMarkerPlacement();
-                })
-                .setCancelable(false);
-
-        AlertDialog dialog = builder.create();
-        dialog.show();
-    }
-
-    private void saveYuvaNodeToFirestore(LatLng location, String name, String description) {
-        com.google.firebase.firestore.FirebaseFirestore db = com.google.firebase.firestore.FirebaseFirestore.getInstance();
-        Map<String, Object> node = new HashMap<>();
-        node.put("type", "Yuva");
-        node.put("location", new GeoPoint(location.latitude, location.longitude));
-        node.put("name", name);
-        node.put("description", description);
-        node.put("createdAt", com.google.firebase.firestore.FieldValue.serverTimestamp());
-
-        db.collection("nodes")
-                .add(node)
-                .addOnSuccessListener(documentReference -> {
-                    String nodeId = documentReference.getId();
-                    Log.d("SokakActivity", "YuvaNode eklendi, ID: " + nodeId);
-                    Toast.makeText(this, "YuvaNode oluşturuldu: " + name, Toast.LENGTH_SHORT).show();
-
-                    if (harita != null && harita.getNodeManager() != null) {
-                        com.google.android.gms.maps.model.MarkerOptions options = new com.google.android.gms.maps.model.MarkerOptions()
-                                .position(location)
-                                .title("Yuva: " + name)
-                                .icon(harita.getNodeManager().getCustomIcon("Yuva"));
-                        harita.getNodeManager().addMarker(options, "Yuva", nodeId);
-
-                        harita.animateCameraTo(location, 15f);
-                    }
-                    stopMarkerPlacement();
-                })
-                .addOnFailureListener(e -> {
-                    Log.e("SokakActivity", "YuvaNode ekleme hatası: " + e.getMessage());
-                    Toast.makeText(this, "Hata: " + e.getMessage(), Toast.LENGTH_LONG).show();
-                    stopMarkerPlacement();
+                    // TODO: Places yerine Firestore (Baksi collection) üzerinden yükleme + adminPath yoksa CF tetikleme
                 });
+            }
+
+            @Override
+            public void onVetsLoadFailed(String error) {
+                runOnUiThread(() -> {
+                    setProgressVisible(false);
+                    Log.e(TAG, "Vets load failed: " + error);
+                    Toast.makeText(SokakActivity.this, "Veteriner yükleme hatası: " + error, Toast.LENGTH_LONG).show();
+                });
+            }
+
+            @Override
+            public void onVetMarkerAdded(Marker marker) {
+                Log.d(TAG, "Vet marker added: " + (marker != null ? marker.getTitle() : "null"));
+            }
+
+            @Override
+            public void onSearchRadiusSuggested(double nextRadius, String radiusLabel) {
+                runOnUiThread(() -> {
+                    // TODO: Kullanıcıya “yarıçapı büyüt” prompt’u
+                    Toast.makeText(SokakActivity.this, "Aramayı genişlet: " + radiusLabel, Toast.LENGTH_SHORT).show();
+                });
+            }
+        });
     }
+
+    private void setProgressVisible(boolean visible) {
+        if (progressBar == null) return;
+        progressBar.setVisibility(visible ? View.VISIBLE : View.GONE);
+        if (!visible) {
+            progressBar.setIndeterminate(false);
+            progressBar.setProgress(0);
+        }
+    }
+
+    // =========================
+    // Harita callbacks
+    // =========================
 
     @Override
     public void onLockModeChanged(boolean locked) {
         isLockedMode = locked;
-        isMarkerMode = locked;
+        lockOverlay.setVisibility(locked ? View.VISIBLE : View.GONE);
 
-        runOnUiThread(() -> {
-            if (locked) {
-                if (lockModeOverlay != null) {
-                    lockModeOverlay.setVisibility(View.VISIBLE);
-                    lockModeOverlay.setClickable(true);
-                    lockModeOverlay.setOnClickListener(v -> {
-                        Toast.makeText(this, "Marker yerleştirme modu aktif. Haritaya uzun basın.", Toast.LENGTH_SHORT).show();
-                    });
-                }
-                hideFABs();
-            } else {
-                if (lockModeOverlay != null) {
-                    lockModeOverlay.setVisibility(View.GONE);
-                    lockModeOverlay.setClickable(false);
-                }
-                showFABs();
-            }
-        });
-    }
-
-    public void startMarkerPlacement() {
-        if (harita != null) {
-            harita.startMarkerPlacementMode();
-            isMarkerMode = true;
-        }
-    }
-
-    public void stopMarkerPlacement() {
-        if (harita != null) {
-            harita.stopMarkerPlacementMode();
-            isMarkerMode = false;
-        }
-    }
-
-    private void hideFABs() {
-        runOnUiThread(() -> {
-            if (mainFab != null) mainFab.setVisibility(View.GONE);
-            if (beslemeFab != null) beslemeFab.setVisibility(View.GONE);
-            if (bolgeFab != null) bolgeFab.setVisibility(View.GONE);
-            if (nakilFab != null) nakilFab.setVisibility(View.GONE);
-            if (soundFab != null) soundFab.setVisibility(View.GONE);
-        });
-    }
-
-    private void showFABs() {
-        runOnUiThread(() -> {
-            if (mainFab != null) mainFab.setVisibility(View.VISIBLE);
-        });
-    }
-
-    private boolean ensureLoggedInOrGoLogin() {
-        FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
-        if (user == null || user.isAnonymous()) {
-            Toast.makeText(this, "Devam etmek için giriş yapmalısınız.", Toast.LENGTH_LONG).show();
-            startActivity(new Intent(this, Login.class));
-            finish();
-            return false;
-        }
-        Log.d(TAG, "Kullanıcı girişi doğrulandı: " + user.getEmail());
-        return true;
-    }
-
-    @Override
-    public boolean dispatchTouchEvent(MotionEvent event) {
-        if (miniFabs != null && miniFabs.handleOutsideTouch(event)) {
-            return true;
-        }
-        return super.dispatchTouchEvent(event);
-    }
-
-    private void setupMapWithMarkers() {
-        final Handler handler = new Handler();
-        final Runnable checkMapReady = new Runnable() {
-            @RequiresPermission(allOf = {Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION})
-            @Override
-            public void run() {
-                Log.d(TAG, "Harita hazırlık kontrolü...");
-                if (harita != null && harita.isReady()) {
-                    Log.d(TAG, "Harita hazır, node'lar yükleniyor...");
-
-                    try {
-                        harita.fetchNodesNearby(null, 5000, 200);
-                        harita.setMyLocationIconEnabled(true);
-
-                        // LocationManager null kontrolü - EKLENDİ
-                        if (locationManager == null) {
-                            locationManager = new LocationManager(SokakActivity.this);
-                            Log.d(TAG, "setupMapWithMarkers: LocationManager başlatıldı");
-                        }
-
-                        // BaksiHelper'ı harita hazır olduğunda başlat
-                        initializeBaksiHelper();
-
-                        Log.d(TAG, "Veteriner yükleme başlatılıyor...");
-                        loadNearbyVets();
-                    } catch (Exception e) {
-                        Log.e(TAG, "Harita hazırlık hatası: " + e.getMessage());
-                        // 3sn sonra tekrar dene
-                        handler.postDelayed(this, 3000);
-                    }
-                } else {
-                    Log.d(TAG, "Harita henüz hazır değil, 1sn bekleniyor...");
-                    handler.postDelayed(this, 1000);
-                }
-            }
-        };
-        handler.postDelayed(checkMapReady, 1000);
-    }
-
-    private void loadNearbyVets() {
-        // locationManager null kontrolü
-        if (locationManager == null) {
-            locationManager = new LocationManager(this);
-            Log.d(TAG, "LocationManager başlatıldı");
-        }
-
-        locationManager.setListener(new LocationManager.LocationManagerListener() {
-            @Override
-            public void onLocationReceived(LatLng location) {
-                lastKnownLocation = location;
-                Log.d(TAG, "Konum alındı: " + location);
-
-                // Alternatif 1: NodeManager üzerinden veteriner yükle
-                if (harita != null && harita.getNodeManager() != null) {
-                    //harita.getNodeManager().loadVetNodes();
-                }
-
-                // Alternatif 2: Basit veteriner yükleme - DÜZELTME: Sonsuz döngüyü engelle
-                // Bu satırı silin veya yorum yapın:
-                // loadNearbyVets(); // BU SONSUZ DÖNGÜYE NEDEN OLUYOR!
-
-                // Bunun yerine doğrudan veteriner yükleme metodunu çağırın:
-                startProgressiveBaksiSearch(location);
-            }
-
-            @Override
-            public void onLocationError(String error) {
-                Log.e(TAG, "Konum alınamadı: " + error);
-                // fallback: node manager'dan veteriner yükle
-                if (harita != null && harita.getNodeManager() != null) {
-                    harita.getNodeManager().loadVetNodes();
-                }
-            }
-        });
-        locationManager.getCurrentLocation();
-    }
-    private void startProgressiveBaksiSearch(LatLng location) {
-        //loadNearbyBaksiVetsFromFirestore(location, 1500); // 1.5km başla
-        // suggestWiderSearch() içinde genişlet:
-        // loadNearbyBaksiVets(location, 5000);
-        // loadNearbyBaksiVets(location, 15000);
-    }
-/*
-    @SuppressLint("MissingPermission")
-    private void loadNearbyVets() {
-        Log.d(TAG, "=== VETERİNER YÜKLEME BAŞLANGIÇ ===");
-
-        if (harita == null || !harita.isReady()) {
-            Log.w(TAG, "Harita hazır değil, veteriner yükleme ertelendi");
-            new Handler().postDelayed(this::loadNearbyVets, 2000);
-            return;
-        }
-
-        // İzin kontrolü
-        if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED &&
-                checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-
-            Log.w(TAG, "Konum izinleri gerekli");
-            requestPermissions(
-                    new String[]{
-                            Manifest.permission.ACCESS_FINE_LOCATION,
-                            Manifest.permission.ACCESS_COARSE_LOCATION
-                    },
-                    LOCATION_PERMISSION_REQUEST_CODE
-            );
-            return;
-        }
-
-        if (baksiHelper == null) {
-            Log.w(TAG, "BaksiHelper null, yeniden başlatılıyor...");
-            initializeBaksiHelper();
-            if (baksiHelper == null) {
-                Log.e(TAG, "BaksiHelper hala null, veteriner yükleme iptal");
-                return;
-            }
-        }
-
-        if (locationManager == null) {
-            locationManager = new LocationManager(this);
-            Log.d(TAG, "LocationManager oluşturuldu");
-        }
-
-        locationManager.setListener(new LocationManager.LocationManagerListener() {
-            @Override
-            public void onLocationReceived(LatLng location) {
-                Log.d(TAG, "Konum alındı: " + location);
-                lastKnownLocation = location;
-
-                if (baksiHelper != null) {
-                    Log.d(TAG, "Kademeli veteriner arama başlatılıyor (150m)...");
-                    baksiHelper.startProgressiveVetSearch(location);
-                } else {
-                    Log.e(TAG, "BaksiHelper null! Veteriner yüklenemedi.");
-                }
-            }
-
-            @Override
-            public void onLocationError(String error) {
-                Log.e(TAG, "Konum alınamadı: " + error);
-                runOnUiThread(() -> {
-                    Toast.makeText(SokakActivity.this,
-                            "Konum alınamadı: " + error,
-                            Toast.LENGTH_SHORT).show();
-
-                    // Fallback: son bilinen konumu kullan veya varsayılan konum
-                    if (lastKnownLocation != null) {
-                        Log.d(TAG, "Son bilinen konum kullanılıyor: " + lastKnownLocation);
-                        baksiHelper.startProgressiveVetSearch(lastKnownLocation);
-                    }
-                });
-            }
-        });
-
-        Log.d(TAG, "Konum alınıyor...");
-        locationManager.getCurrentLocation();
-    }
-*/
-    @Override
-    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-
-        if (requestCode == LOCATION_PERMISSION_REQUEST_CODE) {
-            boolean allGranted = true;
-            for (int result : grantResults) {
-                if (result != PackageManager.PERMISSION_GRANTED) {
-                    allGranted = false;
-                    break;
-                }
-            }
-            if (allGranted) {
-                Log.d(TAG, "Konum izinleri alındı, veteriner yükleme başlatılıyor");
-                loadNearbyVets();
-            } else {
-                Log.w(TAG, "Konum izinleri reddedildi");
-                Toast.makeText(this, "Konum izinleri olmadan veterinerler gösterilemez", Toast.LENGTH_LONG).show();
-            }
-        }
-    }
-
-    @Override
-    protected void onResume() {
-        super.onResume();
-        Log.d(TAG, "onResume - Harita durumu: " + (harita != null ? "Mevcut" : "Null"));
-
-        try {
-            if (harita != null) {
-                Log.d(TAG, "Harita hazır: " + harita.isReady());
-                Log.d(TAG, "Konum izni: " + (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED));
-
-                // LocationManager kontrolü - EKLENDİ
-                if (locationManager == null) {
-                    locationManager = new LocationManager(this);
-                    Log.d(TAG, "onResume: LocationManager başlatıldı");
-                }
-
-                // Haritayı yeniden etkinleştir
-                if (harita.isReady()) {
-                    // Harita onResume işlemleri
-                }
-            }
-        } catch (Exception e) {
-            Log.e(TAG, "onResume hatası: " + e.getMessage());
-        }        Log.d(TAG, "onResume - Harita durumu: " + (harita != null ? "Mevcut" : "Null"));
-
-    }
-
-    @Override
-    protected void onPause() {
-        super.onPause();
-        try {
-            if (harita != null) {
-                // Harita onPause işlemleri
-            }
-        } catch (Exception e) {
-            Log.e(TAG, "onPause hatası: " + e.getMessage());
-        }
-    }
-
-    private void initializeSpinners() {
-        LinearLayout[] rows = {
-                findViewById(R.id.row_spinner_1),
-                findViewById(R.id.row_spinner_2),
-                findViewById(R.id.row_spinner_3),
-                findViewById(R.id.row_spinner_4),
-                findViewById(R.id.row_spinner_5)
-        };
-
-        Spinner[] spinners = {
-                findViewById(R.id.spinner_level_1),
-                findViewById(R.id.spinner_level_2),
-                findViewById(R.id.spinner_level_3),
-                findViewById(R.id.spinner_level_4),
-                findViewById(R.id.spinner_level_5)
-        };
-
-        String[] speciesOptions = {"Kedi", "Köpek", "Kuş", "Vahşi", "İstenmeyen"};
-        ArrayAdapter<String> adapterSpecies = new ArrayAdapter<>(
-                this, android.R.layout.simple_spinner_dropdown_item, speciesOptions
-        );
-        spinners[1].setAdapter(adapterSpecies);
-
-        String[] categoryOptions = {"Beslenme", "Yuva", "Su", "AvYemleme", "Hepsi"};
-        ArrayAdapter<String> adapterCategory = new ArrayAdapter<>(
-                this, android.R.layout.simple_spinner_dropdown_item, categoryOptions
-        );
-        spinners[2].setAdapter(adapterCategory);
-
-        spinners[3].setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, new String[]{}));
-        spinners[4].setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, new String[]{}));
-
-        for (int i = 1; i < rows.length; i++) rows[i].setVisibility(View.GONE);
-
-        AdapterView.OnItemSelectedListener[] listeners = new AdapterView.OnItemSelectedListener[5];
-        for (int i = 0; i < 5; i++) {
-            final int idx = i;
-            listeners[i] = new AdapterView.OnItemSelectedListener() {
-                @Override
-                public void onItemSelected(AdapterView<?> parent, View view, int pos, long id) {
-                    for (int j = idx + 1; j < rows.length; j++) {
-                        rows[j].setVisibility(View.GONE);
-                    }
-                    if (idx + 1 < rows.length) {
-                        rows[idx + 1].setVisibility(View.VISIBLE);
-                    }
-                }
-
-                @Override
-                public void onNothingSelected(AdapterView<?> parent) {
-                    for (int j = idx + 1; j < rows.length; j++) {
-                        rows[j].setVisibility(View.GONE);
-                    }
-                }
-            };
-            spinners[i].setOnItemSelectedListener(listeners[i]);
-        }
-        selectSpinnerValue(spinners[3], "ADM'");
-    }
-
-    private void selectSpinnerValue(Spinner spinner, String value) {
-        @SuppressWarnings("unchecked")
-        ArrayAdapter<String> adapter = (ArrayAdapter<String>) spinner.getAdapter();
-        int position = adapter.getPosition(value);
-        if (position >= 0) {
-            spinner.setSelection(position);
-        }
-    }
-
-    private void initializeFABs() {
-        fabOpenAnim = AnimationUtils.loadAnimation(this, R.anim.fab_open);
-        fabCloseAnim = AnimationUtils.loadAnimation(this, R.anim.fab_close);
-        rotateForwardAnim = AnimationUtils.loadAnimation(this, R.anim.rotate_forward);
-        rotateBackwardAnim = AnimationUtils.loadAnimation(this, R.anim.rotate_backward);
-
-        mainFab = findViewById(R.id.main_fab);
-        beslemeFab = findViewById(R.id.ülgen_fab);
-        bolgeFab = findViewById(R.id.coban_fab);
-        nakilFab = findViewById(R.id.acil_fab);
-        soundFab = findViewById(R.id.sound_fab);
-
-        beslemeFab.setVisibility(View.GONE);
-        bolgeFab.setVisibility(View.GONE);
-        nakilFab.setVisibility(View.GONE);
-        soundFab.setVisibility(View.GONE);
-
-        int[] miniFabIds = new int[]{R.id.ülgen_fab, R.id.coban_fab, R.id.acil_fab};
-        miniFabs = new MiniFabs(this, mainFab, soundFab, miniFabIds);
-        miniFabs.setAnimations(fabOpenAnim, fabCloseAnim, rotateForwardAnim, rotateBackwardAnim);
-
-        mainFab.setVisibility(View.VISIBLE);
-
-        Actions actions = new Actions(miniFabs, this, this);
-        soundFab.setOnClickListener(v -> {
-            if (miniFabs.getSelectedFab() != null) {
-                actions.performSelectedAction(miniFabs.getSelectedFab(), this);
-                miniFabs.toggle();
-            } else {
-                Toast.makeText(this, "Önce bir miniFAB seçin", Toast.LENGTH_SHORT).show();
-            }
-        });
-
-        miniFabs.applyDefaultColors();
-        miniFabs.setupDraggableOnly(this, mainFab);
-
-        setupFABClickListeners();
-    }
-
-    private void setupFABClickListeners() {
-        for (FloatingActionButton fab : miniFabs.getFabs()) {
-            fab.setOnClickListener(v -> {
-                miniFabs.selectFab((FloatingActionButton) v);
-
-                int id = v.getId();
-                Harita.MapMode mode = Harita.MapMode.DEFAULT;
-
-                if (id == R.id.ülgen_fab) {
-                    mode = Harita.MapMode.FEEDING;
-                } else if (id == R.id.coban_fab) {
-                    mode = Harita.MapMode.NEST;
-                } else if (id == R.id.acil_fab) {
-                    mode = Harita.MapMode.TASK;
-                }
-
-                if (harita != null) {
-                    harita.setMode(mode);
-                    startNodeCreationProcess();
-                }
-            });
-        }
-    }
-
-    public void startNodeCreationProcess() {
-        CFHelper cf = new CFHelper(this, "iyesi-e8d4f","us-central1", new CFHelper.Listener(){});
-        cf.refreshRole(role -> {
-            Log.i("CustomClaims", "Role: " + role);
-            if ("Tengri".equals(role)) {
-                if (harita != null) {
-                    harita.startMarkerPlacementMode();
-                    new Handler().postDelayed(() -> {
-                        harita.showNodeTypeSelectionDialog();
-                    }, 500);
-                }
-            } else {
-                Toast.makeText(this, "Bu işlem için yetkiniz yok", Toast.LENGTH_LONG).show();
-                Log.e("RoleCheckFailed", "Tengri rolü gerekli");
-            }
-        });
-    }
-
-    @Override
-    public void onRequestMarkerReposition(@androidx.annotation.NonNull String markerId) {
-        if (harita != null) {
-            harita.startRepositionMode(markerId);
-            isMarkerMode = true;
-        }
+        // map_overlay dokunmaları Harita.handleOverlayTouch ile yönetiliyor
+        // locked durumda istersen map_overlay’i clickable yapabilirsin, ama şu an lockOverlay zaten blokluyor.
+        Log.d(TAG, "Lock mode changed: " + locked);
     }
 
     @Override
     public void onNodeCreated(String nodeId, String nodeType) {
-        runOnUiThread(() -> {
-            showNodeCreationSuccessDialog(nodeId, nodeType);
-            stopMarkerPlacement();
-        });
+        // TODO: Node create akışı tamamlandığında UI güncelle
+        Toast.makeText(this, "Node created: " + nodeType + " (" + nodeId + ")", Toast.LENGTH_SHORT).show();
+        onLockModeChanged(false);
     }
 
     @Override
     public void onNodeCreationFailed(String error) {
-        runOnUiThread(() -> {
-            Toast.makeText(this, error, Toast.LENGTH_LONG).show();
-        });
+        Toast.makeText(this, "Node create failed: " + error, Toast.LENGTH_LONG).show();
+        onLockModeChanged(false);
     }
 
-    private void showNodeCreationSuccessDialog(String nodeId, String nodeType) {
-        androidx.appcompat.app.AlertDialog.Builder builder = new androidx.appcompat.app.AlertDialog.Builder(this);
-        builder.setTitle("Node Oluşturuldu ✓")
-                .setMessage("Node ID: " + nodeId + "\nTür: " + nodeType)
-                .setPositiveButton("OK", (dialog, which) -> dialog.dismiss())
-                .setNeutralButton("Foto", (dialog, which) -> {
-                    Toast.makeText(this, "Foto özelliği yakında eklenecek", Toast.LENGTH_SHORT).show();
-                    dialog.dismiss();
-                })
-                .setCancelable(false)
-                .show();
+    // =========================
+    // NodeDetailsBottomSheet.Host
+    // =========================
+
+    @Override
+    public void onRequestMarkerReposition(String markerId) {
+        if (harita == null) return;
+        harita.startRepositionMode(markerId);
+        onLockModeChanged(true);
+        Toast.makeText(this, "Marker taşıma modu: " + markerId, Toast.LENGTH_SHORT).show();
+    }
+
+    // =========================
+    // Permissions
+    // =========================
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == REQ_LOCATION) {
+            boolean granted = false;
+            for (int r : grantResults) {
+                if (r == PackageManager.PERMISSION_GRANTED) {
+                    granted = true;
+                    break;
+                }
+            }
+            Log.d(TAG, "Location permission result: " + granted);
+        }
+        // Harita içinde de static handler var (kullanmaya devam edebilirsin)
+        Harita.onRequestPermissionsResult(this, requestCode, grantResults);
     }
 
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        Log.d(TAG, "SokakActivity sonlandırılıyor");
-        if (harita != null) {
-            harita.cleanup();
+        try {
+            if (harita != null) harita.cleanup();
+        } catch (Throwable t) {
+            Log.w(TAG, "harita.cleanup error: " + t.getMessage());
         }
     }
 }

@@ -2,7 +2,7 @@ package com.kurmez.iyesi.kurmes.seed;
 
 import android.util.Log;
 
-import com.kurmez.iyesi.kurmes.utilities.helper.net.CFClient;
+import com.kurmez.iyesi.kurmes.utilities.clients.CFClient;
 
 import org.json.JSONObject;
 
@@ -17,7 +17,7 @@ import okhttp3.Response;
 /**
  * SeedService
  * Şehir bazlı sahte/örnek Soul kayıtlarını Cloud Function'a yükler.
- * - CFClient: com.kurmez.iyesi.kurmes.utilities.helper.net.CFClient
+ * - CFClient: com.kurmez.iyesi.kurmes.utilities.clients.CFClient
  * - Gerekli CFClient imzası: post(String url, String rawJson, String idToken, String appCheckToken)
  * - Tokenlar: CFClient.getTokens(TokensCallback, ErrorCallback)
  */

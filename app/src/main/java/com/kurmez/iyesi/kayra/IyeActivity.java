@@ -65,7 +65,7 @@ import com.kurmez.iyesi.umay.sokak.Harita;
 import com.kurmez.iyesi.kayra.Classes.Souls.Iye;
 import com.kurmez.iyesi.kurmes.utilities.Helpers;
 import com.kurmez.iyesi.kurmes.utilities.LoadingOverlay;
-import com.kurmez.iyesi.kurmes.utilities.helper.net.CFClient;
+import com.kurmez.iyesi.kurmes.utilities.clients.CFClient;
 
 import java.io.ByteArrayOutputStream;
 import java.lang.ref.WeakReference;
@@ -90,7 +90,7 @@ import org.json.JSONObject;
  */
 public class IyeActivity extends AppCompatActivity {
     private static final String TAG = "IyeActivity";
-    private static final String BaseURL = "https://us-central1-iyesi-e8d4f.cloudfunctions.net";
+    private static final String BaseURL = "https://us-central1-iyesi-aef03.cloudfunctions.net";
     private static final String FUNCTIONS_REGION = "us-central1"; // profile client'a geçiyoruz
     private static final boolean USE_HTTP_FOR_UPDATE = true;       // istersen burada yönet
     public static final int REQ_PICK_PROFILE_IMAGE = 4011;
@@ -187,7 +187,7 @@ public class IyeActivity extends AppCompatActivity {
         if (startInEditMode) {enterEditMode();}// Sadece edit intent'i ile gelindiyse düzenleme modunda başla
 
         if (getIntent().getBooleanExtra(EXTRA_VIA_GUARD, false)) {
-            Log.i(TAG,u.getDisplayName());
+            if (u.getDisplayName() != null) Log.i(TAG,u.getDisplayName());
             if (u.getDisplayName().isBlank()||u.getDisplayName().isEmpty()) showMembershipDialog();
         }// Sadece guard ile gelindiyse aç
         /*
@@ -762,9 +762,16 @@ public class IyeActivity extends AppCompatActivity {
 
             new Thread(() -> {
                 try {
-                    String endpoint = BaseURL + "/saveBase64Image";
-                    String path = "images/iye/avatar/" + System.currentTimeMillis();
+                    String endpoint = BaseURL.endsWith("/")
+                            ? (BaseURL + "saveBase64Image")
+                            : (BaseURL + "/saveBase64Image");
+                    // path, backend'in kendi dosya adını üretmesi için "prefix" gibi kullanılmalı.
+                    // Bu yüzden timestamp'i path'e gömmek yerine sabit prefix kullanmak daha temiz:
+                    String path = "images/iye/avatar";
+
                     String imageUrl = handlePickedImage(uri, endpoint, path);
+
+                    Log.d("IYE_UPLOAD", "endpoint=" + endpoint + " path=" + path);
 
                     runOnUiThread(() -> {
                         // başarılıysa

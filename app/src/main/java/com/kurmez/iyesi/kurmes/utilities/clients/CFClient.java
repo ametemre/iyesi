@@ -1,4 +1,4 @@
-package com.kurmez.iyesi.kurmes.utilities.helper.net;
+package com.kurmez.iyesi.kurmes.utilities.clients;
 
 import android.content.Context;
 import android.graphics.Bitmap;
@@ -15,11 +15,12 @@ import androidx.annotation.WorkerThread;
 
 import com.google.android.gms.tasks.Tasks;
 import com.google.firebase.appcheck.AppCheckToken;
-import com.google.firebase.appcheck.AppCheckTokenResult;
 import com.google.firebase.appcheck.FirebaseAppCheck;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 import com.kurmez.iyesi.kurmes.utilities.helper.CFHelper;
+import com.kurmez.iyesi.kurmes.utilities.helper.net.FirebaseAuthenticator;
+import com.kurmez.iyesi.kurmes.utilities.helper.net.FirebaseHeadersInterceptor;
 
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -58,7 +59,7 @@ public class CFClient {
 
     public static final String TAG = "CFClient";
     public static final MediaType JSON = MediaType.get("application/json; charset=utf-8");
-
+    private CFHelper cfHelper;
     private final OkHttpClient http;
     private final ExecutorService io;
     private final Handler main;
@@ -442,9 +443,22 @@ public class CFClient {
             Log.d(tag, prefix + line);
         }
     }
+    public void findNearbyBaksi(String adminPath, int radiusM, double lat, double lng, CFHelper.EndpointCallback cb) {
+        JSONObject body = new JSONObject();
+        try {
+            body.put("adminPath", adminPath);
+            body.put("radiusM", radiusM);
+            body.put("lat", lat);
+            body.put("lng", lng);
+        } catch (JSONException e) {
+            cb.onError(e);
+            return;
+        }
 
+        cfHelper.endpointAsync("/findNearbyBaksi", null, body, /*post=*/true, cb);
+    }
     public void refreshRole(@NonNull CFHelper.RoleCallback callback, Context context) {
-        CFHelper cfHelper = new CFHelper(context, "iyesi-e8d4f","us-central1", new CFHelper.Listener(){});
+        cfHelper = new CFHelper(context, "iyesi-aef03","us-central1", new CFHelper.Listener(){});
         cfHelper.refreshRole(callback);
     }
     // ----------------------------- WhereBuilder (opsiyonel) -----------------------------
@@ -643,13 +657,18 @@ public class CFClient {
         String deviceId = Settings.Secure.getString(ctx.getContentResolver(), Settings.Secure.ANDROID_ID);
 
         // 2) Gövde
-        JSONObject opts = new JSONObject();
-        opts.put("path", path); // backend ownerUid’i kendisi enjekte ediyor
-        opts.put("bucketName", "iyesi-e8d4f.firebasestorage.app"); // ← bucket name ekle
-
+// 2) Gövde  (backend: b64/base64 + path + (opsiyonel) returnSignedUrl)
         JSONObject body = new JSONObject();
-        body.put("b64", dataUriB64);
-        body.put("opts", opts);
+        body.put("b64", dataUriB64);      // index.js: b64 kabul ediyor
+        body.put("path", path);           // index.js: path'i TOP-LEVEL bekliyor
+        body.put("returnSignedUrl", true); // storage.js: url üretmesi için gerekli
+
+// bucketName göndermek ZORUNLU değil.
+// İstersen doğru bucket'ı dinamik al (yanlış hardcode kullanma):
+// String bucket = FirebaseApp.getInstance().getOptions().getStorageBucket();
+// if (bucket != null && !bucket.isEmpty()) body.put("bucketName", bucket);
+
+        Log.d("CFClient", "POST " + endpoint + " bodyLen=" + body.toString().length());
 
         Request req = new Request.Builder()
                 .url(endpoint)
@@ -657,8 +676,10 @@ public class CFClient {
                 .addHeader("X-Firebase-AppCheck", appCheck)
                 .addHeader("X-Device-Id", deviceId != null ? deviceId : "unknown")
                 .addHeader("Accept", "application/json")
+                .addHeader("Content-Type", "application/json; charset=utf-8")
                 .post(RequestBody.create(body.toString().getBytes(StandardCharsets.UTF_8), JSON))
                 .build();
+
 
         // 3) İstek
         try (Response resp = http().newCall(req).execute()) {

@@ -69,7 +69,7 @@ public class ExplorePrivate extends AppCompatActivity {
 
     /* ======================= CONST / PERMISSIONS ===================== */
     // DOĞRU RTDB URL (default-rtdb alan adı)
-    private static final String RTDB_URL = "https://iyesi-e8d4f-default-rtdb.firebaseio.com/";
+    private static final String RTDB_URL = "https://iyesi-aef03-default-rtdb.firebaseio.com/";
     private static final List<String> ALLOWED_ROLES = Arrays.asList(
             "İye", "Körmös", "Körmes", "Ülgen", "Tengri", "Ağaç"
     );
@@ -130,7 +130,7 @@ public class ExplorePrivate extends AppCompatActivity {
             });
         }
 
-        cf = new CFHelper(this, "iyesi-e8d4f", null);
+        cf = new CFHelper(this, "iyesi-aef03", null);
         fused = LocationServices.getFusedLocationProviderClient(this);
 
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)

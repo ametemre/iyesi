@@ -3,7 +3,7 @@ package com.kurmez.iyesi.kurmes.utilities.helper;
 
 import static com.kurmez.iyesi.kurmes.utilities.helper.FireBaseHelper.buildAuthHeaders;
 import static com.kurmez.iyesi.kurmes.utilities.helper.FireBaseHelper.refreshTokensBlocking;
-import static com.kurmez.iyesi.kurmes.utilities.helper.net.CFClient.JSON;
+import static com.kurmez.iyesi.kurmes.utilities.clients.CFClient.JSON;
 
 import android.os.Build;
 import android.text.TextUtils;

@@ -36,7 +36,7 @@ import com.kurmez.iyesi.kurmes.utilities.Helpers;
 import com.kurmez.iyesi.kurmes.utilities.adapters.CompanionAdapter;
 
 import com.kurmez.iyesi.kurmes.utilities.helper.HeaderHelper;
-import com.kurmez.iyesi.kurmes.utilities.helper.net.CFClient;
+import com.kurmez.iyesi.kurmes.utilities.clients.CFClient;
 import com.kurmez.iyesi.umay.sahiplendirme.Companion;
 
 import org.json.JSONObject;
@@ -139,7 +139,7 @@ headerHelper.refreshHeaderWithIye(null, new Iye());
         // 4) Tokenları al ve rol/kayıtları yükle
         cf.getTokens((idTok, appTok) -> {
             // Örnek test endpoint (gerekmiyorsa kaldırılabilir)
-            String url = "https://us-central1-iyesi-e8d4f.cloudfunctions.net/listSoulsByFields?col=Souls&where=status:eq:adoptable&limit=3";
+            String url = "https://us-central1-iyesi-aef03.cloudfunctions.net/listSoulsByFields?col=Souls&where=status:eq:adoptable&limit=3";
             Request.Builder rb = new Request.Builder().url(url).get()
                     .addHeader("Authorization", "Bearer " + idTok);
             if (appTok != null && !appTok.isEmpty()) {
