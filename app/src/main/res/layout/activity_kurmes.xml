@@ -1,0 +1,213 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:background="#000">
+    <!-- Floating Action Button -->
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/fab_main"
+        android:layout_width="72dp"
+        android:layout_height="72dp"
+        android:contentDescription="Menu"
+        android:src="@drawable/pati"
+        android:backgroundTint="@android:color/white"
+        app:elevation="10dp"
+        app:maxImageSize="46dp"
+        android:layout_alignParentBottom="true"
+        android:layout_marginBottom="32dp"
+        android:layout_margin="16dp"
+        android:scaleType="centerInside"
+        android:outlineSpotShadowColor="@android:color/white"
+        app:rippleColor="@android:color/darker_gray"
+        android:stateListAnimator="@null"
+        android:background="@drawable/fab_glow"/>
+    <!-- Recorf FABs (Hidden Initially) -->
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/fab_Sound"
+        android:layout_width="150dp"
+        android:layout_height="150dp"
+        android:layout_centerHorizontal="true"
+        android:layout_centerVertical="true"
+        android:visibility="gone"
+        android:backgroundTint="@color/black_overlay"
+        android:contentDescription="Sound"
+        android:rotation="90"
+        android:scaleType="centerInside"
+        android:src="@drawable/hush"
+        app:maxImageSize="50dp"
+        app:rippleColor="@color/teal" />
+    <!-- Mini FABs (Initially Hidden) -->
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/fab_1"
+        android:src="@drawable/kedi_"
+        style="@style/MiniFabStyle"/>
+
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/fab_2"
+        android:src="@drawable/dog"
+        style="@style/MiniFabStyle"/>
+
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/fab_3"
+        android:src="@drawable/kurt"
+        style="@style/MiniFabStyle"/>
+
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/fab_4"
+        android:src="@drawable/karga"
+        style="@style/MiniFabStyle"/>
+
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/fab_5"
+        android:src="@drawable/hawk_"
+        style="@style/MiniFabStyle"/>
+
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/fab_6"
+        android:src="@drawable/eagle"
+        style="@style/MiniFabStyle"/>
+
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/fab_7"
+        android:src="@drawable/keklik_"
+        style="@style/MiniFabStyle"/>
+
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/fab_8"
+        android:src="@drawable/pidgeon"
+        style="@style/MiniFabStyle"/>
+
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/fab_9"
+        android:src="@drawable/coban"
+        style="@style/MiniFabStyle"/>
+    <!-- Camera View -->
+    <org.opencv.android.JavaCamera2View
+        android:id="@+id/kurmes_camera_view"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"/>
+    <!-- Camera Status Text -->
+    <ImageView
+        android:id="@+id/processed_view"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginRight="5dp"
+        android:layout_marginLeft="5dp"
+        android:scaleType="fitCenter"/>
+    <TextView
+        android:id="@+id/resource_monitor"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:background="#80000000"
+        android:textColor="#FFF"
+        android:padding="4dp"
+        android:textSize="12sp"
+        android:layout_marginTop="60dp"
+        android:layout_alignParentTop="true"
+        android:layout_alignParentEnd="true"/>
+    <TextView
+        android:id="@+id/camera_status_text"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_alignParentTop="true"
+        android:layout_centerHorizontal="true"
+        android:layout_marginTop="16dp"
+        android:padding="8dp"
+        android:background="#CC000000"
+        android:text="Camera Status: Initializing..."
+        android:textColor="#FFFFFF"
+        android:textSize="16sp"
+        android:textStyle="bold"
+        android:clickable="true"
+        android:focusable="true" />
+    <!-- Switch Camera Button -->
+    <androidx.appcompat.widget.AppCompatButton
+        android:id="@+id/switch_camera_button"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_alignParentBottom="true"
+        android:layout_centerHorizontal="true"
+        android:layout_marginBottom="16dp"
+        android:padding="8dp"
+        android:background="#CC000000"
+        android:text="Switch Camera"
+        android:textColor="#FFFFFF"
+        android:textSize="16sp"
+        android:textStyle="bold" />
+    <!-- Label for Image Recognition -->
+    <TextView
+        android:id="@+id/label_text"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_alignParentBottom="true"
+        android:layout_centerHorizontal="true"
+        android:layout_marginBottom="60dp"
+        android:text="Processing..."
+        android:textColor="#FFFFFF"
+        android:textSize="18sp"
+        android:textStyle="bold" />
+
+    <ScrollView
+        android:layout_width="wrap_content"
+        android:layout_height="300dp"
+        android:verticalScrollbarPosition="right"
+        android:orientation="vertical"
+        android:layout_centerVertical="true"
+        android:layout_alignParentRight="true"
+        android:padding="8dp">
+        <LinearLayout
+            android:id="@+id/detected_sounds_list"
+            android:verticalScrollbarPosition="right"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:layout_centerVertical="true"
+            android:layout_alignParentRight="true"
+            android:padding="8dp"
+            android:background="@android:color/transparent">
+        </LinearLayout>
+    </ScrollView>
+    <ScrollView
+        android:layout_width="wrap_content"
+        android:layout_height="300dp"
+        android:orientation="vertical"
+        android:layout_centerVertical="true"
+        android:layout_alignParentLeft="true"
+        android:padding="8dp"
+        android:verticalScrollbarPosition="left">
+        <LinearLayout
+            android:verticalScrollbarPosition="left"
+            android:id="@+id/ModelClasses_list"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:layout_centerVertical="true"
+            android:layout_alignParentLeft="true"
+            android:padding="8dp"
+            android:background="@android:color/transparent">
+        </LinearLayout>
+    </ScrollView>
+    <LinearLayout
+        android:id="@+id/Sayac"
+        android:layout_width="wrap_content"
+        android:layout_marginTop="64dp"
+        android:layout_height="wrap_content">
+        <TextView
+            android:id="@+id/yazi"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:padding="12dp"
+            android:textSize="16sp"
+            android:textColor="@android:color/black"
+            android:gravity="start" />
+        <TextView
+            android:id="@+id/sayi"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:padding="12dp"
+            android:textSize="16sp"
+            android:textColor="@android:color/black"
+            android:gravity="start" />
+    </LinearLayout>
+</RelativeLayout>
