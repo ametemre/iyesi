@@ -739,7 +739,7 @@ Lütfen Google Play Hizmetleri ve Play Store’u güncelleyin veya etkinleştiri
     <string name="edit_profile_hint_bio">Biyografi</string>
     <string name="edit_profile_button_save">Kaydet</string>
 
-    <string name="content_item_text_sample">İçerik metni</string>
+    <string name="content_item_text_sample">İçerik metini</string>
     <string name="content_item_text_likes">Beğeni: 0</string>
     <string name="content_item_text_comments">Yorum: 0</string>
 
