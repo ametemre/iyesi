@@ -45,12 +45,14 @@ public class QRAdmin extends AppCompatActivity {
         Button   processButton    = findViewById(R.id.process_button);
         Button   go_to_button    = findViewById(R.id.go_to_button);
 
+        // ÖNCE: Hardcoded "QR Data: " + qrData ve "QR Data will appear here"
+        // ŞİMDİ: String resource kullanımı
         if (!TextUtils.isEmpty(qrData)) {
             Log.i(TAG, "[method] in");
             lastRaw = qrData;
-            qrDataTextView.setText("QR Data: " + qrData);
+            qrDataTextView.setText(getString(R.string.qr_admin_label_data, qrData));
         } else {
-            qrDataTextView.setText("QR Data will appear here");
+            qrDataTextView.setText(getString(R.string.qr_admin_label_data_will_appear));
         }
 
         // Tara - QRScannerActivity'yi kullan
@@ -66,7 +68,9 @@ public class QRAdmin extends AppCompatActivity {
                 // QR'daki ham veriyi işle, dış linklere gitme
                 processQRContent(lastRaw);
             } else {
-                Toast.makeText(QRAdmin.this, "No QR Data to process", Toast.LENGTH_SHORT).show();
+                // ÖNCE: Hardcoded "No QR Data to process"
+                // ŞİMDİ: String resource kullanımı
+                Toast.makeText(QRAdmin.this, getString(R.string.qr_admin_toast_no_data_to_process), Toast.LENGTH_SHORT).show();
             }
         });
         go_to_button.setOnClickListener(v -> {
@@ -86,8 +90,10 @@ public class QRAdmin extends AppCompatActivity {
 
     private void updateQRDataView() {
         TextView qrDataTextView = findViewById(R.id.qr_data_text_view);
+        // ÖNCE: Hardcoded "QR Data: " + lastRaw
+        // ŞİMDİ: String resource kullanımı
         if (!TextUtils.isEmpty(lastRaw)) {
-            qrDataTextView.setText("QR Data: " + lastRaw);
+            qrDataTextView.setText(getString(R.string.qr_admin_label_data, lastRaw));
         }
     }
 
@@ -121,7 +127,9 @@ public class QRAdmin extends AppCompatActivity {
     private void handleWelcomeRoute() {
         Log.i(TAG, "[handleWelcomeRoute] in");
         // Welcome sayfası için özel işlem
-        Toast.makeText(this, "Welcome sayfası açılıyor...", Toast.LENGTH_LONG).show();
+        // ÖNCE: Hardcoded "Welcome sayfası açılıyor..." ve "Welcome - Veteriner Kayıtlı Sokak Hayvanları Listesi"
+        // ŞİMDİ: String resource kullanımı
+        Toast.makeText(this, getString(R.string.qr_admin_toast_welcome_opening), Toast.LENGTH_LONG).show();
 
         // Burada veteriner kayıtlı sokak hayvanları listesini göster
         // Örnek: Intent ile WelcomeActivity'yi aç
@@ -130,7 +138,7 @@ public class QRAdmin extends AppCompatActivity {
 
         // Şimdilik sadece mesaj göster
         TextView qrDataTextView = findViewById(R.id.qr_data_text_view);
-        qrDataTextView.setText("Welcome - Veteriner Kayıtlı Sokak Hayvanları Listesi");
+        qrDataTextView.setText(getString(R.string.qr_admin_label_welcome_list));
     }
 
     private void handleInternalRoute(Uri route) {
@@ -139,7 +147,9 @@ public class QRAdmin extends AppCompatActivity {
         String host = route.getHost();
         String path = route.getPath();
 
-        Toast.makeText(this, "Internal Route: " + host + path, Toast.LENGTH_LONG).show();
+        // ÖNCE: Hardcoded "Internal Route: " + host + path
+        // ŞİMDİ: String resource kullanımı - format string ile host ve path parametreleri
+        Toast.makeText(this, getString(R.string.qr_admin_toast_internal_route, host != null ? host : "", path != null ? path : ""), Toast.LENGTH_LONG).show();
 
         // Burada route'a göre uygulama içi işlemler yap
         if ("souls".equals(host)) {
@@ -185,11 +195,16 @@ public class QRAdmin extends AppCompatActivity {
             }
 
             // Diğer HTTP linkleri için ham veriyi göster
-            Toast.makeText(this, "URL Content: " + url, Toast.LENGTH_LONG).show();
+            // ÖNCE: Hardcoded "URL Content: " + url
+            // ŞİMDİ: String resource kullanımı - format string ile url parametresi
+            Toast.makeText(this, getString(R.string.qr_admin_toast_url_content, url), Toast.LENGTH_LONG).show();
 
         } catch (Exception e) {
             Log.i(TAG, "[catch] in");
-            Toast.makeText(this, "URL parse error: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+            // ÖNCE: Hardcoded "URL parse error: " + e.getMessage()
+            // ŞİMDİ: String resource kullanımı - format string ile error mesajı
+            String errorMsg = e.getMessage() == null ? "-" : e.getMessage();
+            Toast.makeText(this, getString(R.string.qr_admin_toast_url_parse_error, errorMsg), Toast.LENGTH_SHORT).show();
         }
     }
 
@@ -203,7 +218,9 @@ public class QRAdmin extends AppCompatActivity {
             processQRContent(slugRoute.toString());
         } else {
             // Gerçek düz metin
-            Toast.makeText(this, "Text Content: " + text, Toast.LENGTH_LONG).show();
+            // ÖNCE: Hardcoded "Text Content: " + text
+            // ŞİMDİ: String resource kullanımı - format string ile text parametresi
+            Toast.makeText(this, getString(R.string.qr_admin_toast_text_content, text), Toast.LENGTH_LONG).show();
         }
     }
 
@@ -252,13 +269,17 @@ public class QRAdmin extends AppCompatActivity {
                 if (!TextUtils.isEmpty(raw)) {
                     lastRaw = raw;
                     updateQRDataView();
-                    Toast.makeText(this, "Scanned: " + raw, Toast.LENGTH_SHORT).show();
+                    // ÖNCE: Hardcoded "Scanned: " + raw
+                    // ŞİMDİ: String resource kullanımı - format string ile raw parametresi
+                    Toast.makeText(this, getString(R.string.qr_admin_toast_scanned, raw), Toast.LENGTH_SHORT).show();
 
                     // Otomatik işleme
                     processQRContent(raw);
                 }
             } else if (resultCode == Activity.RESULT_CANCELED) {
-                Toast.makeText(this, "Scan cancelled", Toast.LENGTH_SHORT).show();
+                // ÖNCE: Hardcoded "Scan cancelled"
+                // ŞİMDİ: String resource kullanımı
+                Toast.makeText(this, getString(R.string.qr_admin_toast_scan_cancelled), Toast.LENGTH_SHORT).show();
             }
         } else if (requestCode == IntentIntegrator.REQUEST_CODE) {
             // ZXing scanner sonucu (fallback)
@@ -268,10 +289,14 @@ public class QRAdmin extends AppCompatActivity {
                     String raw = result.getContents().trim();
                     lastRaw = raw;
                     updateQRDataView();
-                    Toast.makeText(this, "Scanned: " + raw, Toast.LENGTH_SHORT).show();
+                    // ÖNCE: Hardcoded "Scanned: " + raw
+                    // ŞİMDİ: String resource kullanımı - format string ile raw parametresi
+                    Toast.makeText(this, getString(R.string.qr_admin_toast_scanned, raw), Toast.LENGTH_SHORT).show();
                     processQRContent(raw);
                 } else {
-                    Toast.makeText(this, "Scan cancelled", Toast.LENGTH_SHORT).show();
+                    // ÖNCE: Hardcoded "Scan cancelled"
+                    // ŞİMDİ: String resource kullanımı
+                    Toast.makeText(this, getString(R.string.qr_admin_toast_scan_cancelled), Toast.LENGTH_SHORT).show();
                 }
             }
         }

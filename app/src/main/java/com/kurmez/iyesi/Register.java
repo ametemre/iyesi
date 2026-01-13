@@ -45,7 +45,9 @@ public class Register extends AppCompatActivity {
         // Intent extras’tan alınır
         deviceId = getIntent().getStringExtra("deviceId");
         if (deviceId == null) {
-            Helpers.showToastSafe(this, "Eksik parameter: deviceId");
+            // ÖNCE: Hardcoded "Eksik parameter: deviceId"
+            // ŞİMDİ: String resource kullanımı
+            Helpers.showToastSafe(this, getString(R.string.register_toast_missing_parameter));
             finish();
             return;
         }
@@ -73,32 +75,34 @@ public class Register extends AppCompatActivity {
         String location = locationField.getText().toString().trim();
         String phone    = phoneField.getText().toString().trim();
 
+        // ÖNCE: Hardcoded error mesajları
+        // ŞİMDİ: String resource kullanımı
         if (TextUtils.isEmpty(username)) {
-            usernameField.setError("Kullanıcı adı gerekli");
+            usernameField.setError(getString(R.string.register_error_username_required));
             usernameField.requestFocus();
             return;
         }
 
         if (TextUtils.isEmpty(email) || !Patterns.EMAIL_ADDRESS.matcher(email).matches()) {
-            emailField.setError("Geçerli e‑posta gerekli");
+            emailField.setError(getString(R.string.register_error_valid_email_required));
             emailField.requestFocus();
             return;
         }
 
         if (TextUtils.isEmpty(password) || password.length() < 6) {
-            passwordField.setError("Şifre en az 6 karakter olmalı");
+            passwordField.setError(getString(R.string.register_error_password_min_length));
             passwordField.requestFocus();
             return;
         }
 
         if (TextUtils.isEmpty(location)) {
-            locationField.setError("Konum gerekli");
+            locationField.setError(getString(R.string.register_error_location_required));
             locationField.requestFocus();
             return;
         }
 
         if (TextUtils.isEmpty(phone) || phone.length() < 10) {
-            phoneField.setError("Geçerli telefon numarası gerekli");
+            phoneField.setError(getString(R.string.register_error_valid_phone_required));
             phoneField.requestFocus();
             return;
         }
@@ -107,16 +111,23 @@ public class Register extends AppCompatActivity {
         mAuth.createUserWithEmailAndPassword(email, password)
                 .addOnCompleteListener(task -> {
                     if (!task.isSuccessful()) {
+                        // ÖNCE: Hardcoded "Kayıt başarısız: " + error
+                        // ŞİMDİ: String resource kullanımı - format string ile error mesajı
+                        String errorMsg = task.getException() != null && task.getException().getMessage() != null
+                                ? task.getException().getMessage()
+                                : "-";
                         Toast.makeText(this,
-                                "Kayıt başarısız: " + task.getException().getMessage(),
+                                getString(R.string.register_toast_registration_failed, errorMsg),
                                 Toast.LENGTH_LONG).show();
                         return;
                     }
 
                     FirebaseUser user = mAuth.getCurrentUser();
                     if (user == null || user.isAnonymous()) {
+                        // ÖNCE: Hardcoded "Beklenmedik hata: kullanıcı alınamadı"
+                        // ŞİMDİ: String resource kullanımı
                         Toast.makeText(this,
-                                "Beklenmedik hata: kullanıcı alınamadı",
+                                getString(R.string.register_toast_unexpected_error),
                                 Toast.LENGTH_LONG).show();
                         return;
                     }
@@ -143,8 +154,11 @@ public class Register extends AppCompatActivity {
                                         });
                             })
                             .addOnFailureListener(e -> {
+                                // ÖNCE: Hardcoded "Sunucu hatası: " + error
+                                // ŞİMDİ: String resource kullanımı - format string ile error mesajı
+                                String errorMsg = e.getMessage() == null ? "-" : e.getMessage();
                                 Toast.makeText(this,
-                                        "Sunucu hatası: " + e.getMessage(),
+                                        getString(R.string.register_toast_server_error, errorMsg),
                                         Toast.LENGTH_LONG).show();
                             });
                 });

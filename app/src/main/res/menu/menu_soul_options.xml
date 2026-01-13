@@ -2,15 +2,15 @@
     xmlns:app="http://schemas.android.com/apk/res-auto">
     <item
         android:id="@+id/EvlatEdin"
-        android:title="Evlat Edin" />
+        android:title="@string/menu_soul_adopt" />
     <item
         android:id="@+id/Duzenle"
-        android:title="Düzenle" />
+        android:title="@string/menu_soul_edit" />
     <item
         android:id="@+id/Kaydet"
-        android:title="Kaydet" />
+        android:title="@string/menu_soul_save" />
     <item
         android:id="@+id/Kritik"
-        android:title="Kritik Sağlık Modu"
+        android:title="@string/menu_soul_critical"
         app:showAsAction="never" />
 </menu>

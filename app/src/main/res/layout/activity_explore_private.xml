@@ -29,7 +29,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:padding="8dp"
-            android:text="Yol seçilmedi" />
+            android:text="@string/explore_private_text_no_path_selected" />
 
         <!-- Records list -->
         <androidx.recyclerview.widget.RecyclerView

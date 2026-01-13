@@ -35,7 +35,7 @@
             android:layout_marginBottom="15dp"
             android:layout_marginHorizontal="30dp"
             android:background="@drawable/button_border_white"
-            android:text="Take Another Photo"
+            android:text="@string/founded_button_take_another_photo"
             android:textColor="@android:color/black"
             android:elevation="0dp"
             android:stateListAnimator="@null" />
@@ -45,7 +45,7 @@
             android:id="@+id/companion_species"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:hint="Cinsi (Species)"
+            android:hint="@string/founded_hint_species"
             android:layout_marginTop="16dp"
             android:inputType="text" />
 
@@ -53,7 +53,7 @@
             android:id="@+id/companion_found_date"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:hint="Bulunduğu Tarih (Found Date)"
+            android:hint="@string/founded_hint_found_date"
             android:layout_marginTop="16dp"
             android:inputType="date" />
 
@@ -61,9 +61,25 @@
             android:id="@+id/companion_found_place"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:hint="Bulunduğu Yer (Found Place)"
+            android:hint="@string/founded_hint_found_place"
             android:layout_marginTop="16dp"
             android:inputType="text" />
+
+        <!-- Task Tag (Yavru Hayvan / Evsiz Hayvan / Sahiplenme) -->
+        <Spinner
+            android:id="@+id/companion_task_tag"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:importantForAutofill="no" />
+
+        <!-- Task Subtype (İlk spinner seçimine göre değişir) -->
+        <Spinner
+            android:id="@+id/companion_task_subtype"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:importantForAutofill="no" />
 
         <!-- Save Button -->
         <androidx.appcompat.widget.AppCompatButton
@@ -75,7 +91,7 @@
             android:layout_marginBottom="15dp"
             android:layout_marginHorizontal="30dp"
             android:background="@drawable/button_border_white"
-            android:text="Register Companion"
+            android:text="@string/founded_button_register_companion"
             android:textColor="@android:color/black"
             android:elevation="0dp"
             android:stateListAnimator="@null" />

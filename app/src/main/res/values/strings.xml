@@ -20,4 +20,776 @@
     <string name="original">Original</string>
     <string name="undistorted">Undistorted</string>
     <string name="mesajlar">Mesajlar</string>
+
+    <!-- NodeDetailsBottomSheet - Node Types -->
+    <string name="node_type_feeding">Besleme</string>
+    <string name="node_type_nest">Yuva</string>
+    <string name="node_type_shelter">Barınak</string>
+    <string name="node_type_task">Görev</string>
+    <string name="node_type_default">Nokta</string>
+    <string name="node_type_with_server">%1$s (%2$s)</string>
+
+    <!-- NodeDetailsBottomSheet - Chip Labels -->
+    <string name="chip_label_when_fed">Ne zaman beslendi: %1$s</string>
+    <string name="chip_label_who_fed">Kim besledi: %1$s</string>
+    <string name="chip_label_amount">Miktar: %1$s</string>
+    <string name="chip_label_when_cleaned">Ne zaman temizlendi: %1$s</string>
+    <string name="chip_label_who_cleaned">Kim temizledi: %1$s</string>
+    <string name="chip_label_food_type">Mama türü: %1$s</string>
+    <string name="chip_label_water_available">Su var</string>
+    <string name="chip_label_last_maintenance">Son bakım: %1$s</string>
+    <string name="chip_label_maintained_by">Bakım yapan: %1$s</string>
+    <string name="chip_label_capacity">Kapasite: %1$d</string>
+    <string name="chip_label_material">Malzeme: %1$s</string>
+    <string name="chip_label_condition">Durum: %1$s</string>
+    <string name="chip_label_last_visit">Son ziyaret: %1$s</string>
+    <string name="chip_label_visited_by">Kim ziyaret etti: %1$s</string>
+    <string name="chip_label_shelter_name">Barınak: %1$s</string>
+    <string name="chip_label_manager">Sorumlu: %1$s</string>
+    <string name="chip_label_contact">İletişim: %1$s</string>
+    <string name="chip_label_capacity_with_current">Kapasite: %1$d (Mevcut: %2$d)</string>
+    <string name="chip_label_current_count">Mevcut: %1$d</string>
+    <string name="chip_label_24h_vet">24 saat veteriner</string>
+    <string name="chip_label_operating_room">Ameliyathane var</string>
+    <string name="chip_label_xray">Röntgen cihazı var</string>
+    <string name="chip_label_feeding_time">Mama saati: %1$s</string>
+    <string name="chip_label_food_per_animal">Hayvan başına: %1$d gr</string>
+    <string name="chip_label_quarantine_area">Karantina bölgesi var</string>
+    <string name="chip_label_large_play_area">Büyük oyun alanı var</string>
+    <string name="chip_label_employee_count">Çalışan: %1$d</string>
+    <string name="chip_label_phone">Telefon: %1$s</string>
+    <string name="chip_label_working_hours">Çalışma saatleri: %1$s</string>
+    <string name="chip_label_website">Web: %1$s</string>
+    <string name="chip_label_rating">Değerlendirme: %1$s</string>
+    <string name="chip_label_assigned_to">Atanan: %1$s</string>
+    <string name="chip_label_state">Durum: %1$s</string>
+    <string name="chip_label_time_window">Zaman penceresi: %1$s</string>
+
+    <!-- NodeDetailsBottomSheet - Meta Labels -->
+    <string name="meta_label_status">Durum: %1$s</string>
+    <string name="meta_label_location">Konum: %1$s</string>
+    <string name="meta_label_souls">Canlar: %1$d</string>
+    <string name="meta_label_supervisor">Denetleyici: %1$s</string>
+    <string name="meta_label_veterinarian">Veteriner: %1$s</string>
+    <string name="meta_label_feeding">Besleme: %1$s</string>
+
+    <!-- NodeDetailsBottomSheet - Time Format -->
+    <string name="time_format_just_now">şimdi</string>
+    <string name="time_format_minutes_ago">%1$d dk önce</string>
+    <string name="time_format_hours_ago">%1$d sa önce</string>
+    <string name="time_format_days_ago">%1$d gün önce</string>
+
+    <!-- NodeDetailsBottomSheet - Status Values -->
+    <string name="status_active">Aktif</string>
+    <string name="status_inactive">Pasif</string>
+    <string name="status_pending">Beklemede</string>
+    <string name="status_closed">Kapatıldı</string>
+    <string name="status_maintenance">Bakımda</string>
+
+    <!-- NodeDetailsBottomSheet - Toast Messages -->
+    <string name="toast_camera_unavailable">Kamera kullanılamıyor</string>
+    <string name="toast_photo_captured">Fotoğraf çekildi (Backend entegrasyonu TODO)</string>
+
+    <!-- NodeDetailsBottomSheet - Format Separators -->
+    <string name="format_separator_bullet"> • </string>
+    <string name="format_separator_comma">, </string>
+    <string name="format_separator_space"> </string>
+    <string name="format_separator_dash"> - </string>
+    <string name="format_time_window_same_day">%1$s - %2$s</string>
+    <string name="format_time_window_different_days">%1$s %2$s - %3$s %4$s</string>
+    <string name="format_amount_with_unit">%1$s %2$s</string>
+
+    <!-- Founded.java - Toast Messages -->
+    <string name="founded_toast_connection_preparing">Bağlantı hazırlanıyor, lütfen tekrar deneyin…</string>
+    <string name="founded_toast_location_updated">Bulunduğu yer güncellendi</string>
+    <string name="founded_toast_location_unavailable">Konum alınamadı. Lütfen GPS’i açın.</string>
+    <string name="founded_toast_camera_not_available">Camera not available</string>
+    <string name="founded_toast_please_select_photo">Lütfen en az bir fotoğraf seçin.</string>
+    <string name="founded_toast_photo_not_found">Foto bulunamadı. Lütfen seçin.</string>
+    <string name="founded_toast_auth_error">Doğrulama hatası (%1$d). Lütfen oturum açın ve uygulamayı doğrulayın.</string>
+    <string name="founded_toast_server_error">Sunucu hatası: %1$s</string>
+    <string name="founded_toast_location_required">Konum alınamadı. “lat, lng” girin veya konum izni verin.</string>
+    <string name="founded_toast_no_photo">Fotoğraf yok!</string>
+    <string name="founded_toast_city_country_undetected">Şehir/ülke tespit edilemedi. İnternet/GPS açık mı? (country/city zorunlu)</string>
+    <string name="founded_toast_unexpected_error">Beklenmeyen hata: %1$s</string>
+    <string name="founded_toast_response_key_missing">Yanıt anahtarı alınamadı</string>
+    <string name="founded_toast_response_parse_error">Yanıt çözümlenemedi</string>
+    <string name="founded_error_date_required">Tarih gerekli (yyyy-MM-dd)</string>
+
+    <!-- Founded.java - Dialog Messages -->
+    <string name="founded_dialog_task_type_young_animal_title">Yavru Hayvan</string>
+    <string name="founded_dialog_task_type_young_animal_message">Herhangi bir kullanıcı sokakta, yavru hayvanlara denk gelebilir. Bu yavrular annesiz kalmış da olabilir, hasta da olabilir ya da yuva alanında da olabilir. Her halükarda sistemin bu bilgiyi işlemesi ve not alması elzemdir. Her duruma göre farklı aksiyon alınmalıdır bu yüzden her halükarda eğitimli birinin yardımına ihtiyaç duyulacaktır. Her vakanın süreci farklıdır fakat tamamında ehil bir göz tarafından tanı konmalıdır. Bu durumla ilgili uyulması gereken talimatlar Kayıt ekranındaki popUp ile sağlanacaktır. Her durumda veri sisteme düşecek ve ehil kullanıcıların tamamına bildirim gidecektir.</string>
+    <string name="founded_dialog_task_type_stray_animal_title">Evsiz Hayvan</string>
+    <string name="founded_dialog_task_type_stray_animal_message">Herhangi bir kullanıcı sokakta, evsiz hayvanlara denk gelebilir. Bu hayvanlar yaralı da olabilir, hasta da olabilir ya da normal sokak hayat alanlarında da olabilir. Her halükarda sistemin bu bilgiyi işlemesi ve not alması elzemdir. Her duruma göre farklı aksiyon alınmalıdır; bu sebeble her halükarda tecrübeli birinin yardımına ihtiyaç duyulacaktır. Her vakanın süreci farklıdır fakat tamamında ehil bir göz tarafından tanı konmalıdır. Bu durumla ilgili uyulması gereken talimatlar kayıt ekranındaki popUp ile sağlanacaktır. Her durumda veri sisteme düşecek ve ehil kullanıcıların tamamına bildirim gidecektir.</string>
+    <string name="founded_dialog_task_type_adoption_title">Sahiplenme</string>
+    <string name="founded_dialog_task_type_adoption_message">Herhangi bir kullanıcı herhangi bir hayvanı sahiplenmiş olabilir. Sahiplendiği hayvan hasta, bakımsız ya da sağlıklı olabilir. Her halükarda sistemin bu bilgiyi edinmesi ve daha bilinçli sahipler (iyeler) olabilmeleri için iye adaylarına rehberlik edebilmesi, sistemin ana amacıdır. Bu sebeble bir kullanıcı sahiplendiği hayvanı sisteme kaydettiğinde nitelikli kullanıcılara bildirim gidecek ve daha iyi bir sahip olmalarına yardım edecek yönergeler kayıt ekranındaki popUp ile sağlanacaktır.</string>
+    <string name="founded_dialog_button_understood">Anladım</string>
+
+    <!-- SokakActivity.java - Layer Type Names -->
+    <string name="sokak_layer_type_shelter">Barınak</string>
+    <string name="sokak_layer_type_feeding">Besleme</string>
+    <string name="sokak_layer_type_nest">Yuva</string>
+    <string name="sokak_layer_type_task">Görev</string>
+
+    <!-- SokakActivity.java - Toast Messages -->
+    <string name="sokak_toast_location_unavailable">Konum alınamadı.</string>
+    <string name="sokak_toast_location_permission_denied">Konum izni verilmedi.</string>
+    <string name="sokak_toast_location_info_unavailable">Konum bilgisi alınamadı. Veterinerler gösterilemiyor.</string>
+    <string name="sokak_toast_adminpath_not_ready">AdminPath hazır değil (reverseGeocode gerekli).</string>
+    <string name="sokak_toast_ulgen_fab_todo">Ülgen FAB (TODO)</string>
+    <string name="sokak_toast_acil_fab_todo">Acil FAB (TODO)</string>
+    <string name="sokak_toast_sound_todo">Sound (TODO)</string>
+    <string name="sokak_toast_find_nearby_baksi_error">findNearbyBaksi hata: %1$s</string>
+    <string name="sokak_toast_node_manager_null">NodeManager null</string>
+    <string name="sokak_toast_vets_loaded">%1$d veteriner yüklendi (%2$s)</string>
+    <string name="sokak_toast_parse_error">Parse hata: %1$s</string>
+    <string name="sokak_toast_find_nearby_baksi_full_error">findNearbyBaksi hatası: %1$s</string>
+    <string name="sokak_toast_vets_count">%1$d veteriner (%2$s)</string>
+    <string name="sokak_toast_vets_load_error">Veteriner yükleme hatası: %1$s</string>
+    <string name="sokak_toast_expand_search">Aramayı genişlet: %1$s</string>
+    <string name="sokak_toast_node_created">Node created: %1$s (%2$s)</string>
+    <string name="sokak_toast_node_create_failed">Node create failed: %1$s</string>
+    <string name="sokak_toast_marker_reposition_mode">Marker taşıma modu: %1$s</string>
+    <!-- Founded.java - Task Type Constants (for switch case matching) -->
+    <string name="founded_task_type_young_animal">Yavru Hayvan</string>
+    <string name="founded_task_type_stray_animal">Evsiz Hayvan</string>
+    <string name="founded_task_type_adoption">Sahiplenme</string>
+
+    <!-- IyeActivity.java - Row Meta Labels -->
+    <string name="iye_row_label_username">Kullanıcı Adı</string>
+    <string name="iye_row_label_email">E‑posta</string>
+    <string name="iye_row_label_location">Konum</string>
+    <string name="iye_row_label_phone">Telefon</string>
+    <string name="iye_row_label_avatar_url">Avatar URL</string>
+
+    <!-- IyeActivity.java - Dialog Strings -->
+    <string name="iye_dialog_membership_title">Üyelik Tamamlama</string>
+    <string name="iye_dialog_password_hint">Yeni Şifreni Belirle...</string>
+    <string name="iye_dialog_button_continue">Devam</string>
+    <string name="iye_dialog_button_cancel">İptal</string>
+    <string name="iye_dialog_button_verifying">Doğrulanıyor...</string>
+    <string name="iye_dialog_error_empty">Boş olamaz</string>
+    <string name="iye_dialog_error_email_not_found">Kullanıcı e-posta bilgisi bulunamadı.</string>
+
+    <!-- IyeActivity.java - Toast Messages -->
+    <string name="iye_toast_edit_mode">Düzenleme modu</string>
+    <string name="iye_toast_session_not_found">Oturum bulunamadı.</string>
+    <string name="iye_toast_token_claims_error">Token/Claims alınamadı: %1$s</string>
+    <string name="iye_toast_password_changed">Şifre başarıyla değiştirildi.</string>
+    <string name="iye_toast_password_change_failed">Şifre değiştirilemedi: %1$s</string>
+    <string name="iye_toast_password_changed_email_sent">Şifre başarıyla değiştirildi. E-posta doğrulaması gönderildi.</string>
+    <string name="iye_toast_password_change_failed_generic">Şifre değiştirme başarısız.</string>
+    <string name="iye_toast_login_required">Giriş yapmalısın.</string>
+    <string name="iye_toast_android_version_required">Android 7.0+ gerekli.</string>
+    <string name="iye_toast_no_internet">İnternet bağlantısı yok.</string>
+    <string name="iye_toast_profile_updated">Profil güncellendi.</string>
+    <string name="iye_toast_no_changes">Değişiklik yok.</string>
+    <string name="iye_toast_user_not_found">Kullanıcı bulunamadı.</string>
+    <string name="iye_toast_image_uploaded">Görsel yüklendi</string>
+    <string name="iye_toast_upload_error">Yükleme hatası: %1$s</string>
+    <string name="iye_toast_upload_failed">Yükleme başarısız: %1$s</string>
+    <string name="iye_toast_please_upload_image">Önce görseli yükleyin</string>
+    <string name="iye_toast_location_searching">Konum aranıyor...</string>
+    <string name="iye_toast_location_timeout">Konum alınamadı - zaman aşımı</string>
+    <string name="iye_toast_location_permission_required">Konum izni gerekli</string>
+    <string name="iye_toast_location_unavailable">Konum alınamadı</string>
+    <string name="iye_toast_location_service_unavailable">Konum servisi kullanılamıyor</string>
+    <string name="iye_toast_location_unavailable_with_error">Konum alınamadı: %1$s</string>
+    <string name="iye_toast_location_invalid">Konum bilgisi geçersiz.</string>
+    <string name="iye_toast_location_fetching">Konum alınıyor...</string>
+    <string name="iye_toast_location_not_found">Konum bulunamadı</string>
+    <string name="iye_toast_location_info_not_found">Konum bilgisi bulunamadı</string>
+    <string name="iye_toast_location_permission_granted">Konum için izin verildi.</string>
+    <string name="iye_toast_location_permission_required_dialog">Konum izni gereklidir.</string>
+
+    <!-- IyeActivity.java - Loading Messages -->
+    <string name="iye_loading_profile">Profil yükleniyor...</string>
+    <string name="iye_loading_saving">Kaydediliyor...</string>
+    <string name="iye_loading_image">Görsel yükleniyor…</string>
+    <string name="iye_loading_generic">Yükleniyor...</string>
+
+    <!-- IyeActivity.java - EditText Hints -->
+    <string name="iye_hint_location_tap">Konum seçmek için dokun</string>
+
+    <!-- IyeActivity.java - Error Messages -->
+    <string name="iye_error_json_create">Hata: JSON oluşturulamadı: %1$s</string>
+    <string name="iye_error_server_unreachable">Sunucu adresine ulaşılamıyor. İnternet bağlantınızı veya base URL’inizi kontrol edin.</string>
+    <string name="iye_error_update_failed">Güncelleme başarısız: %1$s</string>
+
+    <!-- IyeActivity.java - Address Format -->
+    <string name="iye_address_format_fallback">LangLat: %1$.6f,%2$.6f  —  AvatarLoc:%3$.6f,%4$.6f</string>
+    <string name="iye_address_format_separator"> / </string>
+    <string name="iye_address_format_dash">—</string>
+
+    <!-- SoulsManagerActivity.java - Dialog Titles -->
+    <string name="souls_dialog_title_new">Yeni Soul</string>
+    <string name="souls_dialog_title_edit">Düzenle</string>
+
+    <!-- SoulsManagerActivity.java - Dialog Buttons -->
+    <string name="souls_dialog_button_save">Kaydet</string>
+    <string name="souls_dialog_button_cancel">Vazgeç</string>
+    <string name="souls_dialog_button_yes">Evet</string>
+    <string name="souls_dialog_button_no">Hayır</string>
+
+    <!-- SoulsManagerActivity.java - Dialog Messages -->
+    <string name="souls_dialog_message_delete_confirm">Silmek istiyor musun?</string>
+
+    <!-- SoulsManagerActivity.java - Toast Messages -->
+    <string name="souls_toast_login_required">Giriş gerekli.</string>
+    <string name="souls_toast_name_required">Ad gerekli</string>
+    <string name="souls_toast_id_missing">ID yok</string>
+    <string name="souls_toast_token_error">Token hatası: %1$s</string>
+    <string name="souls_toast_create_error">Oluşturma hatası: %1$s</string>
+    <string name="souls_toast_update_error">Güncelleme hatası: %1$s</string>
+    <string name="souls_toast_delete_error">Silme hatası: %1$s</string>
+    <string name="souls_toast_list_error">Listeleme hatası: %1$s</string>
+    <string name="souls_toast_seed_error">Seed hata: %1$s</string>
+    <string name="souls_toast_seed_city_done">%1$s → %2$d/%3$d OK</string>
+
+    <!-- Message.java - Toast Messages -->
+    <string name="message_toast_login_required">Devam etmek için giriş yapmalısınız.</string>
+    <string name="message_toast_blocked">Engellendi</string>
+    <string name="message_toast_muted">Sessize alındı</string>
+    <string name="message_toast_deleted">Silindi</string>
+    <string name="message_toast_follow_action">Takip işlemi</string>
+    <string name="message_toast_security_verification_failed">Güvenlik doğrulaması başarısız</string>
+    <string name="message_toast_request_preparation_error">İstek hazırlama hatası: %1$s</string>
+
+    <!-- Message.java - UI Labels -->
+    <string name="message_label_conversation">Konuşma</string>
+
+    <!-- Messaging.java - Toast Messages -->
+    <string name="messaging_toast_user_list_error">Kullanıcı listesi alınamadı</string>
+    <string name="messaging_toast_admin_only">Bu işlemi sadece Ülgen ve Tengri yapabilir.</string>
+    <string name="messaging_toast_bluetooth_enabled">Bluetooth aktif ve görünür hale geldi</string>
+    <string name="messaging_toast_profile_editing">Profil Düzenleniyor</string>
+
+    <!-- SokakActivity.java - Unit Strings -->
+    <string name="unit_kilometer">km</string>
+    <string name="unit_meter">m</string>
+    <!-- Positional format: aapt warning'lerini engeller -->
+    <string name="format_distance_km">%1$.1f%2$s</string>
+    <string name="format_distance_m">%1$d%2$s</string>
+
+    <!-- Explore.java - Toast Messages -->
+    <string name="explore_toast_login_required">Lütfen önce giriş yapın.</string>
+    <string name="explore_toast_role_not_assigned">Rol atanmadı!</string>
+    <string name="explore_toast_access_denied">Bu sayfaya erişim yetkiniz yok: %1$s</string>
+    <string name="explore_toast_role_query_error">Rol sorgusu hatası: %1$s</string>
+    <string name="explore_toast_empty_list">Boş liste döndü</string>
+    <string name="explore_toast_parse_error">Veri çözümlenirken hata.</string>
+    <string name="explore_toast_data_fetch_error">Veri alınamadı: %1$s</string>
+    <string name="explore_toast_posts_load_error">Gönderiler yüklenemedi.</string>
+    <string name="explore_toast_refreshing">Yenileniyor…</string>
+
+    <!-- Explore.java - UI Labels -->
+    <string name="explore_label_record_owner">Kayıt sahibi: %1$s</string>
+    <string name="explore_label_username_placeholder">KullanıcıAdı</string>
+
+    <!-- ExplorePrivate.java - Toast Messages -->
+    <string name="explore_private_toast_login_required">Bu sayfayı görüntülemek için giriş yapmalısınız.</string>
+    <string name="explore_private_toast_cloud_function_error">Cloud Function hata: %1$s</string>
+    <string name="explore_private_toast_completed">Tamamlandı ✓</string>
+    <string name="explore_private_toast_error">Hata: %1$s</string>
+    <string name="explore_private_toast_role_updated">Rol güncellendi: %1$s</string>
+    <string name="explore_private_toast_deleted">Silindi</string>
+    <string name="explore_private_toast_records_loaded">ExplorePrivate: %1$d kayıt (%2$s)</string>
+    <string name="explore_private_toast_records_loaded_simple">ExplorePrivate: %1$d kayıt yüklendi</string>
+    <string name="explore_private_toast_data_read_error">Veri okunamadı</string>
+    <string name="explore_private_toast_permission_denied">İzin reddedildi (Rules/App Check?)</string>
+    <string name="explore_private_toast_app_check_missing">App Check doğrulaması eksik</string>
+    <string name="explore_private_toast_network_error">Ağ hatası</string>
+    <string name="explore_private_toast_error_with_detail">%1$s • %2$s</string>
+
+    <!-- ExplorePrivate.java - Dialog Titles -->
+    <string name="explore_private_dialog_title_quick_actions">Hızlı İşlemler</string>
+    <string name="explore_private_dialog_title_select_role">Yeni Rol Seç</string>
+    <string name="explore_private_dialog_title_delete_confirm">Silinsin mi?</string>
+
+    <!-- ExplorePrivate.java - Dialog Messages -->
+    <string name="explore_private_dialog_message_delete_confirm">Bu kaydı kalıcı olarak silmek istiyor musunuz?</string>
+
+    <!-- ExplorePrivate.java - Dialog Items -->
+    <string name="explore_private_dialog_item_complete">Bu kaydı tamamla</string>
+    <string name="explore_private_dialog_item_change_role">Rolü değiştir…</string>
+    <string name="explore_private_dialog_item_delete">Sil</string>
+    <string name="explore_private_dialog_button_cancel">Vazgeç</string>
+
+    <!-- ExplorePrivate.java - UI Labels -->
+    <string name="explore_private_label_species">Tür: %1$s</string>
+    <string name="explore_private_label_record_owner">Kayıt sahibi: %1$s</string>
+    <string name="explore_private_label_location">Konum: %1$s</string>
+
+    <!-- MainActivity.java - Dialog Titles -->
+    <string name="main_dialog_title_update_required">Güncelleme / Düzeltme Gerekli</string>
+    <string name="main_dialog_title_device_qr_code">Device QR Code</string>
+
+    <!-- MainActivity.java - Dialog Messages -->
+    <!-- Not: AAPT bazı ortamlarda '\\n' kaçışlarını yanlış yorumlayıp build'i kırabiliyor. Literal newline kullan. -->
+    <string name="main_dialog_message_play_env_issue">Google Play ortamında eksik/uyumsuzluk algılandı.
+Neden: %1$s
+
+Lütfen Google Play Hizmetleri ve Play Store’u güncelleyin veya etkinleştirin.</string>
+
+    <!-- MainActivity.java - Dialog Buttons -->
+    <string name="main_dialog_button_play_services">Play Hizmetleri</string>
+    <string name="main_dialog_button_play_store">Play Store</string>
+    <string name="main_dialog_button_this_app_store">Bu Uygulama (Store)</string>
+    <string name="main_dialog_button_close">Close</string>
+
+    <!-- MainActivity.java - Toast Messages -->
+    <string name="main_toast_qr_generation_failed">Failed to generate QR code</string>
+    <string name="main_toast_registration_completed">Registration completed on-chain</string>
+    <string name="main_toast_registration_failed">Registration failed: %1$s</string>
+
+    <!-- MainActivity.java - Error Messages -->
+    <string name="main_error_play_store_not_installed">Google Play Store kurulu değil / devre dışı</string>
+    <string name="main_error_not_installed_from_play">Uygulama resmi Play Store’dan yüklenmemiş.</string>
+    <string name="main_error_play_env_missing">Play ortamı eksik/eski. (Integrity env)</string>
+    <string name="main_error_transient">Geçici hata: Lütfen tekrar deneyin.</string>
+    <string name="main_error_nonce_input">Nonce girdisi hatası tekrarlandı.</string>
+    <string name="main_error_unknown_integrity">Bilinmeyen Integrity hatası.</string>
+    <string name="main_error_appcheck_warmup_failed">AppCheck warm-up başarısız: %1$s</string>
+    <string name="main_error_anon_signin_user_null">Anon sign-in user null</string>
+    <string name="main_error_id_token_anon">ID token alınamadı (anon).</string>
+    <string name="main_error_anon_signin_failed">Anon giriş başarısız.</string>
+
+    <!-- SokakActivity.java - Fallback Labels -->
+    <string name="sokak_label_veteriner_fallback">Veteriner</string>
+
+    <!-- ExplorePrivate.java - Fallback Labels -->
+    <string name="explore_private_error_cf_hata">CF hata</string>
+    <string name="explore_private_error_unknown">bilinmeyen</string>
+
+    <!-- SokakActivity.java - Error Fallback -->
+    <string name="sokak_error_unknown">unknown</string>
+
+    <!-- Welcome.java - Toast Messages -->
+    <string name="welcome_toast_no_internet">İnternet bağlantısı yok. Lütfen bağlantınızı kontrol edin.</string>
+    <string name="welcome_toast_ulgen_or_tengri">Ülgen Yada Tanrı</string>
+    <string name="welcome_toast_empty_list">Boş liste döndü</string>
+    <string name="welcome_toast_data_fetch_error">Veri alınamadı: %1$s</string>
+    <string name="welcome_toast_item_selected">Selected: %1$s</string>
+    <string name="welcome_toast_notification_coming_soon">Bildirim özelliği yakında gelecek</string>
+
+    <!-- Login.java - Error Messages and Toast Messages -->
+    <string name="login_error_valid_email_required">Valid email is required</string>
+    <string name="login_error_password_required">Password is required</string>
+    <string name="login_toast_app_integrity_failed">App integrity doğrulaması başarısız. Tekrar deneyin.</string>
+    <string name="login_toast_successful">Login successful</string>
+    <string name="login_error_unknown">Unknown error</string>
+    <string name="login_toast_failed">Login failed: %1$s</string>
+
+    <!-- Register.java - Error Messages and Toast Messages -->
+    <string name="register_toast_missing_parameter">Eksik parameter: deviceId</string>
+    <string name="register_error_username_required">Kullanıcı adı gerekli</string>
+    <string name="register_error_valid_email_required">Geçerli e‑posta gerekli</string>
+    <string name="register_error_password_min_length">Şifre en az 6 karakter olmalı</string>
+    <string name="register_error_location_required">Konum gerekli</string>
+    <string name="register_error_valid_phone_required">Geçerli telefon numarası gerekli</string>
+    <string name="register_toast_registration_failed">Kayıt başarısız: %1$s</string>
+    <string name="register_toast_unexpected_error">Beklenmedik hata: kullanıcı alınamadı</string>
+    <string name="register_toast_server_error">Sunucu hatası: %1$s</string>
+
+    <!-- Sahiplendirme.java - Error Messages and Toast Messages -->
+    <string name="sahiplendirme_error_name_required">İsim boş olamaz</string>
+    <string name="sahiplendirme_toast_record_created">Kayıt başarıyla oluşturuldu</string>
+    <string name="sahiplendirme_toast_error">Hata: %1$s</string>
+
+    <!-- Companion.java - UI Labels, Toast Messages and Dialog -->
+    <string name="companion_label_fallback_title">Companion</string>
+    <string name="companion_toast_server_connection_failed">Sunucuya bağlanılamadı</string>
+    <string name="companion_toast_data_parse_error">Veri çözülemedi</string>
+    <string name="companion_dialog_title_waiting_approval">Waiting For Ülgen’s Approval</string>
+    <string name="companion_dialog_message_waiting_approval">Veterinarians in our community are checking your application and will respond to you ASAP with the necessary medical attention.\n\nPlease do not touch, move, or pet the soul you have found. It may not look harmful, but street animals might carry diseases that could harm you, or you may harm the soul.\n\nYou will receive the necessary professional help ASAP.</string>
+    <string name="companion_dialog_button_close">Close</string>
+
+    <!-- HeaderHelper.java - Fallback Labels -->
+    <string name="header_helper_label_user_fallback">Kullanıcı</string>
+
+    <!-- WelcomeClient.java - Toast Messages -->
+    <string name="welcome_client_toast_session_info_not_available">Oturum bilgileri alınamadı. Lütfen tekrar giriş yapın.</string>
+    <string name="welcome_client_toast_session_info_invalid">Oturum bilgileri geçersiz. Lütfen tekrar giriş yapın.</string>
+    <string name="welcome_client_toast_server_error">Sunucu hatası (%1$d)</string>
+    <string name="welcome_client_toast_auth_error">Yetkilendirme hatası. Lütfen tekrar giriş yapın.</string>
+    <string name="welcome_client_toast_access_denied">Erişim engellendi. Gerekli izinlere sahip değilsiniz.</string>
+    <string name="welcome_client_toast_resource_not_found">Kaynak bulunamadı.</string>
+    <string name="welcome_client_toast_server_internal_error">Sunucu iç hatası. Lütfen daha sonra tekrar deneyin.</string>
+
+    <!-- QRAdmin.java - UI Labels and Toast Messages -->
+    <string name="qr_admin_label_data">QR Data: %1$s</string>
+    <string name="qr_admin_label_data_will_appear">QR Data will appear here</string>
+    <string name="qr_admin_toast_no_data_to_process">No QR Data to process</string>
+    <string name="qr_admin_toast_welcome_opening">Welcome sayfası açılıyor…</string>
+    <string name="qr_admin_label_welcome_list">Welcome - Veteriner Kayıtlı Sokak Hayvanları Listesi</string>
+    <string name="qr_admin_toast_internal_route">Internal Route: %1$s%2$s</string>
+    <string name="qr_admin_toast_url_content">URL Content: %1$s</string>
+    <string name="qr_admin_toast_url_parse_error">URL parse error: %1$s</string>
+    <string name="qr_admin_toast_text_content">Text Content: %1$s</string>
+    <string name="qr_admin_toast_scanned">Scanned: %1$s</string>
+    <string name="qr_admin_toast_scan_cancelled">Scan cancelled</string>
+
+    <!-- QRScannerActivity.java - Scanner Prompt -->
+    <string name="qr_scanner_prompt_align">QR’ı hizalayın</string>
+
+    <!-- PlayStoreFixer.java - Dialog Titles, Messages and Buttons -->
+    <string name="playstore_fixer_dialog_title_verification_required">Google Play doğrulaması gerekli</string>
+    <string name="playstore_fixer_dialog_message_components_outdated">Bu cihazda Google Play bileşenleri (Play Store / Google Play services) güncel değil ya da devre dışı gibi görünüyor. Lütfen güncelleyip tekrar deneyin.</string>
+    <string name="playstore_fixer_dialog_button_update_play_store">Play Store’u güncelle</string>
+    <string name="playstore_fixer_dialog_button_update_play_services">Google Play services’ı güncelle</string>
+    <string name="playstore_fixer_dialog_button_later">Daha sonra</string>
+
+    <!-- Kurmes.java - Toast Messages and Labels -->
+    <string name="kurmes_toast_camera_not_available">Camera not available</string>
+    <string name="kurmes_toast_select_option_first">Önce bir seçenek seçin</string>
+    <string name="kurmes_toast_model_load_failed">Model yükleme başarısız</string>
+    <string name="kurmes_toast_detection_init_failed">Algılama nesnesi başlatılamadı</string>
+    <string name="kurmes_toast_ai_started">AI Başlatıldı</string>
+    <string name="kurmes_toast_model_init_error">Model başlatma hatası: %1$s</string>
+    <string name="kurmes_toast_stopped">Durduruldu</string>
+    <string name="kurmes_label_camera_status">Camera Status: %1$s</string>
+    <string name="kurmes_label_processing">Processing...</string>
+
+    <!-- SeedMockActivity.java - Toast Messages -->
+    <string name="seed_mock_toast_login_required">Önce giriş yap (FirebaseAuth).</string>
+    <string name="seed_mock_toast_select_city">Şehir seç.</string>
+    <string name="seed_mock_toast_at_least_one_value">En az bir değer gir.</string>
+    <string name="seed_mock_toast_no_batch">Kayıtlı batch yok.</string>
+
+    <!-- Harita.java - Location Permission and Status Messages -->
+    <string name="harita_toast_location_permission_required">Konum izni gerekli</string>
+    <string name="harita_toast_location_permission_granted">Konum izni verildi</string>
+    <string name="harita_toast_location_permission_denied">Konum izni reddedildi</string>
+    <string name="harita_text_location_fetching">Konum alınıyor...</string>
+    <string name="harita_text_location_failed">Konum alınamadı</string>
+    <string name="harita_text_location_failed_permission">Konum alınamadı (izin).</string>
+
+    <!-- ImagePick.java - Error Messages -->
+    <string name="imagepick_error_image_cannot_open">Görsel açılamadı.</string>
+    <string name="imagepick_error_upload_failed">Yükleme hatası: %1$s</string>
+    <string name="imagepick_error_processing_failed">İşleme hatası: %1$s</string>
+
+    <!-- SoulAdapter.java - Fallback Labels -->
+    <string name="soul_adapter_fallback_found_date">Bulunduğu tarih</string>
+    <string name="soul_adapter_fallback_found_location">Bulunduğu yer</string>
+    <string name="soul_adapter_fallback_finder">Bulan</string>
+
+    <!-- LoadingOverlay.java - Default Loading Text -->
+    <string name="loading_overlay_default_text">Yükleniyor...</string>
+
+    <!-- QR.java - QR Generator Dialog Labels and Messages -->
+    <string name="qr_dialog_label_shape">Şekil</string>
+    <string name="qr_dialog_content_description_circle">Daire</string>
+    <string name="qr_dialog_content_description_square">Kare</string>
+    <string name="qr_dialog_label_dot_size">Nokta Büyüklüğü</string>
+    <string name="qr_dialog_label_density">Yoğunluk / Seyreltme</string>
+    <string name="qr_dialog_value_density_full">Tam (mod 0)</string>
+    <string name="qr_dialog_value_density_sparse_3">Seyrek: 3’te1 (mod3)</string>
+    <string name="qr_dialog_value_density_sparse_2">Seyrek: 2’de1 (mod2)</string>
+    <string name="qr_dialog_label_center_hole">Merkez Boşluğu (Logo)</string>
+    <string name="qr_dialog_checkbox_use_hole">Merkezde dairesel boşluk kullan</string>
+    <string name="qr_dialog_value_diameter_ratio">Çap oranı: %1$.02f</string>
+    <string name="qr_dialog_label_logo">Logo (opsiyonel)</string>
+    <string name="qr_dialog_button_select">Seç</string>
+    <string name="qr_dialog_button_remove">Kaldır</string>
+    <string name="qr_dialog_title_select_logo">Logo Seç</string>
+    <string name="qr_dialog_item_no_logo">Yok (logo kullanma)</string>
+    <string name="qr_dialog_hint_http_link">HTTP Link (tam URL)</string>
+    <string name="qr_dialog_button_generate">Generate</string>
+    <string name="qr_dialog_title_settings">QR Ayarları</string>
+    <string name="qr_dialog_toast_generate_failed">QR üretilemedi: %1$s</string>
+    <string name="qr_dialog_title_preview">QR Önizleme</string>
+    <string name="qr_dialog_button_close">Kapat</string>
+    <string name="qr_dialog_hint_dot_scale">Nokta ölçeği (0.30–0.48) örn: 0.34</string>
+    <string name="qr_dialog_hint_hole_ratio">Merkez boşluğu (çap oranı 0.18–0.30) örn: 0.22</string>
+    <string name="qr_dialog_hint_link_auto">Link (tam URL) – boş bırakırsan otomatik oluşturulur</string>
+
+    <!-- GeoSon.java - Toast Messages -->
+    <string name="geoson_toast_bounds_loaded">Sınırlar başarıyla yüklendi.</string>
+    <string name="geoson_toast_processing_error">GeoJSON işleme hatası.</string>
+
+    <!-- ContentAdapter.java - Format Strings -->
+    <string name="content_adapter_format_likes">Likes: %1$d</string>
+    <string name="content_adapter_format_comments">Comments: %1$d</string>
+
+    <!-- Detection.java - UI Labels -->
+    <string name="detection_label_no_strong_detections">No strong detections</string>
+
+    <!-- Kurmes.java - Additional UI Labels (Status Messages) -->
+    <string name="kurmes_label_init">init...</string>
+    <string name="kurmes_label_fabs">fabs...</string>
+    <string name="kurmes_label_ready">ready...</string>
+    <string name="kurmes_label_standby">standby...</string>
+    <string name="kurmes_status_camera_started">Camera Started.</string>
+    <string name="kurmes_status_camera_stopped">Camera Stopped.</string>
+    <string name="kurmes_status_camera_view_resumed">Camera View Resumed.</string>
+    <string name="kurmes_status_opencv_init_failed">OpenCV Initialization Failed.</string>
+    <string name="kurmes_status_camera_view_paused">Camera View Paused.</string>
+    <string name="kurmes_status_camera_enabled">Camera Enabled.</string>
+    <string name="kurmes_status_camera_paused">Camera Paused.</string>
+
+    <!-- Harita.java - Location Format String -->
+    <string name="harita_format_location_coords">long: %1$.6f  —  lat:%2$.6f</string>
+
+    <!-- activity_sokak.xml - Content Descriptions -->
+    <string name="sokak_content_description_toggle_visibility">Görünür/Gizle</string>
+    <string name="sokak_content_description_clear">Temizle</string>
+    <string name="sokak_content_description_main_menu">Ana Menü</string>
+    <string name="sokak_content_description_ulgen">ulgen</string>
+    <string name="sokak_content_description_coban">coban</string>
+    <string name="sokak_content_description_sound">Sound</string>
+
+    <!-- activity_sokak.xml - Layer Labels -->
+    <string name="sokak_layer_label_veterinarians">Veterinerler</string>
+    <string name="sokak_layer_label_emergency_help">Acil Yardım</string>
+    <string name="sokak_layer_label_responsible_areas">Sorumlu Alanlar</string>
+    <string name="sokak_layer_label_newly_added">Yeni Eklenenler</string>
+    <string name="sokak_layer_label_overdue_maintenance">Bakımı Gecikenler</string>
+    <string name="sokak_layer_label_shelters">Barınaklar</string>
+    <string name="sokak_layer_label_feeding_areas">Besleme Alanları</string>
+    <string name="sokak_layer_label_nesting_areas">Yuvalanma Alanları</string>
+    <string name="sokak_layer_label_tasks">Görevler</string>
+
+    <!-- activity_sokak.xml - Panel Labels -->
+    <string name="sokak_panel_label_population">Popülasyon:</string>
+    <string name="sokak_panel_label_missing">Kayıp:</string>
+    <string name="sokak_panel_title_shelter_info">Barınak Bilgileri</string>
+    <string name="sokak_panel_label_cat">Kedi:</string>
+    <string name="sokak_panel_label_dog">Köpek:</string>
+    <string name="sokak_panel_label_blind">Körmez:</string>
+
+    <!-- activity_seed_mock.xml - Labels and Hints -->
+    <string name="seed_mock_title">Mock Seed (Nodes + Souls)</string>
+    <string name="seed_mock_label_select_city">Şehir seç:</string>
+    <string name="seed_mock_label_counts">Counts</string>
+    <string name="seed_mock_hint_feeding">Besleme</string>
+    <string name="seed_mock_hint_nest">Yuva</string>
+    <string name="seed_mock_hint_shelter">Barınak</string>
+    <string name="seed_mock_hint_task">Görev</string>
+    <string name="seed_mock_hint_souls">Souls</string>
+    <string name="seed_mock_hint_radius">Dağılım yarıçapı (metre)</string>
+    <string name="seed_mock_button_start">Başlat</string>
+    <string name="seed_mock_button_stop">Durdur</string>
+    <string name="seed_mock_button_reset">Reset (son batch)</string>
+    <string name="seed_mock_label_log">Log</string>
+
+    <!-- activity_sahiplendirme.xml - Content Descriptions and Hints -->
+    <string name="sahiplendirme_content_description_press_or_hold">pres or pres and hold</string>
+    <string name="sahiplendirme_hint_companion">Companion</string>
+    <string name="sahiplendirme_hint_species">Species</string>
+    <string name="sahiplendirme_hint_breed">Breed</string>
+    <string name="sahiplendirme_hint_age">Age</string>
+    <string name="sahiplendirme_hint_health">Health</string>
+    <string name="sahiplendirme_hint_found_date">Found Date</string>
+    <string name="sahiplendirme_hint_found_place">Found Place</string>
+    <string name="sahiplendirme_hint_veterinary">Veterinary</string>
+
+    <!-- activity_iye.xml - Labels and Buttons -->
+    <string name="iye_text_username">username</string>
+    <string name="iye_text_iye">iye</string>
+    <string name="iye_text_place">place</string>
+    <string name="iye_text_who">who</string>
+    <string name="iye_text_veteriner">veteriner</string>
+    <string name="iye_button_ok">OK</string>
+
+    <!-- activity_founded.xml -->
+    <string name="founded_button_take_another_photo">Take Another Photo</string>
+    <string name="founded_hint_species">Cinsi (Species)</string>
+    <string name="founded_hint_found_date">Bulunduğu Tarih (Found Date)</string>
+    <string name="founded_hint_found_place">Bulunduğu Yer (Found Place)</string>
+    <string name="founded_button_register_companion">Register Companion</string>
+
+    <!-- activity_qr.xml -->
+    <string name="qr_content_description_desc">desc</string>
+    <string name="qr_text_scan_qr">Scan QR</string>
+    <string name="qr_button_generate_qr">Generate QR</string>
+    <string name="qr_text_data_will_appear">QR Data will appear here</string>
+    <string name="qr_button_process_qr">Process QR</string>
+    <string name="qr_button_goto">GoTo</string>
+    <string name="qr_hint_goto">GoTo</string>
+
+    <!-- activity_main.xml -->
+    <string name="main_text_security_verification">Güvenlik Doğrulaması</string>
+    <string name="main_text_preparing">Hazırlanıyor…</string>
+    <string name="main_text_installer">Installer: —</string>
+    <string name="main_text_app_check">App Check: —</string>
+    <string name="main_text_integrity">Integrity: —</string>
+    <string name="main_button_retry">Tekrar Dene</string>
+    <string name="main_button_update">Güncelle</string>
+
+    <!-- activity_companion.xml -->
+    <string name="companion_text_companion">companion</string>
+    <string name="companion_text_date">date</string>
+    <string name="companion_text_place">place</string>
+    <string name="companion_text_who">who</string>
+    <string name="companion_text_candidate">candidate</string>
+    <string name="companion_text_raiting">raiting</string>
+
+    <!-- dialog_shelter_info.xml -->
+    <string name="shelter_info_title">Barınak Bilgileri</string>
+    <string name="shelter_info_label_population">Popülasyon:</string>
+    <string name="shelter_info_label_missing">Kayıp:</string>
+    <string name="shelter_info_label_cat">Kedi:</string>
+    <string name="shelter_info_label_dog">Köpek:</string>
+    <string name="shelter_info_label_blind">Körmez:</string>
+    <string name="shelter_info_button_close">Kapat</string>
+
+    <!-- activity_submit_missing_pet.xml -->
+    <string name="submit_missing_pet_content_description">Pet Photo</string>
+    <string name="submit_missing_pet_button_upload_photo">Upload Photo</string>
+    <string name="submit_missing_pet_hint_pet_name">Pet Name</string>
+    <string name="submit_missing_pet_hint_species">Species</string>
+    <string name="submit_missing_pet_hint_color">Color</string>
+    <string name="submit_missing_pet_hint_age">Age</string>
+    <string name="submit_missing_pet_hint_last_known_location">Last Known Location</string>
+    <string name="submit_missing_pet_hint_date_missing">Date Missing</string>
+    <string name="submit_missing_pet_button_submit">Submit</string>
+
+    <!-- activity_register.xml -->
+    <string name="register_hint_username">Username</string>
+    <string name="register_hint_password">Password</string>
+    <string name="register_hint_email">Email Address</string>
+    <string name="register_hint_city_country">City/Country</string>
+    <string name="register_hint_phone">Phone Number</string>
+
+    <!-- dialog_edit_profile.xml -->
+    <string name="edit_profile_hint_username">Kullanıcı adı</string>
+    <string name="edit_profile_hint_email">E-posta</string>
+    <string name="edit_profile_hint_phone">Telefon</string>
+    <string name="edit_profile_hint_location">Konum</string>
+    <string name="edit_profile_hint_avatar_url">Avatar URL</string>
+    <string name="edit_profile_button_confirm">Confirm</string>
+
+    <!-- dialog_create_yuva_node.xml -->
+    <string name="yuva_node_hint_name">Node Adı</string>
+    <string name="yuva_node_hint_description">Açıklama</string>
+
+    <!-- activity_login.xml -->
+    <string name="login_content_description_title_image">Login Title Image</string>
+    <string name="login_hint_username">Username</string>
+    <string name="login_hint_password">Password</string>
+
+    <!-- Kalan Layout Dosyaları -->
+    <!-- bottomsheet_marker_details.xml -->
+    <string name="bottomsheet_content_description_take_photo">Fotoğraf çek</string>
+
+    <!-- view_loading_overlay.xml -->
+    <string name="loading_overlay_text_loading">Yükleniyor...</string>
+
+    <!-- item_soul.xml -->
+    <string name="soul_content_description_edit">Düzenle</string>
+    <string name="soul_content_description_delete">Sil</string>
+
+    <!-- activity_souls_manager.xml -->
+    <string name="souls_manager_button_refresh">Yenile</string>
+    <string name="souls_manager_button_new">Yeni</string>
+    <string name="souls_manager_button_seed">Seed</string>
+
+    <!-- dialog_soul_edit.xml -->
+    <string name="soul_edit_hint_name">Ad</string>
+    <string name="soul_edit_hint_species">Tür</string>
+    <string name="soul_edit_hint_health">Sağlık (Good/Fair/...)</string>
+
+    <!-- activity_kurmes.xml -->
+    <string name="kurmes_content_description_menu">Menu</string>
+    <string name="kurmes_text_camera_status_initializing">Camera Status: Initializing...</string>
+    <string name="kurmes_text_switch_camera">Switch Camera</string>
+    <string name="kurmes_text_processing">Processing...</string>
+
+    <!-- activity_explore_private.xml -->
+    <string name="explore_private_text_no_path_selected">Yol seçilmedi</string>
+
+    <!-- activity_messaging.xml -->
+    <string name="messaging_hint_type_message">Mesajınızı yazın...</string>
+    <string name="messaging_content_description_send_button">gönderButonu</string>
+
+    <!-- item_conversation.xml -->
+    <string name="conversation_content_description_profile">Profil</string>
+    <string name="conversation_text_username">Username</string>
+    <string name="conversation_text_last_message">Son mesaj</string>
+    <string name="conversation_content_description_options">Seçenekler</string>
+
+    <!-- activity_welcome_v2.xml -->
+    <string name="welcome_v2_content_description_scroll_header">Scroll Header</string>
+
+    <!-- activity_qr_scanner.xml -->
+    <string name="qr_scanner_text_align_frame">Align the QR code within the frame to scan</string>
+
+    <!-- layout_message_header.xml -->
+    <string name="message_header_content_description_profile_image">Message Profile Image</string>
+    <string name="message_header_text_username">Username</string>
+    <string name="message_header_text_last_seen">Son görülme: 5 dk önce</string>
+    <string name="message_header_content_description_more_options">More Options</string>
+
+    <!-- item_conversation_header.xml -->
+    <string name="conversation_header_text_username">KullanıcıAdı</string>
+
+    <!-- item_message_sent.xml -->
+    <string name="message_sent_text_sample">Gönderilen mesaj metni</string>
+
+    <!-- item_message_received.xml -->
+    <string name="message_received_text_sample">Gelen mesaj metni</string>
+
+    <!-- recorder_surface_view.xml -->
+    <string name="recorder_button_start_camera">Start Camera</string>
+    <string name="recorder_text_status_initialized">Status: Initialized</string>
+
+    <!-- layout_profile_header.xml -->
+    <string name="profile_header_content_description_user_image">User Profile Image</string>
+    <string name="profile_header_text_username">Username</string>
+    <string name="profile_header_text_bio">Bio goes here</string>
+    <string name="profile_header_text_followers">Followers: 200</string>
+
+    <!-- list_item_companion.xml -->
+    <string name="companion_item_content_description_pet_photo">Pet Photo</string>
+    <string name="companion_item_text_species">Cinsi</string>
+    <string name="companion_item_text_found_date">Bulunduğu tarih</string>
+    <string name="companion_item_text_found_place">Bulunduğu yer</string>
+    <string name="companion_item_text_finder">Bulan</string>
+
+    <!-- activity_welcome.xml -->
+    <string name="welcome_button_adopt">Adopt</string>
+    <string name="welcome_button_iye">Iye</string>
+    <string name="welcome_button_lost">Lost</string>
+
+    <!-- item_slider_image.xml -->
+    <string name="slider_image_content_description">Slider Image</string>
+
+    <!-- layout_edit_profile.xml -->
+    <string name="edit_profile_content_description_picture">Edit Profile Picture</string>
+    <string name="edit_profile_hint_bio">Bio</string>
+    <string name="edit_profile_button_save">Save</string>
+
+    <!-- item_content.xml -->
+    <string name="content_item_text_sample">Content Text</string>
+    <string name="content_item_text_likes">Likes: 0</string>
+    <string name="content_item_text_comments">Comments: 0</string>
+
+    <!-- Menu XML Dosyaları -->
+    <!-- menu_explore_options.xml -->
+    <string name="menu_explore_action_refresh">action_refresh</string>
+    <string name="menu_explore_action_filter">action_filter</string>
+    <string name="menu_explore_toggle_critical">Kritik Sağlık Modu</string>
+
+    <!-- menu_soul_options.xml -->
+    <string name="menu_soul_adopt">Evlat Edin</string>
+    <string name="menu_soul_edit">Düzenle</string>
+    <string name="menu_soul_save">Kaydet</string>
+    <string name="menu_soul_critical">Kritik Sağlık Modu</string>
+
+    <!-- profile_menu.xml -->
+    <string name="menu_profile_edit">Profili Düzenle</string>
+
+    <!-- menu_message_options.xml -->
+    <string name="menu_message_bluetooth">BlueTooth Mesajları Kabulet</string>
+
+    <!-- menu_explore_private_options.xml -->
+    <string name="menu_explore_private_action_refresh">action_refresh</string>
+    <string name="menu_explore_private_action_filter">action_filter</string>
+
+    <!-- menu_messaging_options.xml -->
+    <string name="menu_messaging_block">Engelle</string>
+    <string name="menu_messaging_mute">Sessize Al</string>
+    <string name="menu_messaging_delete">Mesajları Sil</string>
+    <string name="menu_messaging_follow">Takip Et/Takibi Bırak</string>
 </resources>

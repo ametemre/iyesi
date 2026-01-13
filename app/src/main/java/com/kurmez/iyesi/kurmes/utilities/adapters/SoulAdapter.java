@@ -34,9 +34,11 @@ public class SoulAdapter extends RecyclerView.Adapter<SoulAdapter.VH> {
     public void onBindViewHolder(@NonNull VH h, int pos) {
         Soul s = items.get(pos);
         h.breed.setText( nz(s.getBreed(), "-") );
-        h.foundDate.setText( nz(s.getFoundDate(), "Bulunduğu tarih") );
-        h.location.setText( nz(firstNonNull(s.getAdminPath(), s.getFoundLocation()), "Bulunduğu yer") );
-        h.finder.setText( nz(s.getFinderName(), "Bulan") );
+        // ÖNCE: Hardcoded "Bulunduğu tarih", "Bulunduğu yer", "Bulan"
+        // ŞİMDİ: String resource kullanımı
+        h.foundDate.setText( nz(s.getFoundDate(), ctx.getString(R.string.soul_adapter_fallback_found_date)) );
+        h.location.setText( nz(firstNonNull(s.getAdminPath(), s.getFoundLocation()), ctx.getString(R.string.soul_adapter_fallback_found_location)) );
+        h.finder.setText( nz(s.getFinderName(), ctx.getString(R.string.soul_adapter_fallback_finder)) );
 
         Glide.with(ctx).load(normalizeUrl(s.getImageUrl()))
                 .placeholder(R.drawable.holder).error(R.drawable.holder).into(h.image);

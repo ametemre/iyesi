@@ -46,7 +46,9 @@ public class SoulsManagerActivity extends AppCompatActivity {
         setContentView(R.layout.activity_souls_manager);
 
         if (FirebaseAuth.getInstance().getCurrentUser() == null) {
-            Toast.makeText(this, "Giriş gerekli.", Toast.LENGTH_LONG).show();
+            // ÖNCE: Hardcoded "Giriş gerekli."
+            // ŞİMDİ: String resource kullanımı
+            Toast.makeText(this, getString(R.string.souls_toast_login_required), Toast.LENGTH_LONG).show();
             Intent intent = new Intent(this, Login.class);
             startActivity(intent);
             finish(); return;
@@ -87,14 +89,19 @@ public class SoulsManagerActivity extends AppCompatActivity {
         SeedService seed = new SeedService(cf, PATH_CREATE);
         seed.seedCities(cities, 20, false, 2, new SeedService.SeedListener() {
             @Override public void onCityDone(String city, int ok, int total) {
-                runOnUiThread(() -> Toast.makeText(SoulsManagerActivity.this, city + " → " + ok + "/" + total + " OK", Toast.LENGTH_SHORT).show());
+                // ÖNCE: Hardcoded city + " → " + ok + "/" + total + " OK"
+                // ŞİMDİ: String resource kullanımı - format string ile city, ok, total parametreleri
+                runOnUiThread(() -> Toast.makeText(SoulsManagerActivity.this, getString(R.string.souls_toast_seed_city_done, city, ok, total), Toast.LENGTH_SHORT).show());
             }
             @Override public void onAllDone() {
                 runOnUiThread(() -> { progress.setVisibility(View.GONE); loadMySouls(); });
             }
             @Override public void onError(Exception e) {
                 runOnUiThread(() -> { progress.setVisibility(View.GONE);
-                    Toast.makeText(SoulsManagerActivity.this, "Seed hata: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                    // ÖNCE: Hardcoded "Seed hata: " + e.getMessage()
+                    // ŞİMDİ: String resource kullanımı - format string ile error mesajı
+                    String errorMsg = e.getMessage() == null ? "-" : e.getMessage();
+                    Toast.makeText(SoulsManagerActivity.this, getString(R.string.souls_toast_seed_error, errorMsg), Toast.LENGTH_LONG).show();
                 });
             }
         });
@@ -132,7 +139,9 @@ public class SoulsManagerActivity extends AppCompatActivity {
             runOnUiThread(() -> {
                 progress.setVisibility(View.GONE);
                 if (fErr != null) {
-                    Toast.makeText(this, "Listeleme hatası: " + fErr, Toast.LENGTH_LONG).show();
+                    // ÖNCE: Hardcoded "Listeleme hatası: " + fErr
+                    // ŞİMDİ: String resource kullanımı - format string ile error mesajı
+                    Toast.makeText(this, getString(R.string.souls_toast_list_error, fErr), Toast.LENGTH_LONG).show();
                     Log.e("Liesteleme Hatası",fErr);
                 } else {
                     adapter.setData(souls);
@@ -140,7 +149,10 @@ public class SoulsManagerActivity extends AppCompatActivity {
             });
         }).start(), e -> runOnUiThread(() -> {
             progress.setVisibility(View.GONE);
-            Toast.makeText(this, "Token hatası: " + e.getMessage(), Toast.LENGTH_LONG).show();
+            // ÖNCE: Hardcoded "Token hatası: " + e.getMessage()
+            // ŞİMDİ: String resource kullanımı - format string ile error mesajı
+            String errorMsg = e.getMessage() == null ? "-" : e.getMessage();
+            Toast.makeText(this, getString(R.string.souls_toast_token_error, errorMsg), Toast.LENGTH_LONG).show();
         }));
     }
 
@@ -151,16 +163,24 @@ public class SoulsManagerActivity extends AppCompatActivity {
         EditText etHealth = v.findViewById(R.id.etHealth);
 
         new AlertDialog.Builder(this)
-            .setTitle("Yeni Soul")
+            // ÖNCE: Hardcoded "Yeni Soul"
+            // ŞİMDİ: String resource kullanımı
+            .setTitle(getString(R.string.souls_dialog_title_new))
             .setView(v)
-            .setPositiveButton("Kaydet", (d, which) -> {
+            // ÖNCE: Hardcoded "Kaydet"
+            // ŞİMDİ: String resource kullanımı
+            .setPositiveButton(getString(R.string.souls_dialog_button_save), (d, which) -> {
                 String name = etName.getText().toString().trim();
                 String species = etSpecies.getText().toString().trim();
                 String health = etHealth.getText().toString().trim();
-                if (TextUtils.isEmpty(name)) { Toast.makeText(this, "Ad gerekli", Toast.LENGTH_SHORT).show(); return; }
+                // ÖNCE: Hardcoded "Ad gerekli"
+                // ŞİMDİ: String resource kullanımı
+                if (TextUtils.isEmpty(name)) { Toast.makeText(this, getString(R.string.souls_toast_name_required), Toast.LENGTH_SHORT).show(); return; }
                 createSoulJson(name, species, health);
             })
-            .setNegativeButton("Vazgeç", null)
+            // ÖNCE: Hardcoded "Vazgeç"
+            // ŞİMDİ: String resource kullanımı
+            .setNegativeButton(getString(R.string.souls_dialog_button_cancel), null)
             .show();
     }
 
@@ -181,12 +201,17 @@ public class SoulsManagerActivity extends AppCompatActivity {
             final String fErr = err;
             runOnUiThread(() -> {
                 progress.setVisibility(View.GONE);
-                if (fErr != null) Toast.makeText(this, "Oluşturma hatası: " + fErr, Toast.LENGTH_LONG).show();
+                // ÖNCE: Hardcoded "Oluşturma hatası: " + fErr
+                // ŞİMDİ: String resource kullanımı - format string ile error mesajı
+                if (fErr != null) Toast.makeText(this, getString(R.string.souls_toast_create_error, fErr), Toast.LENGTH_LONG).show();
                 loadMySouls();
             });
         }).start(), e -> runOnUiThread(() -> {
             progress.setVisibility(View.GONE);
-            Toast.makeText(this, "Token hatası: " + e.getMessage(), Toast.LENGTH_LONG).show();
+            // ÖNCE: Hardcoded "Token hatası: " + e.getMessage()
+            // ŞİMDİ: String resource kullanımı - format string ile error mesajı
+            String errorMsg = e.getMessage() == null ? "-" : e.getMessage();
+            Toast.makeText(this, getString(R.string.souls_toast_token_error, errorMsg), Toast.LENGTH_LONG).show();
         }));
     }
 
@@ -200,18 +225,26 @@ public class SoulsManagerActivity extends AppCompatActivity {
         etHealth.setText(s.getHealth());
 
         new AlertDialog.Builder(this)
-            .setTitle("Düzenle")
+            // ÖNCE: Hardcoded "Düzenle"
+            // ŞİMDİ: String resource kullanımı
+            .setTitle(getString(R.string.souls_dialog_title_edit))
             .setView(v)
-            .setPositiveButton("Kaydet", (d, w) -> updateSoul(s.getId(),
+            // ÖNCE: Hardcoded "Kaydet"
+            // ŞİMDİ: String resource kullanımı
+            .setPositiveButton(getString(R.string.souls_dialog_button_save), (d, w) -> updateSoul(s.getId(),
                     etName.getText().toString().trim(),
                     etSpecies.getText().toString().trim(),
                     etHealth.getText().toString().trim()))
-            .setNegativeButton("Vazgeç", null)
+            // ÖNCE: Hardcoded "Vazgeç"
+            // ŞİMDİ: String resource kullanımı
+            .setNegativeButton(getString(R.string.souls_dialog_button_cancel), null)
             .show();
     }
 
     private void updateSoul(String id, String name, String species, String health) {
-        if (TextUtils.isEmpty(id)) { Toast.makeText(this, "ID yok", Toast.LENGTH_SHORT).show(); return; }
+        // ÖNCE: Hardcoded "ID yok"
+        // ŞİMDİ: String resource kullanımı
+        if (TextUtils.isEmpty(id)) { Toast.makeText(this, getString(R.string.souls_toast_id_missing), Toast.LENGTH_SHORT).show(); return; }
         progress.setVisibility(View.VISIBLE);
         cf.getTokens((idToken, appToken) -> new Thread(() -> {
             String err = null;
@@ -228,20 +261,31 @@ public class SoulsManagerActivity extends AppCompatActivity {
             final String fErr = err;
             runOnUiThread(() -> {
                 progress.setVisibility(View.GONE);
-                if (fErr != null) Toast.makeText(this, "Güncelleme hatası: " + fErr, Toast.LENGTH_LONG).show();
+                // ÖNCE: Hardcoded "Güncelleme hatası: " + fErr
+                // ŞİMDİ: String resource kullanımı - format string ile error mesajı
+                if (fErr != null) Toast.makeText(this, getString(R.string.souls_toast_update_error, fErr), Toast.LENGTH_LONG).show();
                 loadMySouls();
             });
         }).start(), e -> runOnUiThread(() -> {
             progress.setVisibility(View.GONE);
-            Toast.makeText(this, "Token hatası: " + e.getMessage(), Toast.LENGTH_LONG).show();
+            // ÖNCE: Hardcoded "Token hatası: " + e.getMessage()
+            // ŞİMDİ: String resource kullanımı - format string ile error mesajı
+            String errorMsg = e.getMessage() == null ? "-" : e.getMessage();
+            Toast.makeText(this, getString(R.string.souls_toast_token_error, errorMsg), Toast.LENGTH_LONG).show();
         }));
     }
 
     private void deleteSoul(String id) {
-        if (TextUtils.isEmpty(id)) { Toast.makeText(this, "ID yok", Toast.LENGTH_SHORT).show(); return; }
+        // ÖNCE: Hardcoded "ID yok"
+        // ŞİMDİ: String resource kullanımı
+        if (TextUtils.isEmpty(id)) { Toast.makeText(this, getString(R.string.souls_toast_id_missing), Toast.LENGTH_SHORT).show(); return; }
         new AlertDialog.Builder(this)
-            .setMessage("Silmek istiyor musun?")
-            .setPositiveButton("Evet", (d, w) -> {
+            // ÖNCE: Hardcoded "Silmek istiyor musun?"
+            // ŞİMDİ: String resource kullanımı
+            .setMessage(getString(R.string.souls_dialog_message_delete_confirm))
+            // ÖNCE: Hardcoded "Evet"
+            // ŞİMDİ: String resource kullanımı
+            .setPositiveButton(getString(R.string.souls_dialog_button_yes), (d, w) -> {
                 progress.setVisibility(View.VISIBLE);
                 cf.getTokens((idToken, appToken) -> new Thread(() -> {
                     String err = null;
@@ -251,15 +295,22 @@ public class SoulsManagerActivity extends AppCompatActivity {
                     final String fErr = err;
                     runOnUiThread(() -> {
                         progress.setVisibility(View.GONE);
-                        if (fErr != null) Toast.makeText(this, "Silme hatası: " + fErr, Toast.LENGTH_LONG).show();
+                        // ÖNCE: Hardcoded "Silme hatası: " + fErr
+                        // ŞİMDİ: String resource kullanımı - format string ile error mesajı
+                        if (fErr != null) Toast.makeText(this, getString(R.string.souls_toast_delete_error, fErr), Toast.LENGTH_LONG).show();
                         loadMySouls();
                     });
                 }).start(), e -> runOnUiThread(() -> {
                     progress.setVisibility(View.GONE);
-                    Toast.makeText(this, "Token hatası: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                    // ÖNCE: Hardcoded "Token hatası: " + e.getMessage()
+                    // ŞİMDİ: String resource kullanımı - format string ile error mesajı
+                    String errorMsg = e.getMessage() == null ? "-" : e.getMessage();
+                    Toast.makeText(this, getString(R.string.souls_toast_token_error, errorMsg), Toast.LENGTH_LONG).show();
                 }));
             })
-            .setNegativeButton("Hayır", null)
+            // ÖNCE: Hardcoded "Hayır"
+            // ŞİMDİ: String resource kullanımı
+            .setNegativeButton(getString(R.string.souls_dialog_button_no), null)
             .show();
     }
 }

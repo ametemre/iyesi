@@ -14,6 +14,7 @@ import androidx.annotation.NonNull;
 
 import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.common.GoogleApiAvailability;
+import com.kurmez.iyesi.R;
 
 /**
  * Play ortamı için yönlendirme yardımcıları:
@@ -101,20 +102,20 @@ public final class PlayStoreFixer {
      */
     @MainThread
     public static void showIntegrityFixDialog(@NonNull Activity activity) {
+        // ÖNCE: Hardcoded "Google Play doğrulaması gerekli", uzun mesaj ve buton metinleri
+        // ŞİMDİ: String resource kullanımı
         new AlertDialog.Builder(activity)
-                .setTitle("Google Play doğrulaması gerekli")
-                .setMessage(
-                        "Bu cihazda Google Play bileşenleri (Play Store / Google Play services) "
-                                + "güncel değil ya da devre dışı gibi görünüyor. Lütfen güncelleyip tekrar deneyin.")
-                .setPositiveButton("Play Store’u güncelle", (d, w) -> {
+                .setTitle(activity.getString(R.string.playstore_fixer_dialog_title_verification_required))
+                .setMessage(activity.getString(R.string.playstore_fixer_dialog_message_components_outdated))
+                .setPositiveButton(activity.getString(R.string.playstore_fixer_dialog_button_update_play_store), (d, w) -> {
                     boolean ok = openPlayStoreForPackage(activity, "com.android.vending");
                     if (!ok) openAppInfoScreen(activity, "com.android.vending");
                 })
-                .setNeutralButton("Google Play services’ı güncelle", (d, w) -> {
+                .setNeutralButton(activity.getString(R.string.playstore_fixer_dialog_button_update_play_services), (d, w) -> {
                     boolean ok = openPlayStoreForPackage(activity, "com.google.android.gms");
                     if (!ok) openAppInfoScreen(activity, "com.google.android.gms");
                 })
-                .setNegativeButton("Daha sonra", (d, w) -> d.dismiss())
+                .setNegativeButton(activity.getString(R.string.playstore_fixer_dialog_button_later), (d, w) -> d.dismiss())
                 .setOnDismissListener(d -> {
                     // İstersen burada yeniden deneme tetikle:
                     // PlayEnvDiagnostics.preflight(activity, /*showUi=*/false, status -> {...});

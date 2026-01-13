@@ -8,6 +8,7 @@ import android.content.Intent;
 import android.net.Uri;
 import android.text.TextUtils;
 import android.util.Log;
+import java.util.Locale;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -193,6 +194,49 @@ public final class QrRouteResolver implements QR.TargetResolver {
             if (host == null) return null;
 
             switch (host) {
+                case "node": {
+                    // iyesi://node/{COUNTRY}/{CITY}/{NODE_ID}
+                    // Target: SokakActivity + Harita + NodeDetailsBottomSheet
+                    if (segs.size() >= 3) {
+                        String country = segs.get(0);
+                        String city = segs.get(1);
+                        String nodeId = segs.get(2);
+                        if (!isEmpty(country) && !isEmpty(city) && !isEmpty(nodeId)) {
+                            Intent i = safeIntent(ctx, CLS_STREET_CASE);
+                            if (i != null) {
+                                i.putExtra("qr_kind", "node");
+                                i.putExtra("qr_country", country.toUpperCase(Locale.ROOT));
+                                i.putExtra("qr_city", city.toUpperCase(Locale.ROOT));
+                                i.putExtra("qr_node_id", nodeId);
+                                i.putExtra("route", route.toString());
+                                return withFlags(i);
+                            }
+                        }
+                    }
+                    break;
+                }
+                case "baksi": {
+                    // iyesi://baksi/{COUNTRY}/{CITY}/{BAKSI_ID}
+                    // Target: Welcome.java (veteriner özelleri aktif)
+                    if (segs.size() >= 3) {
+                        String country = segs.get(0);
+                        String city = segs.get(1);
+                        String baksiId = segs.get(2);
+                        if (!isEmpty(country) && !isEmpty(city) && !isEmpty(baksiId)) {
+                            Intent i = safeIntent(ctx, CLS_WELCOME);
+                            if (i != null) {
+                                i.putExtra("qr_kind", "baksi");
+                                i.putExtra("vetMode", true);
+                                i.putExtra("qr_country", country.toUpperCase(Locale.ROOT));
+                                i.putExtra("qr_city", city.toUpperCase(Locale.ROOT));
+                                i.putExtra("qr_baksi_id", baksiId);
+                                i.putExtra("route", route.toString());
+                                return withFlags(i);
+                            }
+                        }
+                    }
+                    break;
+                }
                 case "souls": {
                     Log.i(TAG,"switch in");
                     String id = firstOrNull(segs);

@@ -82,6 +82,12 @@ public class Welcome extends AppCompatActivity {
     private FirebaseUser user;
     private String role;
 
+    // QR extras (QrRouteResolver)
+    private static final String EXTRA_QR_KIND      = "qr_kind";      // "baksi"
+    private static final String EXTRA_QR_COUNTRY   = "qr_country";   // "TR"
+    private static final String EXTRA_QR_CITY      = "qr_city";      // "ISTANBUL"
+    private static final String EXTRA_QR_BAKSI_ID  = "qr_baksi_id";  // Firestore doc id
+
     public static String nz(String s) { return s == null ? "" : s; }
 
     @RequiresPermission(Manifest.permission.ACCESS_NETWORK_STATE)
@@ -89,6 +95,27 @@ public class Welcome extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_welcome_v2);
+
+        // QR: Veteriner (Baksi) modu
+        // Route: iyesi://baksi/{COUNTRY}/{CITY}/{BAKSI_ID}
+        // TODO: "veteriner özelleri" ekran/feature seti burada netleştirilip aktive edilecek.
+        try {
+            Intent it = getIntent();
+            if (it != null) {
+                boolean vetMode = it.getBooleanExtra("vetMode", false);
+                String kind = it.getStringExtra(EXTRA_QR_KIND);
+                if (vetMode || "baksi".equalsIgnoreCase(kind)) {
+                    String country = it.getStringExtra(EXTRA_QR_COUNTRY);
+                    String city = it.getStringExtra(EXTRA_QR_CITY);
+                    String baksiId = it.getStringExtra(EXTRA_QR_BAKSI_ID);
+                    Log.i(TAG, "QR Baksi: vetMode=" + vetMode + " country=" + country + " city=" + city + " baksiId=" + baksiId);
+                    Helpers.showToastSafe(this, "Veteriner modu aktif (QR)"); // geçici geri bildirim
+                    // TODO: CF /baksiDetails ile tekil baksi çek + UI/flow aktive et.
+                }
+            }
+        } catch (Throwable t) {
+            Log.w(TAG, "QR Baksi extras parse failed", t);
+        }
 
         // UI bileşenleri
         imgWelcome = findViewById(R.id.img_welcome);
@@ -106,12 +133,16 @@ public class Welcome extends AppCompatActivity {
         // İnternet kontrolü
         ConnectivityManager cm = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
         NetworkInfo netInfo = cm != null ? cm.getActiveNetworkInfo() : null;
-        if (netInfo == null || !netInfo.isConnected()) {Helpers.showToastSafe(this, "İnternet bağlantısı yok. Lütfen bağlantınızı kontrol edin.");}
+        // ÖNCE: Hardcoded "İnternet bağlantısı yok. Lütfen bağlantınızı kontrol edin."
+        // ŞİMDİ: String resource kullanımı
+        if (netInfo == null || !netInfo.isConnected()) {Helpers.showToastSafe(this, getString(R.string.welcome_toast_no_internet));}
         // Login kontrolü
         mAuth = FirebaseAuth.getInstance();
         user = mAuth.getCurrentUser();
         if (user == null || user.isAnonymous()) {
-            Toast.makeText(this, "Devam etmek için giriş yapmalısınız.", Toast.LENGTH_LONG).show();
+            // ÖNCE: Hardcoded "Devam etmek için giriş yapmalısınız."
+            // ŞİMDİ: String resource kullanımı - Message.java ile aynı string resource
+            Toast.makeText(this, getString(R.string.message_toast_login_required), Toast.LENGTH_LONG).show();
             startActivity(new Intent(this, Login.class));
             finish();
             return;
@@ -137,10 +168,12 @@ public class Welcome extends AppCompatActivity {
                     cf.refreshRole(role -> {
                         Log.i("CustomClaims", "Role: " + role);
                         this.role = role;
+                        // ÖNCE: Hardcoded "Ülgen Yada Tanrı" ve "Bu işlemi sadece Ülgen ve Tengri yapabilir."
+                        // ŞİMDİ: String resource kullanımı - "Bu işlemi sadece Ülgen ve Tengri yapabilir." Messaging.java ile aynı
                         if (Objects.equals(role, "Ülgen") || Objects.equals(role, "Tengri")) {
-                            Toast.makeText(this, "Ülgen Yada Tanrı", Toast.LENGTH_LONG).show();
+                            Toast.makeText(this, getString(R.string.welcome_toast_ulgen_or_tengri), Toast.LENGTH_LONG).show();
                         } else {
-                            Toast.makeText(this, "Bu işlemi sadece Ülgen ve Tengri yapabilir.", Toast.LENGTH_LONG).show();
+                            Toast.makeText(this, getString(R.string.messaging_toast_admin_only), Toast.LENGTH_LONG).show();
                         }
                         // Refresh the ID token to get updated claims
                         //user = FirebaseAuth.getInstance().getCurrentUser();
@@ -225,7 +258,9 @@ public class Welcome extends AppCompatActivity {
                             Log.d(TAG, "first item probe=" + (first != null ? first.toString() : "null"));
                         }
 
-                        Toast.makeText(Welcome.this, "Boş liste döndü", Toast.LENGTH_SHORT).show();
+                        // ÖNCE: Hardcoded "Boş liste döndü"
+                        // ŞİMDİ: String resource kullanımı
+                        Toast.makeText(Welcome.this, getString(R.string.welcome_toast_empty_list), Toast.LENGTH_SHORT).show();
                     }
 
                     companions.clear();
@@ -235,7 +270,10 @@ public class Welcome extends AppCompatActivity {
 
                 @Override public void onError(@NonNull Throwable t) {
                     Log.e(TAG, "listSoulsByFields", t);
-                    Toast.makeText(Welcome.this, "Veri alınamadı: " + t.getMessage(), Toast.LENGTH_LONG).show();
+                    // ÖNCE: Hardcoded "Veri alınamadı: " + t.getMessage()
+                    // ŞİMDİ: String resource kullanımı - format string ile error mesajı
+                    String errorMsg = t.getMessage() == null ? "-" : t.getMessage();
+                    Toast.makeText(Welcome.this, getString(R.string.welcome_toast_data_fetch_error, errorMsg), Toast.LENGTH_LONG).show();
                     finish();
                 }
             });
@@ -257,7 +295,9 @@ public class Welcome extends AppCompatActivity {
             view.postDelayed(() -> view.setEnabled(true), 600);
 
             Soul s = companions.get(position);
-            Toast.makeText(this, "Selected: " + nz(s.getName()), Toast.LENGTH_SHORT).show();
+            // ÖNCE: Hardcoded "Selected: " + name
+            // ŞİMDİ: String resource kullanımı - format string ile name parametresi
+            Toast.makeText(this, getString(R.string.welcome_toast_item_selected, nz(s.getName())), Toast.LENGTH_SHORT).show();
 
             Intent intent = new Intent(Welcome.this, com.kurmez.iyesi.umay.sahiplendirme.Companion.class);
             // ⚠️ DÜZELTİLENLER:
@@ -273,6 +313,8 @@ public class Welcome extends AppCompatActivity {
             startActivity(intent);
         });
         messageButton.setOnClickListener(v -> startActivity(new Intent(this, Messaging.class)));
-        notificationButton.setOnClickListener(v -> Helpers.showToastSafe(this,"Bildirim özelliği yakında gelecek"));
+        // ÖNCE: Hardcoded "Bildirim özelliği yakında gelecek"
+        // ŞİMDİ: String resource kullanımı
+        notificationButton.setOnClickListener(v -> Helpers.showToastSafe(this, getString(R.string.welcome_toast_notification_coming_soon)));
     }
 }

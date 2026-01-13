@@ -295,7 +295,7 @@ public class JsonHelper {
     }
     public JSONObject markerDetails(@NonNull String id) throws Exception {
         Map<String, String> q = new HashMap<>();
-        q.put("id", id);
+        q.put("markerId", id);
         return doGetJson("/markerDetails", q);
     }
     public JSONObject markerSouls(@NonNull String id, int limit) throws Exception {

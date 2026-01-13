@@ -20,7 +20,7 @@
             android:id="@+id/tvDialogTitle"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Barınak Bilgileri"
+            android:text="@string/shelter_info_title"
             android:textSize="20sp"
             android:textStyle="bold"
             android:paddingBottom="12dp"
@@ -38,7 +38,7 @@
                 android:id="@+id/tvPopulationLabel"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Popülasyon:"
+                android:text="@string/shelter_info_label_population"
                 android:textSize="16sp"
                 android:textColor="@android:color/black" />
 
@@ -61,7 +61,7 @@
                 android:id="@+id/tvMissingLabel"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Kayıp:"
+                android:text="@string/shelter_info_label_missing"
                 android:textSize="16sp"
                 android:textColor="@android:color/black" />
 
@@ -86,7 +86,7 @@
                 android:id="@+id/tvCatLabel"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Kedi:"
+                android:text="@string/shelter_info_label_cat"
                 android:textSize="16sp"
                 android:textColor="@android:color/black" />
 
@@ -113,7 +113,7 @@
                 android:id="@+id/tvDogLabel"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Köpek:"
+                android:text="@string/shelter_info_label_dog"
                 android:textSize="16sp"
                 android:textColor="@android:color/black" />
 
@@ -140,7 +140,7 @@
                 android:id="@+id/tvBlindLabel"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Körmez:"
+                android:text="@string/shelter_info_label_blind"
                 android:textSize="16sp"
                 android:textColor="@android:color/black" />
 
@@ -159,7 +159,7 @@
             android:id="@+id/btnCloseDialog"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Kapat"
+            android:text="@string/shelter_info_button_close"
             android:layout_gravity="end"
             android:layout_marginTop="16dp" />
 

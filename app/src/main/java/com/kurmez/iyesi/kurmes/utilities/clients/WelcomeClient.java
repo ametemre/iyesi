@@ -7,6 +7,7 @@ import android.widget.Toast;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.auth.GetTokenResult;
+import com.kurmez.iyesi.R;
 import com.kurmez.iyesi.kayra.Classes.Souls.Soul;
 
 import org.json.JSONObject;
@@ -55,14 +56,18 @@ public class WelcomeClient {
                 .addOnCompleteListener(task -> {
                     if (!task.isSuccessful()) {
                         Log.e(TAG, "Token alma başarısız", task.getException());
-                        showToast("Oturum bilgileri alınamadı. Lütfen tekrar giriş yapın.",context);
+                        // ÖNCE: Hardcoded "Oturum bilgileri alınamadı. Lütfen tekrar giriş yapın."
+                        // ŞİMDİ: String resource kullanımı
+                        showToast(context.getString(R.string.welcome_client_toast_session_info_not_available), context);
                         return;
                     }
 
                     GetTokenResult result = task.getResult();
                     if (result == null || result.getToken() == null) {
                         Log.e(TAG, "Token sonucu boş");
-                        showToast("Oturum bilgileri geçersiz. Lütfen tekrar giriş yapın.", context);
+                        // ÖNCE: Hardcoded "Oturum bilgileri geçersiz. Lütfen tekrar giriş yapın."
+                        // ŞİMDİ: String resource kullanımı
+                        showToast(context.getString(R.string.welcome_client_toast_session_info_invalid), context);
                         return;
                     }
 
@@ -79,7 +84,9 @@ public class WelcomeClient {
     private void fetchPriorityPets(String idToken, Context context) {
         if (idToken == null || idToken.isEmpty()) {
             Log.e(TAG, "fetchPriorityPets: Geçersiz token");
-            showToast("Oturum bilgileri geçersiz. Lütfen tekrar giriş yapın.", context);
+            // ÖNCE: Hardcoded "Oturum bilgileri geçersiz. Lütfen tekrar giriş yapın."
+            // ŞİMDİ: String resource kullanımı
+            showToast(context.getString(R.string.welcome_client_toast_session_info_invalid), context);
             return;
         }
 
@@ -118,21 +125,23 @@ public class WelcomeClient {
     private void handleHttpError(int statusCode, String responseBody, Context context) {
         Log.e(TAG, "HTTP Hatası: " + statusCode + " | Yanıt: " + responseBody);
 
-        String errorMessage = "Sunucu hatası (" + statusCode + ")";
+        // ÖNCE: Hardcoded error mesajları
+        // ŞİMDİ: String resource kullanımı
+        String errorMessage = context.getString(R.string.welcome_client_toast_server_error, statusCode);
 
         switch (statusCode) {
             case 401:
-                errorMessage = "Yetkilendirme hatası. Lütfen tekrar giriş yapın.";
+                errorMessage = context.getString(R.string.welcome_client_toast_auth_error);
                 FirebaseAuth.getInstance().signOut();
                 break;
             case 403:
-                errorMessage = "Erişim engellendi. Gerekli izinlere sahip değilsiniz.";
+                errorMessage = context.getString(R.string.welcome_client_toast_access_denied);
                 break;
             case 404:
-                errorMessage = "Kaynak bulunamadı.";
+                errorMessage = context.getString(R.string.welcome_client_toast_resource_not_found);
                 break;
             case 500:
-                errorMessage = "Sunucu iç hatası. Lütfen daha sonra tekrar deneyin.";
+                errorMessage = context.getString(R.string.welcome_client_toast_server_internal_error);
                 break;
             default:
                 try {

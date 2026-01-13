@@ -1,10 +1,10 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:orientation="vertical" android:padding="16dp"
     android:layout_width="match_parent" android:layout_height="wrap_content">
-    <EditText android:id="@+id/etName" android:hint="Ad"
+    <EditText android:id="@+id/etName" android:hint="@string/soul_edit_hint_name"
         android:layout_width="match_parent" android:layout_height="wrap_content"/>
-    <EditText android:id="@+id/etSpecies" android:hint="Tür"
+    <EditText android:id="@+id/etSpecies" android:hint="@string/soul_edit_hint_species"
         android:layout_width="match_parent" android:layout_height="wrap_content"/>
-    <EditText android:id="@+id/etHealth" android:hint="Sağlık (Good/Fair/...)"
+    <EditText android:id="@+id/etHealth" android:hint="@string/soul_edit_hint_health"
         android:layout_width="match_parent" android:layout_height="wrap_content"/>
 </LinearLayout>

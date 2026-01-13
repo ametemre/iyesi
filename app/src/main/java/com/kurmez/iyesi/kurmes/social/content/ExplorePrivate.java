@@ -105,7 +105,9 @@ public class ExplorePrivate extends AppCompatActivity {
         user = FirebaseAuth.getInstance().getCurrentUser();
         if (user == null || user.isAnonymous()) {
             Log.w(L, "onCreate() → ÇIKIŞ (USER NULL) | Giriş gerekli");
-            Toast.makeText(this, "Bu sayfayı görüntülemek için giriş yapmalısınız.", Toast.LENGTH_LONG).show();
+            // ÖNCE: Hardcoded "Bu sayfayı görüntülemek için giriş yapmalısınız."
+            // ŞİMDİ: String resource kullanımı
+            Toast.makeText(this, getString(R.string.explore_private_toast_login_required), Toast.LENGTH_LONG).show();
             finish();
             return;
         }
@@ -281,9 +283,11 @@ public class ExplorePrivate extends AppCompatActivity {
             }
 
             String imageUrl = !isEmpty(s.getImageResId()) ? s.getImageResId() : s.getImageUrl();
-            String text = "Tür: " + safe(s.getSpecies())
-                    + "\nKayıt sahibi: " + safe(s.getFinderName())
-                    + "\nKonum: " + safe(s.getFoundLocation());
+            // ÖNCE: Hardcoded "Tür: ", "Kayıt sahibi: ", "Konum: "
+            // ŞİMDİ: String resource kullanımı - format string'ler ile parametreler
+            String text = getString(R.string.explore_private_label_species, safe(s.getSpecies()))
+                    + "\n" + getString(R.string.explore_private_label_record_owner, safe(s.getFinderName()))
+                    + "\n" + getString(R.string.explore_private_label_location, safe(s.getFoundLocation()));
 
             int sc = computeAttentionScore(s);
             long ts = s.getTimestamp();
@@ -318,7 +322,9 @@ public class ExplorePrivate extends AppCompatActivity {
 
         adapter.notifyDataSetChanged();
         Log.i(L, "applySnapshot(" + source + ") → count=" + keys.size() + " | " + previewKeys(keys));
-        Helpers.showToastSafe(this, "ExplorePrivate: " + keys.size() + " kayıt (" + source + ")");
+        // ÖNCE: Hardcoded "ExplorePrivate: " + keys.size() + " kayıt (" + source + ")"
+        // ŞİMDİ: String resource kullanımı - format string ile count ve source parametreleri
+        Helpers.showToastSafe(this, getString(R.string.explore_private_toast_records_loaded, keys.size(), source));
     }
 
     /* =========================== CF (optional) ============================ */
@@ -337,8 +343,11 @@ public class ExplorePrivate extends AppCompatActivity {
                 runOnUiThread(() -> handlePendingResponse(json));
             } catch (Exception e) {
                 Log.e(L, "CF error", e);
+                // ÖNCE: Hardcoded "Cloud Function hata: " + e.getMessage()
+                // ŞİMDİ: String resource kullanımı - format string ile error mesajı
+                String errorMsg = e.getMessage() == null ? "-" : e.getMessage();
                 runOnUiThread(() ->
-                        Toast.makeText(this, "Cloud Function hata: " + e.getMessage(), Toast.LENGTH_LONG).show());
+                        Toast.makeText(this, getString(R.string.explore_private_toast_cloud_function_error, errorMsg), Toast.LENGTH_LONG).show());
             }
         }).start();
     }
@@ -347,7 +356,9 @@ public class ExplorePrivate extends AppCompatActivity {
         Log.i(L, "handlePendingResponse() → GİRİŞ");
         boolean ok = json.optBoolean("success", json.optBoolean("ok", false));
         if (!ok) {
-            String err = json.optString("error", "CF hata");
+            // ÖNCE: Hardcoded "CF hata" fallback
+            // ŞİMDİ: String resource kullanımı
+            String err = json.optString("error", getString(R.string.explore_private_error_cf_hata));
             Log.w(L, "handlePendingResponse() not ok → " + err);
             Helpers.showToastSafe(this, err);
             return;
@@ -389,15 +400,19 @@ public class ExplorePrivate extends AppCompatActivity {
             souls.add(s);
 
             String imageUrl = !isEmpty(s.getImageResId()) ? s.getImageResId() : s.getImageUrl();
-            String text = "Tür: " + safe(s.getSpecies())
-                    + "\nKayıt sahibi: " + safe(s.getFinderName())
-                    + "\nKonum: " + safe(s.getFoundLocation());
+            // ÖNCE: Hardcoded "Tür: ", "Kayıt sahibi: ", "Konum: "
+            // ŞİMDİ: String resource kullanımı - format string'ler ile parametreler
+            String text = getString(R.string.explore_private_label_species, safe(s.getSpecies()))
+                    + "\n" + getString(R.string.explore_private_label_record_owner, safe(s.getFinderName()))
+                    + "\n" + getString(R.string.explore_private_label_location, safe(s.getFoundLocation()));
             items.add(new Content(imageUrl, text, 0, 0, true));
         }
 
         adapter.notifyDataSetChanged();
         Log.i(L, "handlePendingResponse() → ÇIKIŞ count=" + n + " | " + previewKeys(keys));
-        Helpers.showToastSafe(this, "ExplorePrivate: " + n + " kayıt yüklendi");
+        // ÖNCE: Hardcoded "ExplorePrivate: " + n + " kayıt yüklendi"
+        // ŞİMDİ: String resource kullanımı - format string ile count parametresi
+        Helpers.showToastSafe(this, getString(R.string.explore_private_toast_records_loaded_simple, n));
     }
 
     /* ======================= ITEM INTERACTIONS ======================== */
@@ -471,13 +486,17 @@ public class ExplorePrivate extends AppCompatActivity {
 
         Log.d(L, "showQuickActionsDialog() key=" + key);
 
-        String[] roles = {"İye", "Körmös", "Ülgen", "Tengri"};
+        // ÖNCE: Hardcoded String[] roles = {"İye", "Körmös", "Ülgen", "Tengri"}
+        // ŞİMDİ: String array resource kullanımı - çeviri desteği için
+        String[] roles = getResources().getStringArray(R.array.explore_private_roles);
+        // ÖNCE: Hardcoded "Hızlı İşlemler", "Bu kaydı tamamla", "Rolü değiştir…", "Sil"
+        // ŞİMDİ: String resource kullanımı
         new AlertDialog.Builder(this)
-                .setTitle("Hızlı İşlemler")
+                .setTitle(getString(R.string.explore_private_dialog_title_quick_actions))
                 .setItems(new String[]{
-                        "Bu kaydı tamamla",
-                        "Rolü değiştir…",
-                        "Sil"
+                        getString(R.string.explore_private_dialog_item_complete),
+                        getString(R.string.explore_private_dialog_item_change_role),
+                        getString(R.string.explore_private_dialog_item_delete)
                 }, (d, which) -> {
                     Log.d(L, "QuickAction which=" + which + " key=" + key);
                     switch (which) {
@@ -485,8 +504,10 @@ public class ExplorePrivate extends AppCompatActivity {
                             updateStatusCompleted(key);
                             break;
                         case 1:
+                            // ÖNCE: Hardcoded "Yeni Rol Seç"
+                            // ŞİMDİ: String resource kullanımı
                             new AlertDialog.Builder(this)
-                                    .setTitle("Yeni Rol Seç")
+                                    .setTitle(getString(R.string.explore_private_dialog_title_select_role))
                                     .setItems(roles, (d2, idx) -> updateCurrentRole(key, roles[idx]))
                                     .show();
                             break;
@@ -503,11 +524,16 @@ public class ExplorePrivate extends AppCompatActivity {
         pendingRef.child(key).child("status").setValue("completed")
                 .addOnSuccessListener(v -> {
                     Log.i(L, "updateStatusCompleted() → ÇIKIŞ OK key=" + key);
-                    Toast.makeText(this, "Tamamlandı ✓", Toast.LENGTH_SHORT).show();
+                    // ÖNCE: Hardcoded "Tamamlandı ✓"
+                    // ŞİMDİ: String resource kullanımı
+                    Toast.makeText(this, getString(R.string.explore_private_toast_completed), Toast.LENGTH_SHORT).show();
                 })
                 .addOnFailureListener(e -> {
                     Log.e(L, "updateStatusCompleted() → ÇIKIŞ FAIL key=" + key + " msg=" + e.getMessage(), e);
-                    Toast.makeText(this, "Hata: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                    // ÖNCE: Hardcoded "Hata: " + e.getMessage()
+                    // ŞİMDİ: String resource kullanımı - format string ile error mesajı
+                    String errorMsg = e.getMessage() == null ? "-" : e.getMessage();
+                    Toast.makeText(this, getString(R.string.explore_private_toast_error, errorMsg), Toast.LENGTH_SHORT).show();
                 });
     }
 
@@ -516,30 +542,38 @@ public class ExplorePrivate extends AppCompatActivity {
         pendingRef.child(key).child("currentRole").setValue(newRole)
                 .addOnSuccessListener(v -> {
                     Log.i(L, "updateCurrentRole() → ÇIKIŞ OK");
-                    Toast.makeText(this, "Rol güncellendi: " + newRole, Toast.LENGTH_SHORT).show();
+                    // ÖNCE: Hardcoded "Rol güncellendi: " + newRole
+                    // ŞİMDİ: String resource kullanımı - format string ile role parametresi
+                    Toast.makeText(this, getString(R.string.explore_private_toast_role_updated, newRole), Toast.LENGTH_SHORT).show();
                 })
                 .addOnFailureListener(e -> {
                     Log.e(L, "updateCurrentRole() → ÇIKIŞ FAIL msg=" + e.getMessage(), e);
-                    Toast.makeText(this, "Hata: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                    // ÖNCE: Hardcoded "Hata: " + e.getMessage()
+                    // ŞİMDİ: String resource kullanımı - format string ile error mesajı
+                    String errorMsg = e.getMessage() == null ? "-" : e.getMessage();
+                    Toast.makeText(this, getString(R.string.explore_private_toast_error, errorMsg), Toast.LENGTH_SHORT).show();
                 });
     }
 
     private void deletePending(@NonNull String key) {
         Log.w(L, "deletePending() → GİRİŞ key=" + key);
+        // ÖNCE: Hardcoded "Silinsin mi?", "Bu kaydı kalıcı olarak silmek istiyor musunuz?", "Sil", "Vazgeç", "Silindi", "Hata: "
+        // ŞİMDİ: String resource kullanımı
         new AlertDialog.Builder(this)
-                .setTitle("Silinsin mi?")
-                .setMessage("Bu kaydı kalıcı olarak silmek istiyor musunuz?")
-                .setPositiveButton("Sil", (d, w) ->
+                .setTitle(getString(R.string.explore_private_dialog_title_delete_confirm))
+                .setMessage(getString(R.string.explore_private_dialog_message_delete_confirm))
+                .setPositiveButton(getString(R.string.explore_private_dialog_item_delete), (d, w) ->
                         pendingRef.child(key).removeValue()
                                 .addOnSuccessListener(v -> {
                                     Log.w(L, "deletePending() → ÇIKIŞ OK key=" + key);
-                                    Toast.makeText(this, "Silindi", Toast.LENGTH_SHORT).show();
+                                    Toast.makeText(this, getString(R.string.explore_private_toast_deleted), Toast.LENGTH_SHORT).show();
                                 })
                                 .addOnFailureListener(e -> {
                                     Log.e(L, "deletePending() → ÇIKIŞ FAIL key=" + key + " msg=" + e.getMessage(), e);
-                                    Toast.makeText(this, "Hata: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                                    String errorMsg = e.getMessage() == null ? "-" : e.getMessage();
+                                    Toast.makeText(this, getString(R.string.explore_private_toast_error, errorMsg), Toast.LENGTH_SHORT).show();
                                 }))
-                .setNegativeButton("Vazgeç", null)
+                .setNegativeButton(getString(R.string.explore_private_dialog_button_cancel), null)
                 .show();
     }
 
@@ -593,12 +627,18 @@ public class ExplorePrivate extends AppCompatActivity {
 
     /* ======================== ERROR → USER TOAST ===================== */
     private void toastForReadError(Exception e) {
-        String msg = e != null ? e.getMessage() : "bilinmeyen";
-        String userMsg = "Veri okunamadı";
+        // ÖNCE: Hardcoded "bilinmeyen" fallback
+        // ŞİMDİ: String resource kullanımı
+        String msg = e != null ? e.getMessage() : getString(R.string.explore_private_error_unknown);
+        // ÖNCE: Hardcoded "Veri okunamadı", "İzin reddedildi (Rules/App Check?)", "App Check doğrulaması eksik", "Ağ hatası"
+        // ŞİMDİ: String resource kullanımı
+        String userMsg = getString(R.string.explore_private_toast_data_read_error);
         String low = msg != null ? msg.toLowerCase() : "";
-        if (low.contains("permission")) userMsg = "İzin reddedildi (Rules/App Check?)";
-        else if (low.contains("app check") || low.contains("appcheck")) userMsg = "App Check doğrulaması eksik";
-        else if (low.contains("network")) userMsg = "Ağ hatası";
-        Helpers.showToastSafe(this, userMsg + " • " + (msg == null ? "" : msg));
+        if (low.contains("permission")) userMsg = getString(R.string.explore_private_toast_permission_denied);
+        else if (low.contains("app check") || low.contains("appcheck")) userMsg = getString(R.string.explore_private_toast_app_check_missing);
+        else if (low.contains("network")) userMsg = getString(R.string.explore_private_toast_network_error);
+        // ÖNCE: Hardcoded " • " separator
+        // ŞİMDİ: String resource kullanımı - format string ile userMsg ve msg parametreleri
+        Helpers.showToastSafe(this, getString(R.string.explore_private_toast_error_with_detail, userMsg, msg == null ? "" : msg));
     }
 }

@@ -31,7 +31,7 @@
             android:layout_height="200dp"
             android:layout_gravity="center"
             android:layout_weight="1"
-            android:contentDescription="pres or pres and hold"
+            android:contentDescription="@string/sahiplendirme_content_description_press_or_hold"
             android:scaleX="0.5"
             android:scaleY="0.5"
             android:src="@drawable/holder"
@@ -43,7 +43,7 @@
             android:layout_height="140dp"
             android:layout_gravity="center"
             android:layout_weight="2"
-            android:contentDescription="pres or pres and hold"
+            android:contentDescription="@string/sahiplendirme_content_description_press_or_hold"
             android:src="@drawable/soul"
             tools:ignore="HardcodedText" />
 
@@ -63,7 +63,7 @@
                 android:textStyle="bold"
                 android:layout_marginLeft="50dp"
                 android:layout_marginRight="50dp"
-                android:text="companion"
+                android:text="@string/companion_text_companion"
                 android:layout_weight="1"/>
             <TextView
                 android:layout_width="match_parent"
@@ -75,7 +75,7 @@
                 android:textStyle="bold"
                 android:layout_marginLeft="50dp"
                 android:layout_marginRight="50dp"
-                android:text="date"
+                android:text="@string/companion_text_date"
                 android:layout_weight="1"/>
             <TextView
                 android:layout_width="match_parent"
@@ -87,7 +87,7 @@
                 android:textStyle="bold"
                 android:layout_marginLeft="50dp"
                 android:layout_marginRight="50dp"
-                android:text="place"
+                android:text="@string/companion_text_place"
                 android:layout_weight="1"/>
             <TextView
                 android:layout_width="match_parent"
@@ -99,7 +99,7 @@
                 android:textStyle="bold"
                 android:layout_marginLeft="50dp"
                 android:layout_marginRight="50dp"
-                android:text="who"
+                android:text="@string/companion_text_who"
                 android:layout_weight="1"/>
             <androidx.cardview.widget.CardView
                 android:layout_width="match_parent"
@@ -118,13 +118,13 @@
                         android:layout_height="match_parent"
                         android:layout_weight="1"
                         android:gravity="center"
-                        android:text="candidate"/>
+                        android:text="@string/companion_text_candidate"/>
                     <TextView
                         android:layout_width="match_parent"
                         android:layout_height="match_parent"
                         android:layout_weight="1"
                         android:gravity="center"
-                        android:text="raiting"/>
+                        android:text="@string/companion_text_raiting"/>
                 </LinearLayout>
                 <LinearLayout
                     android:layout_width="match_parent"

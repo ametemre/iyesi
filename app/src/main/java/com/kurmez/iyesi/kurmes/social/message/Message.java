@@ -98,7 +98,9 @@ public class Message extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_messaging);
         if (user == null || user.isAnonymous()) {
-            Toast.makeText(this, "Devam etmek için giriş yapmalısınız.", Toast.LENGTH_LONG).show();
+            // ÖNCE: Hardcoded "Devam etmek için giriş yapmalısınız."
+            // ŞİMDİ: String resource kullanımı
+            Toast.makeText(this, getString(R.string.message_toast_login_required), Toast.LENGTH_LONG).show();
             startActivity(new Intent(this, Login.class));
             finish();
             return;
@@ -110,9 +112,11 @@ public class Message extends AppCompatActivity {
         targetUserId   = getIntent().getStringExtra(EXTRA_TARGET_USER_ID);
         targetUserName = getIntent().getStringExtra(EXTRA_TARGET_USER_NAME);
 
-        // ➋ Header’daki kullanıcı adını set et
+        // ➋ Header'daki kullanıcı adını set et
         TextView headerName = findViewById(R.id.tvUsername);
-        headerName.setText(targetUserName != null ? targetUserName : "Konuşma");
+        // ÖNCE: Hardcoded "Konuşma" fallback
+        // ŞİMDİ: String resource kullanımı
+        headerName.setText(targetUserName != null ? targetUserName : getString(R.string.message_label_conversation));
         // ➌ View’ları bağla
         rvMessages = findViewById(R.id.rvMessages);
         etMessage  = findViewById(R.id.etMessage);
@@ -154,16 +158,24 @@ public class Message extends AppCompatActivity {
             int id = item.getItemId();
 
             if (id == R.id.action_block) {
-                Toast.makeText(this, "Engellendi", Toast.LENGTH_SHORT).show();
+                // ÖNCE: Hardcoded "Engellendi"
+                // ŞİMDİ: String resource kullanımı
+                Toast.makeText(this, getString(R.string.message_toast_blocked), Toast.LENGTH_SHORT).show();
                 return true;
             } else if (id == R.id.action_mute) {
-                Toast.makeText(this, "Sessize alındı", Toast.LENGTH_SHORT).show();
+                // ÖNCE: Hardcoded "Sessize alındı"
+                // ŞİMDİ: String resource kullanımı
+                Toast.makeText(this, getString(R.string.message_toast_muted), Toast.LENGTH_SHORT).show();
                 return true;
             } else if (id == R.id.action_delete) {
-                Toast.makeText(this, "Silindi", Toast.LENGTH_SHORT).show();
+                // ÖNCE: Hardcoded "Silindi"
+                // ŞİMDİ: String resource kullanımı
+                Toast.makeText(this, getString(R.string.message_toast_deleted), Toast.LENGTH_SHORT).show();
                 return true;
             } else if (id == R.id.action_follow) {
-                Toast.makeText(this, "Takip işlemi", Toast.LENGTH_SHORT).show();
+                // ÖNCE: Hardcoded "Takip işlemi"
+                // ŞİMDİ: String resource kullanımı
+                Toast.makeText(this, getString(R.string.message_toast_follow_action), Toast.LENGTH_SHORT).show();
                 return true;
             }
             return false;
@@ -195,8 +207,10 @@ public class Message extends AppCompatActivity {
                     })
                     .addOnFailureListener(e -> {
                         Log.e("APP_CHECK", "Token alınamadı", e);
+                        // ÖNCE: Hardcoded "Güvenlik doğrulaması başarısız"
+                        // ŞİMDİ: String resource kullanımı
                         Toast.makeText(Message.this,
-                                "Güvenlik doğrulaması başarısız", Toast.LENGTH_SHORT).show();
+                                getString(R.string.message_toast_security_verification_failed), Toast.LENGTH_SHORT).show();
                     });
         });
     }
@@ -226,8 +240,11 @@ public class Message extends AppCompatActivity {
 
         } catch (Exception e) {
             Log.e("REQUEST", "JSON oluşturma hatası", e);
+            // ÖNCE: Hardcoded "İstek hazırlama hatası: " + e.getMessage()
+            // ŞİMDİ: String resource kullanımı - format string ile error mesajı
+            String errorMsg = e.getMessage() == null ? "-" : e.getMessage();
             runOnUiThread(() -> Toast.makeText(Message.this,
-                    "İstek hazırlama hatası: " + e.getMessage(), Toast.LENGTH_LONG).show());
+                    getString(R.string.message_toast_request_preparation_error, errorMsg), Toast.LENGTH_LONG).show());
         }
     }
     /**

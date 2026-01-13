@@ -40,6 +40,7 @@ import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel;
 import com.google.zxing.qrcode.encoder.ByteMatrix;
 import com.google.zxing.qrcode.encoder.Encoder;
 import com.google.zxing.qrcode.encoder.QRCode;
+import com.kurmez.iyesi.R;
 
 import java.lang.reflect.Field;
 import java.net.URLEncoder;
@@ -260,7 +261,9 @@ public final class QR {
 
         // --- Şekil seçimi (yan yana, isimsiz) ---
         TextView tvShape = new TextView(a);
-        tvShape.setText("Şekil");
+        // ÖNCE: Hardcoded "Şekil"
+        // ŞİMDİ: String resource kullanımı
+        tvShape.setText(a.getString(R.string.qr_dialog_label_shape));
         root.addView(tvShape);
 
         RadioGroup rgShape = new RadioGroup(a);
@@ -270,8 +273,10 @@ public final class QR {
         // Çok yer kaplamasın diye sadece sembol veriyoruz
         rbCircle.setText("●");  // daire
         rbSquare.setText("■");  // kare
-        rbCircle.setContentDescription("Daire");
-        rbSquare.setContentDescription("Kare");
+        // ÖNCE: Hardcoded "Daire", "Kare"
+        // ŞİMDİ: String resource kullanımı
+        rbCircle.setContentDescription(a.getString(R.string.qr_dialog_content_description_circle));
+        rbSquare.setContentDescription(a.getString(R.string.qr_dialog_content_description_square));
         rgShape.addView(rbCircle);
         rgShape.addView(rbSquare);
         if (defaults.dotShape == QROptions.DotShape.SQUARE) rbSquare.setChecked(true);
@@ -280,7 +285,9 @@ public final class QR {
 
         // --- Nokta büyüklüğü (0.30–0.48) ---
         TextView tvDot = new TextView(a);
-        tvDot.setText("Nokta Büyüklüğü");
+        // ÖNCE: Hardcoded "Nokta Büyüklüğü"
+        // ŞİMDİ: String resource kullanımı
+        tvDot.setText(a.getString(R.string.qr_dialog_label_dot_size));
         root.addView(tvDot);
 
         SeekBar sbDot = new SeekBar(a);
@@ -304,7 +311,9 @@ public final class QR {
 
         // --- Yoğunluk / Seyreltme ---
         TextView tvSp = new TextView(a);
-        tvSp.setText("Yoğunluk / Seyreltme");
+        // ÖNCE: Hardcoded "Yoğunluk / Seyreltme"
+        // ŞİMDİ: String resource kullanımı
+        tvSp.setText(a.getString(R.string.qr_dialog_label_density));
         root.addView(tvSp);
 
         SeekBar sbSp = new SeekBar(a);
@@ -314,28 +323,44 @@ public final class QR {
         root.addView(sbSp);
 
         TextView tvSpVal = new TextView(a);
-        tvSpVal.setText(startSparse==0 ? "Tam (mod 0)" : startSparse==1 ? "Seyrek: 3'te1 (mod3)" : "Seyrek: 2'de1 (mod2)");
+        // ÖNCE: Hardcoded "Tam (mod 0)", "Seyrek: 3'te1 (mod3)", "Seyrek: 2'de1 (mod2)"
+        // ŞİMDİ: String resource kullanımı
+        String densityText = startSparse==0 ? a.getString(R.string.qr_dialog_value_density_full) : 
+                            startSparse==1 ? a.getString(R.string.qr_dialog_value_density_sparse_3) : 
+                            a.getString(R.string.qr_dialog_value_density_sparse_2);
+        tvSpVal.setText(densityText);
         root.addView(tvSpVal);
 
         sbSp.setOnSeekBarChangeListener(new SimpleSeek() {
             @Override public void onProgressChanged(SeekBar seekBar, int p, boolean fromUser) {
                 Log.i(TAG, "[onProgressChanged] in");
-                tvSpVal.setText(p==0 ? "Tam (mod 0)" : p==1 ? "Seyrek: 3'te1 (mod3)" : "Seyrek: 2'de1 (mod2)");
+                // ÖNCE: Hardcoded density text'leri
+                // ŞİMDİ: String resource kullanımı
+                String densityText = p==0 ? a.getString(R.string.qr_dialog_value_density_full) : 
+                                    p==1 ? a.getString(R.string.qr_dialog_value_density_sparse_3) : 
+                                    a.getString(R.string.qr_dialog_value_density_sparse_2);
+                tvSpVal.setText(densityText);
             }
         });
 
         // --- Merkez boşluğu (logo) ---
         TextView tvHole = new TextView(a);
-        tvHole.setText("Merkez Boşluğu (Logo)");
+        // ÖNCE: Hardcoded "Merkez Boşluğu (Logo)"
+        // ŞİMDİ: String resource kullanımı
+        tvHole.setText(a.getString(R.string.qr_dialog_label_center_hole));
         root.addView(tvHole);
 
         final android.widget.CheckBox cbHole = new android.widget.CheckBox(a);
-        cbHole.setText("Merkezde dairesel boşluk kullan");
+        // ÖNCE: Hardcoded "Merkezde dairesel boşluk kullan"
+        // ŞİMDİ: String resource kullanımı
+        cbHole.setText(a.getString(R.string.qr_dialog_checkbox_use_hole));
         cbHole.setChecked(defaults.holeRatio > 0f);
         root.addView(cbHole);
 
         final TextView tvHoleVal = new TextView(a);
-        tvHoleVal.setText(String.format(java.util.Locale.US, "Çap oranı: %.02f", clamp(defaults.holeRatio, 0f, 0.35f)));
+        // ÖNCE: Hardcoded "Çap oranı: %.02f"
+        // ŞİMDİ: String resource kullanımı - format string ile değer parametresi
+        tvHoleVal.setText(a.getString(R.string.qr_dialog_value_diameter_ratio, clamp(defaults.holeRatio, 0f, 0.35f)));
         root.addView(tvHoleVal);
 
         final SeekBar sbHole = new SeekBar(a);
@@ -354,13 +379,17 @@ public final class QR {
             @Override public void onProgressChanged(SeekBar seekBar, int p, boolean fromUser) {
                 Log.i(TAG, "[onProgressChanged] in");
                 float val = map(p, 0, 100, 0f, 0.35f);
-                tvHoleVal.setText(String.format(java.util.Locale.US, "Çap oranı: %.02f", val));
+                // ÖNCE: Hardcoded "Çap oranı: %.02f"
+                // ŞİMDİ: String resource kullanımı - format string ile değer parametresi
+                tvHoleVal.setText(a.getString(R.string.qr_dialog_value_diameter_ratio, val));
             }
         });
 
         // --- Logo seçimi (drawable listesi) ---
         TextView tvLogo = new TextView(a);
-        tvLogo.setText("Logo (opsiyonel)");
+        // ÖNCE: Hardcoded "Logo (opsiyonel)"
+        // ŞİMDİ: String resource kullanımı
+        tvLogo.setText(a.getString(R.string.qr_dialog_label_logo));
         root.addView(tvLogo);
 
         final int[] selectedLogoResId = {-1};
@@ -377,11 +406,15 @@ public final class QR {
         logoRow.addView(ivLogo, ivLp);
 
         Button btnPickLogo = new Button(a);
-        btnPickLogo.setText("Seç");
+        // ÖNCE: Hardcoded "Seç"
+        // ŞİMDİ: String resource kullanımı
+        btnPickLogo.setText(a.getString(R.string.qr_dialog_button_select));
         logoRow.addView(btnPickLogo, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
 
         Button btnClearLogo = new Button(a);
-        btnClearLogo.setText("Kaldır");
+        // ÖNCE: Hardcoded "Kaldır"
+        // ŞİMDİ: String resource kullanımı
+        btnClearLogo.setText(a.getString(R.string.qr_dialog_button_remove));
         logoRow.addView(btnClearLogo);
 
         btnClearLogo.setOnClickListener(v -> {
@@ -392,11 +425,15 @@ public final class QR {
         btnPickLogo.setOnClickListener(v -> {
             List<DrawableItem> items = listAppDrawables(a);
             String[] names = new String[items.size() + 1];
-            names[0] = "Yok (logo kullanma)";
+            // ÖNCE: Hardcoded "Yok (logo kullanma)"
+            // ŞİMDİ: String resource kullanımı
+            names[0] = a.getString(R.string.qr_dialog_item_no_logo);
             for (int i = 0; i < items.size(); i++) names[i + 1] = items.get(i).name;
 
             new androidx.appcompat.app.AlertDialog.Builder(a)
-                    .setTitle("Logo Seç")
+                    // ÖNCE: Hardcoded "Logo Seç"
+                    // ŞİMDİ: String resource kullanımı
+                    .setTitle(a.getString(R.string.qr_dialog_title_select_logo))
                     .setItems(names, (d, which) -> {
                         if (which == 0) {
                             Log.i(TAG, "[if] in");
@@ -420,7 +457,9 @@ public final class QR {
 
         // --- HTTP Link ---
         EditText etLink = new EditText(a);
-        etLink.setHint("HTTP Link (tam URL)");
+        // ÖNCE: Hardcoded "HTTP Link (tam URL)"
+        // ŞİMDİ: String resource kullanımı
+        etLink.setHint(a.getString(R.string.qr_dialog_hint_http_link));
         etLink.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_URI);
         etLink.setText(buildSmartContentFromOptions(defaults));
         root.addView(etLink);
@@ -434,13 +473,17 @@ public final class QR {
 
         // --- Generate ---
         Button btnGen = new Button(a);
-        btnGen.setText("Generate");
+        // ÖNCE: Hardcoded "Generate"
+        // ŞİMDİ: String resource kullanımı
+        btnGen.setText(a.getString(R.string.qr_dialog_button_generate));
         root.addView(btnGen, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
         androidx.appcompat.app.AlertDialog dlg =
                 new androidx.appcompat.app.AlertDialog.Builder(a)
-                        .setTitle("QR Ayarları")
+                        // ÖNCE: Hardcoded "QR Ayarları"
+                        // ŞİMDİ: String resource kullanımı
+                        .setTitle(a.getString(R.string.qr_dialog_title_settings))
                         .setView(sc)
                         .setCancelable(true)
                         .create();
@@ -498,7 +541,10 @@ public final class QR {
             } catch (WriterException e) {
                 Log.i(TAG, "[catch] in");
                 Log.e("QR", "Generate failed", e);
-                Toast.makeText(a, "QR üretilemedi: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                // ÖNCE: Hardcoded "QR üretilemedi: " + e.getMessage()
+                // ŞİMDİ: String resource kullanımı - format string ile error mesajı
+                String errorMsg = e.getMessage() == null ? "-" : e.getMessage();
+                Toast.makeText(a, a.getString(R.string.qr_dialog_toast_generate_failed, errorMsg), Toast.LENGTH_SHORT).show();
             }
         });
 
@@ -558,10 +604,12 @@ public final class QR {
         iv.setImageBitmap(bmp);
 
         new androidx.appcompat.app.AlertDialog.Builder(a)
-                .setTitle("QR Önizleme")
+                // ÖNCE: Hardcoded "QR Önizleme", "Kapat"
+                // ŞİMDİ: String resource kullanımı
+                .setTitle(a.getString(R.string.qr_dialog_title_preview))
                 .setMessage(content)
                 .setView(iv)
-                .setPositiveButton("Kapat", (d, w) -> d.dismiss())
+                .setPositiveButton(a.getString(R.string.qr_dialog_button_close), (d, w) -> d.dismiss())
                 .show();
     }
 
@@ -582,19 +630,25 @@ public final class QR {
         sc.addView(root);
 
         final EditText etDot = new EditText(a);
-        etDot.setHint("Nokta ölçeği (0.30–0.48) örn: 0.34");
+        // ÖNCE: Hardcoded "Nokta ölçeği (0.30–0.48) örn: 0.34"
+        // ŞİMDİ: String resource kullanımı
+        etDot.setHint(a.getString(R.string.qr_dialog_hint_dot_scale));
         etDot.setInputType(android.text.InputType.TYPE_CLASS_NUMBER | android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL);
         etDot.setText(String.valueOf(initial.dotScale));
         root.addView(etDot);
 
         final EditText etHole = new EditText(a);
-        etHole.setHint("Merkez boşluğu (çap oranı 0.18–0.30) örn: 0.22");
+        // ÖNCE: Hardcoded "Merkez boşluğu (çap oranı 0.18–0.30) örn: 0.22"
+        // ŞİMDİ: String resource kullanımı
+        etHole.setHint(a.getString(R.string.qr_dialog_hint_hole_ratio));
         etHole.setInputType(android.text.InputType.TYPE_CLASS_NUMBER | android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL);
         etHole.setText(String.valueOf(initial.holeRatio));
         root.addView(etHole);
 
         final EditText etLink = new EditText(a);
-        etLink.setHint("Link (tam URL) – boş bırakırsan otomatik oluşturulur");
+        // ÖNCE: Hardcoded "Link (tam URL) – boş bırakırsan otomatik oluşturulur"
+        // ŞİMDİ: String resource kullanımı
+        etLink.setHint(a.getString(R.string.qr_dialog_hint_link_auto));
         etLink.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_URI);
         etLink.setText(buildSmartContentFromOptions(initial));
         root.addView(etLink);
@@ -606,7 +660,9 @@ public final class QR {
         root.addView(etFrag);
 
         final Button btnGenerate = new Button(a);
-        btnGenerate.setText("Generate");
+        // ÖNCE: Hardcoded "Generate"
+        // ŞİMDİ: String resource kullanımı
+        btnGenerate.setText(a.getString(R.string.qr_dialog_button_generate));
         root.addView(btnGenerate);
 
         final androidx.appcompat.app.AlertDialog dlg =

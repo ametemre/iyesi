@@ -8,7 +8,7 @@
     <com.google.android.material.textfield.TextInputLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:hint="Node Adı">
+        android:hint="@string/yuva_node_hint_name">
         <com.google.android.material.textfield.TextInputEditText
             android:id="@+id/input_node_name"
             android:layout_width="match_parent"
@@ -18,7 +18,7 @@
     <com.google.android.material.textfield.TextInputLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:hint="Açıklama">
+        android:hint="@string/yuva_node_hint_description">
         <com.google.android.material.textfield.TextInputEditText
             android:id="@+id/input_node_description"
             android:layout_width="match_parent"

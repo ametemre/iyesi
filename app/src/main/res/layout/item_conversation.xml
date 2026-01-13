@@ -17,7 +17,7 @@
             android:layout_width="40dp"
             android:layout_height="40dp"
             android:src="@drawable/ic_profile_placeholder"
-            android:contentDescription="Profil"/>
+            android:contentDescription="@string/conversation_content_description_profile"/>
 
         <TextView
             android:id="@+id/tvUsername"
@@ -26,7 +26,7 @@
             android:layout_alignTop="@id/ivProfile"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Username"
+            android:text="@string/conversation_text_username"
             android:textSize="16sp"
             android:textStyle="bold"/>
 
@@ -38,7 +38,7 @@
             android:layout_marginTop="4dp"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Son mesaj"
+            android:text="@string/conversation_text_last_message"
             android:textSize="14sp"
             android:textColor="#666"/>
 
@@ -50,6 +50,6 @@
             android:layout_height="wrap_content"
             android:src="@drawable/ic_follow"
             android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="Seçenekler"/>
+            android:contentDescription="@string/conversation_content_description_options"/>
     </RelativeLayout>
 </androidx.cardview.widget.CardView>

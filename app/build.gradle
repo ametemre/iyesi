@@ -74,6 +74,16 @@ android {
     }
 }
 
+// Workaround (AGP/Gradle validation):
+// Gradle 8.9 can fail the build if a task declares an input directory that doesn't exist yet.
+// AGP sometimes doesn't create this directory when it's empty, so we eagerly create it.
+afterEvaluate {
+    def base = file("$buildDir/intermediates/external_file_lib_dex_archives")
+    ["debug", "release"].each { variant ->
+        file("${base}/${variant}/desugar${variant.capitalize()}FileDependencies").mkdirs()
+    }
+}
+
 dependencies {
     implementation("com.google.firebase:firebase-messaging")
     implementation("com.google.firebase:firebase-bom")
@@ -141,6 +151,13 @@ dependencies {
     implementation libs.material
     implementation libs.activity
     implementation libs.constraintlayout
+    
+    // ===================== Room Database (Persistent Cache) =====================
+    def room_version = libs.versions.roomCompiler.get()
+    implementation "androidx.room:room-runtime:$room_version"
+    annotationProcessor libs.room.compiler
+    // Optional: Room RxJava support
+    // implementation "androidx.room:room-rxjava3:$room_version"
 
     // ===================== Test =====================
     testImplementation libs.junit

@@ -12,8 +12,8 @@ import androidx.annotation.Nullable;
 
 import com.google.android.gms.tasks.Tasks;
 import com.google.firebase.appcheck.AppCheckToken;
-import com.google.firebase.appcheck.BuildConfig;
 import com.google.firebase.appcheck.FirebaseAppCheck;
+import com.kurmez.iyesi.BuildConfig;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.database.DatabaseReference;
@@ -117,8 +117,10 @@ public class CFHelper {
         this.functions = FirebaseFunctions.getInstance(region); // callable doğru bölge
         this.http = new OkHttpClient.Builder()
                 .connectTimeout(15, TimeUnit.SECONDS)
-                .readTimeout(25, TimeUnit.SECONDS)
-                .writeTimeout(25, TimeUnit.SECONDS)
+                // findNearbyBaksi gibi bazı endpoint'ler cold-start/yoğunluk nedeniyle 25sn'yi aşabiliyor.
+                // OkHttp default/önceki timeout yüzünden "timeout" alıp akışı kırmamak için yükseltiyoruz.
+                .readTimeout(60, TimeUnit.SECONDS)
+                .writeTimeout(60, TimeUnit.SECONDS)
                 .retryOnConnectionFailure(true)
                 .build();
         this.region = region;
@@ -267,9 +269,20 @@ public class CFHelper {
                 .build();
 
         Log.d(TAG, "POST " + url);
+        Log.d(TAG, "Request body: " + payload);
+        if (BuildConfig.DEBUG) {
+            boolean hasAC = req.header("X-Firebase-AppCheck") != null;
+            boolean hasAuth = req.header("Authorization") != null;
+            Log.d(TAG, "[POST] " + url + " | AppCheck=" + (hasAC?"yes":"no") + " Auth=" + (hasAuth?"yes":"no"));
+        }
+        
         try (Response resp = http.newCall(req).execute()) {
             String respBody = resp.body() != null ? resp.body().string() : "";
-            if (!resp.isSuccessful()) throw new HttpException(resp.code(), respBody);
+            if (!resp.isSuccessful()) {
+                Log.e(TAG, "HTTP " + resp.code() + " error for " + url);
+                Log.e(TAG, "Response body: " + respBody);
+                throw new HttpException(resp.code(), respBody);
+            }
             return toJson(respBody);
         }
     }
@@ -664,7 +677,19 @@ public class CFHelper {
 
     public JSONObject markerDetails(@NonNull String id) throws Exception {
         Map<String, String> q = new HashMap<>();
-        q.put("id", id);
+        // Backend canonical param: markerId (legacy: id de kabul edebilir)
+        q.put("markerId", id);
+        return doGetJson("/markerDetails", q);
+    }
+
+    /** V2 sözleşmesi: markerDetails için country/city zorunlu (partition). */
+    public JSONObject markerDetails(@NonNull String markerId,
+                                    @NonNull String country,
+                                    @NonNull String city) throws Exception {
+        Map<String, String> q = new HashMap<>();
+        q.put("markerId", markerId);
+        q.put("country", country.trim().toUpperCase(java.util.Locale.ROOT));
+        q.put("city", city.trim().toUpperCase(java.util.Locale.ROOT));
         return doGetJson("/markerDetails", q);
     }
 
@@ -709,30 +734,50 @@ public class CFHelper {
         return callFunction("echoMe", new JSONObject());
     }
 
-    // ---------- Pending companion (deviceId ile) ----------
+    // ---------- Pending companion (key ile) ----------
     public interface PendingCallback {
         /** companion = null → pending yok demektir. */
         void onResult(@Nullable JSONObject companion);
         void onError(@NonNull Throwable error);
     }
 
-    public void checkPendingCompanion(@NonNull String deviceId, @NonNull PendingCallback cb) {
+    public void checkPendingCompanion(@NonNull String key, @NonNull PendingCallback cb) {
+        checkPendingCompanion(key, null, null, cb);
+    }
+
+    public void checkPendingCompanion(@NonNull String key,
+                                      @Nullable String country,
+                                      @Nullable String city,
+                                      @NonNull PendingCallback cb) {
         Map<String, String> q = new HashMap<>();
-        q.put("deviceId", deviceId);
+        // Backend "key" bekliyor. Bizim tarafta bu değer çoğunlukla Firebase UID olmalı.
+        q.put("key", key);
+        if (country != null && !country.trim().isEmpty()) q.put("country", country.trim().toUpperCase(java.util.Locale.ROOT));
+        if (city != null && !city.trim().isEmpty()) q.put("city", city.trim().toUpperCase(java.util.Locale.ROOT));
 
         endpointAsync("/checkPendingCompanion", q, null, /*post=*/false, new EndpointCallback() {
             @Override
             public void onSuccess(JSONObject resp) {
                 try {
-                    boolean has = resp.optBoolean("has",
-                            resp.optBoolean("hasPending", resp.has("companion")));
+                    // Server varyantları:
+                    // - {pending:true, companion:{...}}
+                    // - {hasPending:true, companion:{...}}
+                    // - {has:true, companion:{...}}
+                    // - {ok:true, pending:false}  -> pending YOK demektir
+                    boolean pending = resp.optBoolean("pending", false);
+                    boolean hasPending = resp.optBoolean("hasPending", pending);
+                    boolean has = resp.optBoolean("has", hasPending);
+
+                    // pending açıkça false ise, "resp boş değil" diye pending var saymayalım
+                    boolean shouldHaveCompanion = (pending || hasPending || has);
 
                     JSONObject comp = resp.optJSONObject("companion");
-                    if (comp == null && (has || resp.length() > 0)) {
+                    if (comp == null && shouldHaveCompanion) {
+                        // bazı backend'ler companion'u root'a koyabilir; ama sadece gerçekten pending varsa
                         comp = resp;
-                        has = true;
                     }
-                    final JSONObject result = (has ? comp : null);
+
+                    final JSONObject result = (shouldHaveCompanion ? comp : null);
                     main.post(() -> cb.onResult(result));
                 } catch (Throwable parseErr) {
                     main.post(() -> cb.onError(parseErr));

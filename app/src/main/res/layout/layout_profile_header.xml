@@ -36,7 +36,7 @@
             android:layout_height="64dp"
             android:src="@drawable/holder"
             android:layout_marginEnd="16dp"
-            android:contentDescription="User Profile Image"
+            android:contentDescription="@string/profile_header_content_description_user_image"
             android:scaleType="centerCrop"
             android:background="?android:attr/selectableItemBackground" />
 
@@ -51,7 +51,7 @@
                 android:id="@+id/profile_username"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Username"
+                android:text="@string/profile_header_text_username"
                 android:textStyle="bold"
                 android:textSize="18sp"
                 android:layout_marginBottom="4dp" />
@@ -60,7 +60,7 @@
                 android:id="@+id/profile_bio"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Bio goes here"
+                android:text="@string/profile_header_text_bio"
                 android:textSize="14sp"
                 android:layout_marginBottom="4dp" />
 
@@ -68,7 +68,7 @@
                 android:id="@+id/profile_followers"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Followers: 200"
+                android:text="@string/profile_header_text_followers"
                 android:textSize="14sp" />
 
         </LinearLayout>

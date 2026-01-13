@@ -38,8 +38,10 @@ public class ContentAdapter extends RecyclerView.Adapter<ContentAdapter.ContentV
     public void onBindViewHolder(@NonNull ContentViewHolder holder, int position) {
         Content content = contentList.get(position);
         holder.contentText.setText(content.getText());
-        holder.likes.setText(String.format("Likes: %d", content.getLikes()));
-        holder.comments.setText(String.format("Comments: %d", content.getComments()));
+        // ÖNCE: Hardcoded "Likes: %d", "Comments: %d"
+        // ŞİMDİ: String resource kullanımı - format string ile sayı parametreleri
+        holder.likes.setText(context.getString(R.string.content_adapter_format_likes, content.getLikes()));
+        holder.comments.setText(context.getString(R.string.content_adapter_format_comments, content.getComments()));
 
         // Load media (image or video thumbnail) with Glide
         Glide.with(context).load(content.getMediaUrl()).into(holder.contentImage);

@@ -288,29 +288,40 @@ public class IyeActivity extends AppCompatActivity {
     private void showMembershipDialog() {
         if (u.isEmailVerified())return;
         if (membershipDialog != null && membershipDialog.isShowing()) return;
-        // EditText’i programatik oluşturuyoruz (şifre gibi davranır)
+        // EditText'i programatik oluşturuyoruz (şifre gibi davranır)
         final EditText et = new EditText(this);
         et.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
-        et.setHint("Yeni Şifreni Belirle...");
+        // ÖNCE: Hardcoded "Yeni Şifreni Belirle..."
+        // ŞİMDİ: String resource kullanımı
+        et.setHint(getString(R.string.iye_dialog_password_hint));
         et.setPadding(dp(20), dp(12), dp(20), dp(12));
         et.setSingleLine(true);
         et.setImeOptions(EditorInfo.IME_ACTION_DONE);
 
         membershipDialog = new AlertDialog.Builder(this)
-                .setTitle("Üyelik Tamamlama")
+                // ÖNCE: Hardcoded "Üyelik Tamamlama"
+                // ŞİMDİ: String resource kullanımı
+                .setTitle(getString(R.string.iye_dialog_membership_title))
                 .setView(et)
                 .setCancelable(false)               // geri tuşu ile kapanmasın
-                .setPositiveButton("Devam", (d,w)-> {
+                // ÖNCE: Hardcoded "Devam"
+                // ŞİMDİ: String resource kullanımı
+                .setPositiveButton(getString(R.string.iye_dialog_button_continue), (d,w)-> {
                     FireBaseHelper.changePassword(u.getEmail(), et.getText().toString(), new FireBaseHelper.PasswordChangeCallback() {
                         @Override
                         public void onSuccess() {
-                            Toast.makeText(getApplicationContext(), "Şifre başarıyla değiştirildi.", Toast.LENGTH_SHORT).show();
+                            // ÖNCE: Hardcoded "Şifre başarıyla değiştirildi."
+                            // ŞİMDİ: String resource kullanımı
+                            Toast.makeText(getApplicationContext(), getString(R.string.iye_toast_password_changed), Toast.LENGTH_SHORT).show();
                             iyeImage.performClick();
                         }
 
                         @Override
                         public void onFailure(Exception e) {
-                            Toast.makeText(getApplicationContext(), "Şifre değiştirilemedi: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                            // ÖNCE: Hardcoded "Şifre değiştirilemedi: " + e.getMessage()
+                            // ŞİMDİ: String resource kullanımı - format string ile error mesajı
+                            String errorMsg = e.getMessage() == null ? "-" : e.getMessage();
+                            Toast.makeText(getApplicationContext(), getString(R.string.iye_toast_password_change_failed, errorMsg), Toast.LENGTH_LONG).show();
                             finish();
                         }
 
@@ -318,7 +329,9 @@ public class IyeActivity extends AppCompatActivity {
                     //iyeImage.performClick();
                     failSafe = true;
                 })
-                .setNegativeButton("İptal", (d, w) -> {
+                // ÖNCE: Hardcoded "İptal"
+                // ŞİMDİ: String resource kullanımı
+                .setNegativeButton(getString(R.string.iye_dialog_button_cancel), (d, w) -> {
                     // Guard başarısız/iptal → aktiviteden çık
                     //finish();
                     d.dismiss();
@@ -337,7 +350,9 @@ public class IyeActivity extends AppCompatActivity {
             positive.setOnClickListener(v -> {
                 final String text = String.valueOf(et.getText()).trim();
                 if (TextUtils.isEmpty(text)) {
-                    et.setError("Boş olamaz");
+                    // ÖNCE: Hardcoded "Boş olamaz"
+                    // ŞİMDİ: String resource kullanımı
+                    et.setError(getString(R.string.iye_dialog_error_empty));
                     et.requestFocus();
                     return; // dialog açık kalsın
                 }
@@ -345,7 +360,9 @@ public class IyeActivity extends AppCompatActivity {
                 // Eski şifre ilk üyelikte e-mail olduğundan, burada eski parola yerine u.getEmail() kullanılıyor
                 final String oldPassword = (u != null && u.getEmail() != null) ? u.getEmail() : "";
                 if (TextUtils.isEmpty(oldPassword)) {
-                    et.setError("Kullanıcı e-posta bilgisi bulunamadı.");
+                    // ÖNCE: Hardcoded "Kullanıcı e-posta bilgisi bulunamadı."
+                    // ŞİMDİ: String resource kullanımı
+                    et.setError(getString(R.string.iye_dialog_error_email_not_found));
                     et.requestFocus();
                     return;
                 }
@@ -353,7 +370,9 @@ public class IyeActivity extends AppCompatActivity {
                 // UI kilitleme
                 positive.setEnabled(false);
                 negative.setEnabled(false);
-                positive.setText("Doğrulanıyor...");
+                // ÖNCE: Hardcoded "Doğrulanıyor..."
+                // ŞİMDİ: String resource kullanımı
+                positive.setText(getString(R.string.iye_dialog_button_verifying));
 
                 // Orijinal koda sadık kalarak firebaseHelper'in changePassword metodunu çağırıyoruz.
                 // Varsayım: firebaseHelper.changePassword(String oldPassword, String newPassword, Callback)
@@ -364,7 +383,9 @@ public class IyeActivity extends AppCompatActivity {
                             u.sendEmailVerification().addOnCompleteListener(task -> {
                                 runOnUiThread(() -> {
                                     pendingNewPassword = text;
-                                    Toast.makeText(IyeActivity.this, "Şifre başarıyla değiştirildi. E-posta doğrulaması gönderildi.", Toast.LENGTH_SHORT).show();
+                                    // ÖNCE: Hardcoded "Şifre başarıyla değiştirildi. E-posta doğrulaması gönderildi."
+                                    // ŞİMDİ: String resource kullanımı
+                                    Toast.makeText(IyeActivity.this, getString(R.string.iye_toast_password_changed_email_sent), Toast.LENGTH_SHORT).show();
                                     membershipDialog.dismiss();
                                     iyeImage.performClick();
                                 });
@@ -375,13 +396,17 @@ public class IyeActivity extends AppCompatActivity {
                     @Override
                     public void onFailure(Exception e) {
                         runOnUiThread(() -> {
-                            String msg = (e != null && e.getMessage() != null) ? e.getMessage() : "Şifre değiştirme başarısız.";
+                            // ÖNCE: Hardcoded "Şifre değiştirme başarısız."
+                            // ŞİMDİ: String resource kullanımı
+                            String msg = (e != null && e.getMessage() != null) ? e.getMessage() : getString(R.string.iye_toast_password_change_failed_generic);
                             et.setError(msg);
                             et.requestFocus();
 
                             positive.setEnabled(true);
                             negative.setEnabled(true);
-                            positive.setText("Devam");
+                            // ÖNCE: Hardcoded "Devam"
+                            // ŞİMDİ: String resource kullanımı
+                            positive.setText(getString(R.string.iye_dialog_button_continue));
                         });
                     }
                 });
@@ -421,11 +446,15 @@ public class IyeActivity extends AppCompatActivity {
     private void refreshClaimsAndRender(@Nullable FirebaseUser user) {
         Log.d(TAG, "[refreshClaimsAndRender] user=" + (user==null? "null" : user.getUid()));
         if (user == null || user.isAnonymous()) {
-            Toast.makeText(this, "Oturum bulunamadı.", Toast.LENGTH_LONG).show();
+            // ÖNCE: Hardcoded "Oturum bulunamadı."
+            // ŞİMDİ: String resource kullanımı
+            Toast.makeText(this, getString(R.string.iye_toast_session_not_found), Toast.LENGTH_LONG).show();
             finish();
             return;
         }
-        setUiBusy(true, "Profil yükleniyor...");
+        // ÖNCE: Hardcoded "Profil yükleniyor..."
+        // ŞİMDİ: String resource kullanımı
+        setUiBusy(true, getString(R.string.iye_loading_profile));
         profileClient.refreshClaims(user, new IyeClient.ClaimsCallback() {
             @Override public void onSuccess(Map<String, Object> claims) {
                 claimCache = claims != null ? claims : new HashMap<>();
@@ -437,7 +466,9 @@ public class IyeActivity extends AppCompatActivity {
             @Override public void onFailure(String error) {
                 setUiBusy(false, null);
                 Log.e(TAG, "[claims] FAIL: " + error);
-                Toast.makeText(IyeActivity.this, "Token/Claims alınamadı: " + error, Toast.LENGTH_LONG).show();
+                // ÖNCE: Hardcoded "Token/Claims alınamadı: " + error
+                // ŞİMDİ: String resource kullanımı - format string ile error mesajı
+                Toast.makeText(IyeActivity.this, getString(R.string.iye_toast_token_claims_error, error), Toast.LENGTH_LONG).show();
             }
         });
     }
@@ -457,11 +488,13 @@ public class IyeActivity extends AppCompatActivity {
         tvWho.setText(nonEmptyOrDash(phone));
 
         List<Map.Entry<String, RowMeta>> rows = new ArrayList<>();
-        rows.add(Map.entry(ClaimsKeys.USERNAME,  new RowMeta("Kullanıcı Adı", username,  InputType.TYPE_CLASS_TEXT)));
-        rows.add(Map.entry(ClaimsKeys.EMAIL,     new RowMeta("E‑posta",       emailLike, InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS)));
-        rows.add(Map.entry(ClaimsKeys.LOCATION,  new RowMeta("Konum",         loc,       InputType.TYPE_CLASS_TEXT)));
-        rows.add(Map.entry(ClaimsKeys.PHONE,     new RowMeta("Telefon",       phone,     InputType.TYPE_CLASS_PHONE)));
-        rows.add(Map.entry(ClaimsKeys.AVATAR_URL,new RowMeta("Avatar URL",    getStringClaim(claims, ClaimsKeys.AVATAR_URL), InputType.TYPE_TEXT_VARIATION_URI)));
+        // ÖNCE: Hardcoded "Kullanıcı Adı", "E‑posta", "Konum", "Telefon", "Avatar URL"
+        // ŞİMDİ: String resource kullanımı - çeviri desteği için
+        rows.add(Map.entry(ClaimsKeys.USERNAME,  new RowMeta(getString(R.string.iye_row_label_username), username,  InputType.TYPE_CLASS_TEXT)));
+        rows.add(Map.entry(ClaimsKeys.EMAIL,     new RowMeta(getString(R.string.iye_row_label_email),       emailLike, InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS)));
+        rows.add(Map.entry(ClaimsKeys.LOCATION,  new RowMeta(getString(R.string.iye_row_label_location),         loc,       InputType.TYPE_CLASS_TEXT)));
+        rows.add(Map.entry(ClaimsKeys.PHONE,     new RowMeta(getString(R.string.iye_row_label_phone),       phone,     InputType.TYPE_CLASS_PHONE)));
+        rows.add(Map.entry(ClaimsKeys.AVATAR_URL,new RowMeta(getString(R.string.iye_row_label_avatar_url),    getStringClaim(claims, ClaimsKeys.AVATAR_URL), InputType.TYPE_TEXT_VARIATION_URI)));
 // renderUIFromClaims içinde, url değişkenini aldıktan sonra:
         if (!TextUtils.isEmpty(url)) {
             try {
@@ -488,7 +521,9 @@ public class IyeActivity extends AppCompatActivity {
     private void enterEditMode() {
         isEditing = true;
         listViewIye.setVisibility(View.VISIBLE);
-        Toast.makeText(this, "Düzenleme modu", Toast.LENGTH_SHORT).show();
+        // ÖNCE: Hardcoded "Düzenleme modu"
+        // ŞİMDİ: String resource kullanımı
+        Toast.makeText(this, getString(R.string.iye_toast_edit_mode), Toast.LENGTH_SHORT).show();
     }
 
     private void exitEditModeWithoutSaving() {
@@ -501,14 +536,18 @@ public class IyeActivity extends AppCompatActivity {
         Log.d(TAG, "[onClickSaveProfile] isEditing=" + isEditing);
         if (!isEditing) { enterEditMode(); return; }
 
-        setUiBusy(true, "Kaydediliyor...");
+        // ÖNCE: Hardcoded "Kaydediliyor..."
+        // ŞİMDİ: String resource kullanımı
+        setUiBusy(true, getString(R.string.iye_loading_saving));
         FirebaseAppCheck.getInstance().getAppCheckToken(true) // sadece erken hatayı görmek için
                 .addOnFailureListener(e -> Log.e("APPCHECK","getAppCheckToken FAIL: "+e.getMessage()));
 
         FirebaseUser uNow = FirebaseAuth.getInstance(app).getCurrentUser();
         if (uNow == null || uNow.isAnonymous()) {
             setUiBusy(false, null);
-            Toast.makeText(this, "Giriş yapmalısın.", Toast.LENGTH_LONG).show();
+            // ÖNCE: Hardcoded "Giriş yapmalısın."
+            // ŞİMDİ: String resource kullanımı
+            Toast.makeText(this, getString(R.string.iye_toast_login_required), Toast.LENGTH_LONG).show();
             startActivity(new Intent(this, Login.class));
             finish();
             return;
@@ -516,11 +555,17 @@ public class IyeActivity extends AppCompatActivity {
 
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) {
             setUiBusy(false, null);
-            Toast.makeText(this, "Android 7.0+ gerekli.", Toast.LENGTH_LONG).show();
+            // ÖNCE: Hardcoded "Android 7.0+ gerekli."
+            // ŞİMDİ: String resource kullanımı
+            Toast.makeText(this, getString(R.string.iye_toast_android_version_required), Toast.LENGTH_LONG).show();
             return;
         }
-        if (uploadInProgress) { saveQueued = true; setUiBusy(true,"Görsel yükleniyor…"); return; }
-        if (uploadedObjectPath == null) { Helpers.showToastSafe(this,"Önce görseli yükleyin"); return; }
+        // ÖNCE: Hardcoded "Görsel yükleniyor…"
+        // ŞİMDİ: String resource kullanımı
+        if (uploadInProgress) { saveQueued = true; setUiBusy(true, getString(R.string.iye_loading_image)); return; }
+        // ÖNCE: Hardcoded "Önce görseli yükleyin"
+        // ŞİMDİ: String resource kullanımı
+        if (uploadedObjectPath == null) { Helpers.showToastSafe(this, getString(R.string.iye_toast_please_upload_image)); return; }
         saveAndExitEditMode(); // DB’ye avatarPath = uploadedObjectPath
     }
 
@@ -545,7 +590,9 @@ public class IyeActivity extends AppCompatActivity {
 
         if (filtered.isEmpty()) {
             exitEditModeWithoutSaving();
-            Toast.makeText(this, "Değişiklik yok.", Toast.LENGTH_SHORT).show();
+            // ÖNCE: Hardcoded "Değişiklik yok."
+            // ŞİMDİ: String resource kullanımı
+            Toast.makeText(this, getString(R.string.iye_toast_no_changes), Toast.LENGTH_SHORT).show();
             return;
         }
         JSONObject payload = new JSONObject();
@@ -584,7 +631,9 @@ public class IyeActivity extends AppCompatActivity {
             FirebaseUser user = FirebaseAuth.getInstance(app).getCurrentUser();
             if (user == null) {
                 setUiBusy(false, null);
-                Toast.makeText(this, "Kullanıcı bulunamadı.", Toast.LENGTH_LONG).show();
+                // ÖNCE: Hardcoded "Kullanıcı bulunamadı."
+                // ŞİMDİ: String resource kullanımı
+                Toast.makeText(this, getString(R.string.iye_toast_user_not_found), Toast.LENGTH_LONG).show();
                 return;
             }
 
@@ -600,18 +649,26 @@ public class IyeActivity extends AppCompatActivity {
                     Log.d(TAG, "Gönderilen JSON: " + payload.toString(2));
                 } catch (JSONException e) {
                     setUiBusy(false, null);
-                    Helpers.showToastSafe(this, "Hata: JSON oluşturulamadı: " + e.getMessage());
+                    // ÖNCE: Hardcoded "Hata: JSON oluşturulamadı: " + e.getMessage()
+                    // ŞİMDİ: String resource kullanımı - format string ile error mesajı
+                    String errorMsg = e.getMessage() == null ? "-" : e.getMessage();
+                    Helpers.showToastSafe(this, getString(R.string.iye_error_json_create, errorMsg));
                 }
             });
 
         } catch (JSONException e) {
             setUiBusy(false, null);
-            Helpers.showToastSafe(this, "Hata: JSON oluşturulamadı: " + e.getMessage());
+            // ÖNCE: Hardcoded "Hata: JSON oluşturulamadı: " + e.getMessage()
+            // ŞİMDİ: String resource kullanımı - format string ile error mesajı
+            String errorMsg = e.getMessage() == null ? "-" : e.getMessage();
+            Helpers.showToastSafe(this, getString(R.string.iye_error_json_create, errorMsg));
             return;
         }
 
         CFClient cfClient = new CFClient(BaseURL);
-        setUiBusy(true, "Kaydediliyor...");
+        // ÖNCE: Hardcoded "Kaydediliyor..."
+        // ŞİMDİ: String resource kullanımı
+        setUiBusy(true, getString(R.string.iye_loading_saving));
 
         // ESKİ: cfClient.postJsonAsync("updateProfile", payload, new CFClient.JsonCallback() {
         // YENİ:
@@ -619,7 +676,9 @@ public class IyeActivity extends AppCompatActivity {
         // çağırmadan önce
         if (!isNetworkAvailable()) {
             setUiBusy(false, null);
-            Toast.makeText(this, "İnternet bağlantısı yok.", Toast.LENGTH_LONG).show();
+            // ÖNCE: Hardcoded "İnternet bağlantısı yok."
+            // ŞİMDİ: String resource kullanımı
+            Toast.makeText(this, getString(R.string.iye_toast_no_internet), Toast.LENGTH_LONG).show();
             return;
         }
 
@@ -632,7 +691,9 @@ public class IyeActivity extends AppCompatActivity {
                 // Token'ı refresh et
                 FirebaseAuth.getInstance(app).getCurrentUser().getIdToken(true);
                 setUiBusy(false, null);
-                Helpers.showToastSafe(IyeActivity.this, "Profil güncellendi.");
+                // ÖNCE: Hardcoded "Profil güncellendi."
+                // ŞİMDİ: String resource kullanımı
+                Helpers.showToastSafe(IyeActivity.this, getString(R.string.iye_toast_profile_updated));
                 // SADECE düzenleme modundan çık, yönlendirme YAPMA
                 isEditing = false;
                 listViewIye.setAdapter(null);
@@ -647,9 +708,11 @@ public class IyeActivity extends AppCompatActivity {
             @Override public void onError(@NonNull Throwable t) {
                 Log.e(TAG, "updateIye hatası: " + t.getMessage(), t);
                 setUiBusy(false, null);
+                // ÖNCE: Hardcoded error mesajları
+                // ŞİMDİ: String resource kullanımı - format string ile error mesajı
                 String msg = t.getMessage() != null && t.getMessage().contains("Unable to resolve host")
-                        ? "Sunucu adresine ulaşılamıyor. İnternet bağlantınızı veya base URL'inizi kontrol edin."
-                        : "Güncelleme başarısız: " + t.getMessage();
+                        ? getString(R.string.iye_error_server_unreachable)
+                        : getString(R.string.iye_error_update_failed, t.getMessage() == null ? "-" : t.getMessage());
                 Helpers.showToastSafe(IyeActivity.this, msg);
             }
 
@@ -667,7 +730,9 @@ public class IyeActivity extends AppCompatActivity {
     private void setUiBusy(boolean busy, @Nullable String message) {
         Log.d(TAG, "[setUiBusy] busy=" + busy + " message=" + message);
         if (busy) {
-            LoadingOverlay.show(this, message != null ? message : "Yükleniyor...");
+            // ÖNCE: Hardcoded "Yükleniyor..."
+            // ŞİMDİ: String resource kullanımı
+            LoadingOverlay.show(this, message != null ? message : getString(R.string.iye_loading_generic));
             iyeImage.setAlpha(0.5f);
             iyeImage.setEnabled(false);
         } else {
@@ -758,7 +823,9 @@ public class IyeActivity extends AppCompatActivity {
 
             // 3) handlePickedImage kullanarak görsel yükle (arka planda)
             // BEFORE starting new Thread:
-            runOnUiThread(() -> setUiBusy(true, "Görsel yükleniyor…"));
+            // ÖNCE: Hardcoded "Görsel yükleniyor…"
+            // ŞİMDİ: String resource kullanımı
+            runOnUiThread(() -> setUiBusy(true, getString(R.string.iye_loading_image)));
 
             new Thread(() -> {
                 try {
@@ -781,16 +848,24 @@ public class IyeActivity extends AppCompatActivity {
                         }
                         iyeImage.setImageURI(uri);
                         uploadedObjectPath = imageUrl;
-                        Helpers.showToastSafe(IyeActivity.this, "Görsel yüklendi");
+                        // ÖNCE: Hardcoded "Görsel yüklendi"
+                        // ŞİMDİ: String resource kullanımı
+                        Helpers.showToastSafe(IyeActivity.this, getString(R.string.iye_toast_image_uploaded));
                         setUiBusy(false, null); // ÖNEMLİ: overlay'i kapat
                     });
 
                 } catch (final Exception e) {
                     runOnUiThread(() -> {
                         if (target != null) {
-                            target.setError("Yükleme hatası: " + e.getMessage());
+                            // ÖNCE: Hardcoded "Yükleme hatası: " + e.getMessage()
+                            // ŞİMDİ: String resource kullanımı - format string ile error mesajı
+                            String errorMsg = e.getMessage() == null ? "-" : e.getMessage();
+                            target.setError(getString(R.string.iye_toast_upload_error, errorMsg));
                         }
-                        Helpers.showToastSafe(IyeActivity.this, "Yükleme başarısız: " + e.getMessage());
+                        // ÖNCE: Hardcoded "Yükleme başarısız: " + e.getMessage()
+                        // ŞİMDİ: String resource kullanımı - format string ile error mesajı
+                        String errorMsg = e.getMessage() == null ? "-" : e.getMessage();
+                        Helpers.showToastSafe(IyeActivity.this, getString(R.string.iye_toast_upload_failed, errorMsg));
                         setUiBusy(false, null); // Hata durumunda da kapat
                     });
                 }
@@ -897,7 +972,9 @@ public class IyeActivity extends AppCompatActivity {
                 et.setFocusable(false);
                 et.setFocusableInTouchMode(false);
                 et.setCursorVisible(false);
-                et.setHint("Konum seçmek için dokun");
+                // ÖNCE: Hardcoded "Konum seçmek için dokun"
+                // ŞİMDİ: String resource kullanımı
+                et.setHint(getString(R.string.iye_hint_location_tap));
 
                 final long[] lastClick = {0L};
                 View.OnClickListener openMapWithPermission = v -> {
@@ -964,7 +1041,9 @@ public class IyeActivity extends AppCompatActivity {
             fusedLocationClient = LocationServices.getFusedLocationProviderClient(this);
         }
 
-        target.post(() -> target.setText("Konum aranıyor..."));
+        // ÖNCE: Hardcoded "Konum aranıyor..."
+        // ŞİMDİ: String resource kullanımı
+        target.post(() -> target.setText(getString(R.string.iye_toast_location_searching)));
 
         // Timeout kontrolü
         final Handler timeoutHandler = new Handler();
@@ -972,7 +1051,9 @@ public class IyeActivity extends AppCompatActivity {
             Log.w(TAG, "Konum alma timeout oldu");
             target.post(() -> {
                 target.setText("");
-                Toast.makeText(IyeActivity.this, "Konum alınamadı - zaman aşımı", Toast.LENGTH_SHORT).show();
+                // ÖNCE: Hardcoded "Konum alınamadı - zaman aşımı"
+                // ŞİMDİ: String resource kullanımı
+                Toast.makeText(IyeActivity.this, getString(R.string.iye_toast_location_timeout), Toast.LENGTH_SHORT).show();
             });
         };
 
@@ -984,7 +1065,9 @@ public class IyeActivity extends AppCompatActivity {
 
             target.post(() -> {
                 target.setText("");
-                Toast.makeText(IyeActivity.this, "Konum izni gerekli", Toast.LENGTH_SHORT).show();
+                // ÖNCE: Hardcoded "Konum izni gerekli"
+                // ŞİMDİ: String resource kullanımı
+                Toast.makeText(IyeActivity.this, getString(R.string.iye_toast_location_permission_required), Toast.LENGTH_SHORT).show();
             });
             return;
         }
@@ -1015,7 +1098,9 @@ public class IyeActivity extends AppCompatActivity {
                             if (locationResult == null) {
                                 target.post(() -> {
                                     target.setText("");
-                                    Toast.makeText(IyeActivity.this, "Konum alınamadı", Toast.LENGTH_SHORT).show();
+                                    // ÖNCE: Hardcoded "Konum alınamadı"
+                                    // ŞİMDİ: String resource kullanımı
+                                    Toast.makeText(IyeActivity.this, getString(R.string.iye_toast_location_unavailable), Toast.LENGTH_SHORT).show();
                                 });
                                 return;
                             }
@@ -1034,7 +1119,9 @@ public class IyeActivity extends AppCompatActivity {
                                 timeoutHandler.removeCallbacks(timeoutRunnable);
                                 target.post(() -> {
                                     target.setText("");
-                                    Toast.makeText(IyeActivity.this, "Konum servisi kullanılamıyor", Toast.LENGTH_SHORT).show();
+                                    // ÖNCE: Hardcoded "Konum servisi kullanılamıyor"
+                                    // ŞİMDİ: String resource kullanımı
+                                    Toast.makeText(IyeActivity.this, getString(R.string.iye_toast_location_service_unavailable), Toast.LENGTH_SHORT).show();
                                 });
                                 fusedLocationClient.removeLocationUpdates(this);
                             }
@@ -1053,7 +1140,10 @@ public class IyeActivity extends AppCompatActivity {
                     Log.e(TAG, "getLastLocation failed: " + e.getMessage());
                     target.post(() -> {
                         target.setText("");
-                        Toast.makeText(IyeActivity.this, "Konum alınamadı: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                        // ÖNCE: Hardcoded "Konum alınamadı: " + e.getMessage()
+                        // ŞİMDİ: String resource kullanımı - format string ile error mesajı
+                        String errorMsg = e.getMessage() == null ? "-" : e.getMessage();
+                        Toast.makeText(IyeActivity.this, getString(R.string.iye_toast_location_unavailable_with_error, errorMsg), Toast.LENGTH_SHORT).show();
                     });
                 });
     }
@@ -1111,7 +1201,9 @@ public class IyeActivity extends AppCompatActivity {
             Log.w(TAG, String.format(Locale.US, "getAddressAndFill called with invalid coords: lat=%s lng=%s", lat, lng));
             target.post(() -> {
                 target.setText("");
-                Toast.makeText(this, "Konum bilgisi geçersiz.", Toast.LENGTH_SHORT).show();
+                // ÖNCE: Hardcoded "Konum bilgisi geçersiz."
+                // ŞİMDİ: String resource kullanımı
+                Toast.makeText(this, getString(R.string.iye_toast_location_invalid), Toast.LENGTH_SHORT).show();
             });
             return;
         }
@@ -1121,7 +1213,9 @@ public class IyeActivity extends AppCompatActivity {
 
         final String coordText = String.format(Locale.US, "%.6f,%.6f", lat, lng);
         target.post(() -> {
-            target.setText("Konum alınıyor...");
+            // ÖNCE: Hardcoded "Konum alınıyor..."
+            // ŞİMDİ: String resource kullanımı
+            target.setText(getString(R.string.iye_toast_location_fetching));
             target.setTag(coordText); // koordinatları tag'e koyduk
         });
 
@@ -1137,7 +1231,9 @@ public class IyeActivity extends AppCompatActivity {
                 }
                 @Override
                 public void onError(@NonNull String errorMessage) {
-                    target.post(() -> target.setText("Konum bulunamadı"));
+                    // ÖNCE: Hardcoded "Konum bulunamadı"
+                    // ŞİMDİ: String resource kullanımı
+                    target.post(() -> target.setText(getString(R.string.iye_toast_location_not_found)));
                 }
             });
         } else {
@@ -1150,12 +1246,16 @@ public class IyeActivity extends AppCompatActivity {
                             target.setText(formatted);
                             target.setTag(coordText);
                         } else {
-                            target.setText("Konum bilgisi bulunamadı");
+                            // ÖNCE: Hardcoded "Konum bilgisi bulunamadı"
+                            // ŞİMDİ: String resource kullanımı
+                            target.setText(getString(R.string.iye_toast_location_info_not_found));
                         }
                     });
                 } catch (Exception e) {
                     Log.w(TAG, "Geocoder error: " + e.getMessage(), e);
-                    runOnUiThread(() -> target.setText("Konum alınamadı"));
+                    // ÖNCE: Hardcoded "Konum alınamadı"
+                    // ŞİMDİ: String resource kullanımı
+                    runOnUiThread(() -> target.setText(getString(R.string.iye_toast_location_unavailable)));
                 }
             }).start();
         }
@@ -1167,7 +1267,9 @@ public class IyeActivity extends AppCompatActivity {
     private String formatAddressFromResults(@Nullable List<Address> res, double lat, double lng) {
         if (res == null || res.isEmpty()) {
             // fallback: sadece koordinat
-            return String.format(Locale.US, "LangLat: %.6f,%.6f  —  AvatarLoc:%.6f,%.6f", lat, lng, lat, lng);
+            // ÖNCE: Hardcoded "LangLat: %.6f,%.6f  —  AvatarLoc:%.6f,%.6f"
+            // ŞİMDİ: String resource kullanımı - format string ile koordinat parametreleri
+            return getString(R.string.iye_address_format_fallback, lat, lng, lat, lng);
         }
         Address a = res.get(0);
 
@@ -1186,13 +1288,18 @@ public class IyeActivity extends AppCompatActivity {
         if (neighborhood == null) neighborhood = a.getThoroughfare(); // sokak/cadde fallback
 
         // Güvenli null handling
-        if (country == null) country = "—";
-        if (city == null) city = "—";
-        if (neighborhood == null) neighborhood = "—";
+        // ÖNCE: Hardcoded "—"
+        // ŞİMDİ: String resource kullanımı
+        String dashStr = getString(R.string.iye_address_format_dash);
+        if (country == null) country = dashStr;
+        if (city == null) city = dashStr;
+        if (neighborhood == null) neighborhood = dashStr;
 
         // Sonucu Türkçe etiketlerle döndür
-        return String.format(Locale.forLanguageTag("tr-TR"),
-                "%s / %s / %s", country, city, neighborhood);
+        // ÖNCE: Hardcoded " / " separator
+        // ŞİMDİ: String resource kullanımı - format string ile adres parçaları
+        String separator = getString(R.string.iye_address_format_separator);
+        return country + separator + city + separator + neighborhood;
     }
 
     // İzin sonucunu LocationAssist'e forward et
@@ -1216,10 +1323,14 @@ public class IyeActivity extends AppCompatActivity {
                     runOnUiThread(() -> Harita.askAndFill(IyeActivity.this, target));
                 } else {
                     // hedef yoksa isteğe bağlı: kısa bildirim
-                    Toast.makeText(this, "Konum için izin verildi.", Toast.LENGTH_SHORT).show();
+                    // ÖNCE: Hardcoded "Konum için izin verildi."
+                    // ŞİMDİ: String resource kullanımı
+                    Toast.makeText(this, getString(R.string.iye_toast_location_permission_granted), Toast.LENGTH_SHORT).show();
                 }
             } else {
-                Toast.makeText(this, "Konum izni gereklidir.", Toast.LENGTH_SHORT).show();
+                // ÖNCE: Hardcoded "Konum izni gereklidir."
+                // ŞİMDİ: String resource kullanımı
+                Toast.makeText(this, getString(R.string.iye_toast_location_permission_required_dialog), Toast.LENGTH_SHORT).show();
             }
         }
     }

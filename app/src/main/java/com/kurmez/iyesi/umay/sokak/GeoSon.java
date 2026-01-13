@@ -11,6 +11,7 @@ import com.google.android.gms.maps.model.LatLng;
 import com.google.maps.android.data.geojson.GeoJsonFeature;
 import com.google.maps.android.data.geojson.GeoJsonLayer;
 import com.google.maps.android.data.geojson.GeoJsonPolygonStyle;
+import com.kurmez.iyesi.R;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -97,11 +98,15 @@ public class GeoSon {
 
             layer.addLayerToMap();
             map.moveCamera(CameraUpdateFactory.newLatLngZoom(new LatLng(39, 35), 5));
-            Toast.makeText(context, "Sınırlar başarıyla yüklendi.", Toast.LENGTH_SHORT).show();
+            // ÖNCE: Hardcoded "Sınırlar başarıyla yüklendi."
+            // ŞİMDİ: String resource kullanımı
+            Toast.makeText(context, context.getString(R.string.geoson_toast_bounds_loaded), Toast.LENGTH_SHORT).show();
 
         } catch (JSONException e) {
             Log.e(TAG, "GeoJSON parse hatası (filterAndDraw): " + e.getMessage());
-            Toast.makeText(context, "GeoJSON işleme hatası.", Toast.LENGTH_SHORT).show();
+            // ÖNCE: Hardcoded "GeoJSON işleme hatası."
+            // ŞİMDİ: String resource kullanımı
+            Toast.makeText(context, context.getString(R.string.geoson_toast_processing_error), Toast.LENGTH_SHORT).show();
         }
     }
 

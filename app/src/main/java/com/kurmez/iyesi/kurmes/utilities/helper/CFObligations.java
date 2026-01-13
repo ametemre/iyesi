@@ -16,7 +16,7 @@ import org.json.JSONObject;
  * UI’den ayrıştıran, tekrar kullanılabilir bir yardımcı katman.
  *
  * Neler yapar?
- * - Pending companion kontrolü (deviceId ile)
+ * - Pending companion kontrolü (key ile; genelde Firebase UID)
  * - "soul_inneed" isteğinin gönderimi (gerekirse tek seferlik geri-dönüşümlü retry)
  * - Hata kodu ayrıştırma (401/403/404/500…)
  *
@@ -72,10 +72,18 @@ public class CFObligations {
      * Cihaza ait bekleyen "companion/pending" var mı kontrol eder.
      * UI’den bağımsızdır; sonucu callback’e döner.
      */
-    public void checkPendingCompanion(@NonNull String deviceId,
+    public void checkPendingCompanion(@NonNull String key,
                                       @NonNull PendingListener cb) {
-        Log.i(TAG, "CF checkPendingCompanion START deviceId=" + deviceId);
-        cf.checkPendingCompanion(deviceId, new CFHelper.PendingCallback() {
+        checkPendingCompanion(key, null, null, cb);
+    }
+
+    public void checkPendingCompanion(@NonNull String key,
+                                      @Nullable String country,
+                                      @Nullable String city,
+                                      @NonNull PendingListener cb) {
+        Log.i(TAG, "CF checkPendingCompanion START key=" + key
+                + " country=" + country + " city=" + city);
+        cf.checkPendingCompanion(key, country, city, new CFHelper.PendingCallback() {
             @Override public void onResult(JSONObject companion) {
                 Log.i(TAG, "CF checkPendingCompanion OK has=" + (companion != null));
                 if (verboseJson && companion != null) logChunked("pending.companion", companion.toString());
@@ -130,9 +138,10 @@ public class CFObligations {
                 if (!isRetry && retryEnabled && isImageUploadFailure(msg)) {
                     try {
                         payload.remove("imageBase64");
-                        payload.put("imageUrl", "placeholder://holder");
-                        Log.i(TAG, "Retry with placeholder imageUrl");
-                    } catch (JSONException ignore) { /* no-op */ }
+                        // Sahte URL göndermeyelim; UI local placeholder gösterebilir.
+                        payload.remove("imageUrl");
+                        Log.i(TAG, "Retry without imageUrl");
+                    } catch (Exception ignore) { /* no-op */ }
                     submitInternal(payload, /*retryEnabled*/ false, /*isRetry*/ true, cb);
                     return;
                 }

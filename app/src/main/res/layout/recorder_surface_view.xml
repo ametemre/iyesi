@@ -9,7 +9,7 @@
         android:layout_width="wrap_content"
         android:layout_height="50dp"
         android:layout_margin="10dp"
-        android:text="Start Camera" />
+        android:text="@string/recorder_button_start_camera" />
 
     <TextView
         android:id="@+id/textview1"
@@ -17,7 +17,7 @@
         android:layout_height="wrap_content"
         android:layout_gravity="right"
         android:layout_margin="10dp"
-        android:text="Status: Initialized"
+        android:text="@string/recorder_text_status_initialized"
         android:textColor="#FF0000" />
 
     <org.opencv.android.JavaCameraView

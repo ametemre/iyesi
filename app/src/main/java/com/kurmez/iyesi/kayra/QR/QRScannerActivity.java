@@ -17,6 +17,7 @@ import android.text.TextUtils;
 import android.util.Log;
 import android.widget.Toast;
 
+import com.kurmez.iyesi.R;
 import com.google.zxing.integration.android.IntentIntegrator;
 import com.google.zxing.integration.android.IntentResult;
 
@@ -88,7 +89,9 @@ public class QRScannerActivity extends AppCompatActivity {
         Log.i(TAG, "[startZxingScan] in");
         IntentIntegrator integrator = new IntentIntegrator(this);
         integrator.setDesiredBarcodeFormats(IntentIntegrator.QR_CODE);
-        integrator.setPrompt("QR'ı hizalayın");
+        // ÖNCE: Hardcoded "QR'ı hizalayın"
+        // ŞİMDİ: String resource kullanımı
+        integrator.setPrompt(getString(R.string.qr_scanner_prompt_align));
         integrator.setBeepEnabled(true);
         integrator.setBarcodeImageEnabled(false);
         integrator.setOrientationLocked(true);

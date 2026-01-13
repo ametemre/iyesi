@@ -112,21 +112,28 @@ public class Companion extends AppCompatActivity {
                           String foundDate, String place,
                           String photoUrl, String who) {
 
-        String title = species.isEmpty() ? "Companion" : species + (breed.isEmpty() ? "" : " • " + breed);
+        // ÖNCE: Hardcoded "Companion" fallback ve " • " separator
+        // ŞİMDİ: String resource kullanımı
+        String title = species.isEmpty() ? getString(R.string.companion_label_fallback_title) : species + (breed.isEmpty() ? "" : getString(R.string.format_separator_bullet) + breed);
         tvTitle.setText(title);
+        // "—" karakteri evrensel bir placeholder, lokalize edilmesi gerekmiyor
         tvDate.setText(!foundDate.isEmpty() ? foundDate : "—");
         tvPlace.setText(!place.isEmpty() ? place : "—");
         tvWho.setText(!who.isEmpty() ? who : "—");
 
-        if (!photoUrl.isEmpty()) {
+        // "placeholder://holder" gibi sahte URL'lerde Glide'ı hiç çalıştırmayalım (log spam + gereksiz request).
+        if (photoUrl.isEmpty()
+                || photoUrl.startsWith("placeholder://")
+                || photoUrl.startsWith("android.resource://")) {
+            img.setImageResource(R.drawable.holder);
+            return;
+        }
+
             Glide.with(this)
                     .load(photoUrl)
                     .placeholder(R.drawable.holder)
                     .error(R.drawable.holder)
                     .into(img);
-        } else {
-            img.setImageResource(R.drawable.holder);
-        }
     }
 
     private static String nz(String s) { return s == null ? "" : s; }
@@ -195,8 +202,10 @@ public class Companion extends AppCompatActivity {
         Request req = new Request.Builder().url(url).get().build();
         http.newCall(req).enqueue(new Callback() {
             @Override public void onFailure(Call call, IOException e) {
+                // ÖNCE: Hardcoded "Sunucuya bağlanılamadı"
+                // ŞİMDİ: String resource kullanımı
                 runOnUiThread(() ->
-                        Toast.makeText(Companion.this, "Sunucuya bağlanılamadı", Toast.LENGTH_LONG).show());
+                        Toast.makeText(Companion.this, getString(R.string.companion_toast_server_connection_failed), Toast.LENGTH_LONG).show());
             }
 
             @Override public void onResponse(Call call, Response response) throws IOException {
@@ -220,8 +229,10 @@ public class Companion extends AppCompatActivity {
                     });
 
                 } catch (Exception ignore) {
+                    // ÖNCE: Hardcoded "Veri çözülemedi"
+                    // ŞİMDİ: String resource kullanımı
                     runOnUiThread(() ->
-                            Toast.makeText(Companion.this, "Veri çözülemedi", Toast.LENGTH_SHORT).show());
+                            Toast.makeText(Companion.this, getString(R.string.companion_toast_data_parse_error), Toast.LENGTH_SHORT).show());
                 }
             }
         });
@@ -231,14 +242,13 @@ public class Companion extends AppCompatActivity {
 
     /** Ülgen onayı bekleniyor uyarısı */
     private void showWaitingPopup() {
+        // ÖNCE: Hardcoded "Waiting For Ülgen's Approval", uzun İngilizce mesaj ve "Close" button
+        // ŞİMDİ: String resource kullanımı
         new AlertDialog.Builder(this)
-                .setTitle("Waiting For Ülgen's Approval")
-                .setMessage(
-                        "Veterinarians in our community are checking your application and will respond to you ASAP with the necessary medical attention.\n\n" +
-                                "Please do not touch, move, or pet the soul you have found. It may not look harmful, but street animals might carry diseases that could harm you, or you may harm the soul.\n\n" +
-                                "You will receive the necessary professional help ASAP.")
+                .setTitle(getString(R.string.companion_dialog_title_waiting_approval))
+                .setMessage(getString(R.string.companion_dialog_message_waiting_approval))
                 .setCancelable(false)
-                .setNegativeButton("Close", (d, w) -> d.dismiss())
+                .setNegativeButton(getString(R.string.companion_dialog_button_close), (d, w) -> d.dismiss())
                 .show();
     }
 }

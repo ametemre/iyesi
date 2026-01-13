@@ -24,7 +24,7 @@
             android:layout_height="200dp"
             android:layout_gravity="center"
             android:layout_weight="1"
-            android:contentDescription="pres or pres and hold"
+            android:contentDescription="@string/sahiplendirme_content_description_press_or_hold"
             android:scaleX="0.5"
             android:scaleY="0.5"
             android:src="@drawable/holder"
@@ -36,7 +36,7 @@
             android:layout_height="140dp"
             android:layout_gravity="center"
             android:layout_weight="2"
-            android:contentDescription="pres or pres and hold"
+            android:contentDescription="@string/sahiplendirme_content_description_press_or_hold"
             android:src="@drawable/ic_iye"
             tools:ignore="HardcodedText"
             android:clickable="true"
@@ -57,7 +57,7 @@
                 android:textStyle="bold"
                 android:layout_marginLeft="50dp"
                 android:layout_marginRight="50dp"
-                android:text="username"
+                android:text="@string/iye_text_username"
                 android:layout_weight="1"/>
             <TextView
                 android:layout_width="match_parent"
@@ -69,7 +69,7 @@
                 android:textStyle="bold"
                 android:layout_marginLeft="50dp"
                 android:layout_marginRight="50dp"
-                android:text="iye"
+                android:text="@string/iye_text_iye"
                 android:layout_weight="1"/>
             <TextView
                 android:layout_width="match_parent"
@@ -81,7 +81,7 @@
                 android:textStyle="bold"
                 android:layout_marginLeft="50dp"
                 android:layout_marginRight="50dp"
-                android:text="place"
+                android:text="@string/iye_text_place"
                 android:layout_weight="1"/>
             <TextView
                 android:layout_width="match_parent"
@@ -93,7 +93,7 @@
                 android:textStyle="bold"
                 android:layout_marginLeft="50dp"
                 android:layout_marginRight="50dp"
-                android:text="who"
+                android:text="@string/iye_text_who"
                 android:layout_weight="1"/>
             <LinearLayout
                 android:layout_width="match_parent"
@@ -107,7 +107,7 @@
                     android:layout_marginRight="60dp"
                     android:layout_gravity="center"
                     android:layout_weight="10"
-                    android:contentDescription="pres or pres and hold"
+                    android:contentDescription="@string/sahiplendirme_content_description_press_or_hold"
                     android:src="@drawable/raiting"
                     tools:ignore="HardcodedText" />
 
@@ -144,13 +144,13 @@
                         android:layout_height="match_parent"
                         android:layout_weight="1"
                         android:gravity="center"
-                        android:text="iye"/>
+                        android:text="@string/iye_text_iye"/>
                     <TextView
                         android:layout_width="match_parent"
                         android:layout_height="match_parent"
                         android:layout_weight="1"
                         android:gravity="center"
-                        android:text="veteriner"/>
+                        android:text="@string/iye_text_veteriner"/>
                 </LinearLayout>
                 <LinearLayout
                     android:layout_width="match_parent"
@@ -194,7 +194,7 @@
                 android:id="@+id/editorOk"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="OK" />
+                android:text="@string/iye_button_ok" />
         </LinearLayout>
     </FrameLayout>
 </androidx.cardview.widget.CardView>

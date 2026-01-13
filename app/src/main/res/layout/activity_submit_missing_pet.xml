@@ -16,14 +16,14 @@
             android:layout_width="200dp"
             android:layout_height="200dp"
             android:layout_gravity="center"
-            android:contentDescription="Pet Photo"
+            android:contentDescription="@string/submit_missing_pet_content_description"
             android:src="@drawable/holder" />
 
         <Button
             android:id="@+id/upload_photo_button"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Upload Photo"
+            android:text="@string/submit_missing_pet_button_upload_photo"
             android:layout_marginTop="16dp" />
 
         <!-- Pet Details -->
@@ -31,42 +31,42 @@
             android:id="@+id/pet_name"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:hint="Pet Name"
+            android:hint="@string/submit_missing_pet_hint_pet_name"
             android:layout_marginTop="16dp" />
 
         <EditText
             android:id="@+id/pet_species"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:hint="Species"
+            android:hint="@string/submit_missing_pet_hint_species"
             android:layout_marginTop="16dp" />
 
         <EditText
             android:id="@+id/pet_color"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:hint="Color"
+            android:hint="@string/submit_missing_pet_hint_color"
             android:layout_marginTop="16dp" />
 
         <EditText
             android:id="@+id/pet_age"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:hint="Age"
+            android:hint="@string/submit_missing_pet_hint_age"
             android:layout_marginTop="16dp" />
 
         <EditText
             android:id="@+id/last_location"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:hint="Last Known Location"
+            android:hint="@string/submit_missing_pet_hint_last_known_location"
             android:layout_marginTop="16dp" />
 
         <EditText
             android:id="@+id/missing_date"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:hint="Date Missing"
+            android:hint="@string/submit_missing_pet_hint_date_missing"
             android:layout_marginTop="16dp" />
 
         <!-- Submit Button -->
@@ -74,7 +74,7 @@
             android:id="@+id/submit_missing_pet_button"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Submit"
+            android:text="@string/submit_missing_pet_button_submit"
             android:layout_marginTop="24dp" />
     </LinearLayout>
 </ScrollView>

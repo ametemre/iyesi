@@ -1,8 +1,8 @@
 <menu xmlns:android="http://schemas.android.com/apk/res/android">
     <item
         android:id="@+id/blueTooth"
-        android:title="BlueTooth Mesajları Kabulet" />
+        android:title="@string/menu_message_bluetooth" />
     <item
         android:id="@+id/edit_profile"
-        android:title="Profili Düzenle" />
+        android:title="@string/menu_profile_edit" />
 </menu>

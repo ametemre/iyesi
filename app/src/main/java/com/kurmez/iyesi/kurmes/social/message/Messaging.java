@@ -73,7 +73,9 @@ public class Messaging extends AppCompatActivity {
         setContentView(R.layout.activity_inbox);
         headerHelper = new HeaderHelper(Messaging.this);
         if (user == null || user.isAnonymous()) {
-            Toast.makeText(this, "Devam etmek için giriş yapmalısınız.", Toast.LENGTH_LONG).show();
+            // ÖNCE: Hardcoded "Devam etmek için giriş yapmalısınız."
+            // ŞİMDİ: String resource kullanımı - Message.java ile aynı string resource
+            Toast.makeText(this, getString(R.string.message_toast_login_required), Toast.LENGTH_LONG).show();
             startActivity(new Intent(this, Login.class));
             finish();
             return;
@@ -87,7 +89,9 @@ public class Messaging extends AppCompatActivity {
 
         user = auth.getCurrentUser();
         if (user == null || user.isAnonymous()) {
-            Toast.makeText(this, "Devam etmek için giriş yapmalısınız.", Toast.LENGTH_LONG).show();
+            // ÖNCE: Hardcoded "Devam etmek için giriş yapmalısınız."
+            // ŞİMDİ: String resource kullanımı - Message.java ile aynı string resource
+            Toast.makeText(this, getString(R.string.message_toast_login_required), Toast.LENGTH_LONG).show();
             startActivity(new Intent(this, Login.class));
             finish();
             return;
@@ -133,11 +137,15 @@ public class Messaging extends AppCompatActivity {
                                 })
                                 .addOnFailureListener(e -> {
                                     Log.e("Messaging", "Kullanıcı listesi hatası", e);
-                                    Helpers.showToastSafe(Messaging.this, "Kullanıcı listesi alınamadı");
+                                    // ÖNCE: Hardcoded "Kullanıcı listesi alınamadı"
+                                    // ŞİMDİ: String resource kullanımı
+                                    Helpers.showToastSafe(Messaging.this, getString(R.string.messaging_toast_user_list_error));
                                 });
                     });
                 } else {
-                    Toast.makeText(this, "Bu işlemi sadece Ülgen ve Tengri yapabilir.", Toast.LENGTH_LONG).show();
+                    // ÖNCE: Hardcoded "Bu işlemi sadece Ülgen ve Tengri yapabilir."
+                    // ŞİMDİ: String resource kullanımı
+                    Toast.makeText(this, getString(R.string.messaging_toast_admin_only), Toast.LENGTH_LONG).show();
                 }
 
             }); // CFHelper içinde HTTP POST /getRole çağrısı
@@ -218,15 +226,19 @@ public class Messaging extends AppCompatActivity {
             if (item.getItemId() == R.id.blueTooth) {
                 PrivateCom btHelper = new PrivateCom();
                 btHelper.enableBluetoothAndMakeDiscoverable(Messaging.this, 120); // 2 dakika görünür
-                Toast.makeText(this, "Bluetooth aktif ve görünür hale geldi", Toast.LENGTH_SHORT).show();
+                // ÖNCE: Hardcoded "Bluetooth aktif ve görünür hale geldi"
+                // ŞİMDİ: String resource kullanımı
+                Toast.makeText(this, getString(R.string.messaging_toast_bluetooth_enabled), Toast.LENGTH_SHORT).show();
                 return true;
             }
             if (item.getItemId() == R.id.edit_profile) {
                 profileActivity = new IyeActivity();
                 profileActivity.launchForEdit(this);
-                Toast.makeText(this, "Profil Düzenleniyor", Toast.LENGTH_SHORT).show();
+                // ÖNCE: Hardcoded "Profil Düzenleniyor" (2 kez)
+                // ŞİMDİ: String resource kullanımı
+                Toast.makeText(this, getString(R.string.messaging_toast_profile_editing), Toast.LENGTH_SHORT).show();
                 //profileActivity.launchProfile(this);
-                Toast.makeText(this, "Profil Düzenleniyor", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, getString(R.string.messaging_toast_profile_editing), Toast.LENGTH_SHORT).show();
                 return true;
             }
             return false;

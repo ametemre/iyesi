@@ -18,7 +18,7 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_gravity="center"
-        android:contentDescription="pres or pres and hold"
+        android:contentDescription="@string/sahiplendirme_content_description_press_or_hold"
         android:src="@drawable/pati"
         tools:ignore="HardcodedText"
         android:clickable="true"/>
@@ -26,7 +26,7 @@
         android:id="@+id/tvTitle"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:text="Güvenlik Doğrulaması"
+        android:text="@string/main_text_security_verification"
         android:textSize="22sp"
         android:textStyle="bold"
         app:layout_constraintTop_toTopOf="parent"
@@ -48,7 +48,7 @@
         android:id="@+id/tvStatus"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:text="Hazırlanıyor…"
+        android:text="@string/main_text_preparing"
         android:textSize="16sp"
         app:layout_constraintTop_toBottomOf="@id/progress"
         app:layout_constraintStart_toStartOf="parent"
@@ -59,7 +59,7 @@
         android:id="@+id/tvInstaller"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:text="Installer: —"
+        android:text="@string/main_text_installer"
         app:layout_constraintTop_toBottomOf="@id/tvStatus"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
@@ -69,7 +69,7 @@
         android:id="@+id/tvAppCheck"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:text="App Check: —"
+        android:text="@string/main_text_app_check"
         app:layout_constraintTop_toBottomOf="@id/tvInstaller"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
@@ -79,7 +79,7 @@
         android:id="@+id/tvIntegrity"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:text="Integrity: —"
+        android:text="@string/main_text_integrity"
         app:layout_constraintTop_toBottomOf="@id/tvAppCheck"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
@@ -100,7 +100,7 @@
             android:id="@+id/btnRetry"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Tekrar Dene"/>
+            android:text="@string/main_button_retry"/>
 
         <Space
             android:layout_width="12dp"
@@ -110,6 +110,6 @@
             android:id="@+id/btnOpenStore"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Güncelle"/>
+            android:text="@string/main_button_update"/>
     </LinearLayout>
 </androidx.cardview.widget.CardView>

@@ -4,18 +4,21 @@ import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.drawable.Drawable;
+import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
 
 import androidx.annotation.Nullable;
+import androidx.annotation.RequiresApi;
 import androidx.core.content.ContextCompat;
 
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.model.*;
-import com.google.firebase.firestore.DocumentSnapshot;
-import com.google.firebase.firestore.FirebaseFirestore;
-import com.google.firebase.firestore.QuerySnapshot;
+// Firestore imports kaldırıldı - direkt erişim artık desteklenmiyor
+// import com.google.firebase.firestore.DocumentSnapshot;
+// import com.google.firebase.firestore.FirebaseFirestore;
+// import com.google.firebase.firestore.QuerySnapshot;
 import com.kurmez.iyesi.R;
 import com.kurmez.iyesi.kayra.Classes.Souls.Baksi;
 import com.kurmez.iyesi.kayra.Classes.Nodes.ui.NodeIconFactory;
@@ -63,13 +66,15 @@ public class NodeManager {
     // Main thread handler for UI operations
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
 
-    // Firestore instance for node fetching
-    private final FirebaseFirestore firestore;
+    // Firestore instance - artık kullanılmıyor (güvenlik kuralları nedeniyle)
+    // @Deprecated - Tüm veri erişimi Cloud Function üzerinden yapılmalı
+    // private final FirebaseFirestore firestore;
 
     public NodeManager(GoogleMap map, Context context) {
         this.mMap = map;
         this.context = context;
-        this.firestore = FirebaseFirestore.getInstance();
+        // Firestore instance kaldırıldı - direkt erişim artık desteklenmiyor
+        // this.firestore = FirebaseFirestore.getInstance();
         Log.d(TAG, "NodeManager constructed. googleMap != null? " + (map != null));
     }
 
@@ -136,6 +141,22 @@ public class NodeManager {
         if (markerId == null || marker == null) {
             Log.w(TAG, "registerMarker: markerId veya marker null");
             return;
+        }
+        // Aynı markerId için daha önce eklenmiş bir marker varsa onu map'ten kaldır.
+        // Aksi halde kamera hareketlerinde/fetch tekrarlarında "ghost duplicate" marker'lar kalıp
+        // toggle ile gizlenemez hale geliyor.
+        Marker prev = markerById.get(markerId);
+        if (prev != null && prev != marker) {
+            try {
+                prev.remove();
+            } catch (Throwable ignored) { }
+            try {
+                markerTypeMap.remove(prev);
+            } catch (Throwable ignored) { }
+            if (highlightedMarker == prev) {
+                highlightedMarker = null;
+            }
+            Log.d(TAG, "registerMarker: replaced existing marker id=" + markerId);
         }
         marker.setTag(markerId);
         markerById.put(markerId, marker);
@@ -208,6 +229,7 @@ public class NodeManager {
         });
     }
 
+    @RequiresApi(api = Build.VERSION_CODES.N)
     public void highlightMarker(final Marker marker) {
         if (marker == null) return;
         mainHandler.post(() -> {
@@ -225,6 +247,7 @@ public class NodeManager {
         });
     }
 
+    @RequiresApi(api = Build.VERSION_CODES.N)
     public void clearMarkerHighlight() {
         mainHandler.post(() -> {
             try {
@@ -255,19 +278,29 @@ public class NodeManager {
     }
 
     private BitmapDescriptor createIconForType(String type) {
+        // Type varyasyonlarını normalize et (backend "feeding"/"shelter"/"task" gibi dönebilir)m
+        String key = type;
+        if (key == null) key = "default";
+        key = key.trim().toLowerCase(java.util.Locale.ROOT)
+                .replace("ı", "i").replace("ğ", "g").replace("ü", "u")
+                .replace("ş", "s").replace("ö", "o").replace("ç", "c");
+
         int fgRes;
-        switch (type) {
-            case "Besleme":
+        switch (key) {
+            case "besleme":
+            case "feeding":
                 fgRes = R.drawable.icon_besleme;
                 break;
-            case "Yuva":
+            case "yuva":
+            case "nest":
                 fgRes = R.drawable.icon_yuva;
                 break;
-            case "Barınak":
+            case "barinak":
+            case "shelter":
                 fgRes = R.drawable.icon_barinak;
                 break;
-            case "Sağlık": // Baksi tipi için ikon öngörüldü
-            case "Baksi":
+            case "saglik": // Baksi tipi için ikon öngörüldü
+            case "baksi":
                 fgRes = R.drawable.icon_saglik;
                 break;
             default:
@@ -286,7 +319,7 @@ public class NodeManager {
         float d = context.getResources().getDisplayMetrics().density;
         int markerWidthPx = (int) (MARKER_WIDTH_DP * d + .5f);
         int iconPx = (int) (ICON_DP * d + .5f);
-        int offsetYPx = (int) (ICON_OFFSET_Y_DP * d + .5f);
+        int offsetYPx = (int) (ICON_OFFSET_Y_DP * d );
         int offsetXPx = (int) (ICON_OFFSET_X_DP * d + .5f);
 
         Drawable bg = ContextCompat.getDrawable(context, bgRes);
@@ -319,59 +352,18 @@ public class NodeManager {
 
     /**
      * Firestore'dan VetNodes koleksiyonunu çek ve haritaya ekle.
-     * Bu metot her kullanıcı SokakActivity'ye girdiğinde çağrılmalı.
+     * 
+     * DEPRECATED: Bu metot artık kullanılmıyor. Firestore security rules tüm kullanıcı erişimlerini engelliyor.
+     * Tüm veri erişimi Cloud Function üzerinden yapılmalı (findNearbyBaksi).
+     * 
+     * Bu metot çağrılırsa sadece log yazar, Firestore'a erişmez.
      */
+    @Deprecated
     public void loadVetNodes() {
-        if (!mapAvailable()) {
-            Log.w(TAG, "loadVetNodes: map hazır değil, atlandı");
-            return;
-        }
-
-        // Önce var olan veteriner marker'larını temizlemek isteyebilirsin (opsiyonel)
-        // clearAllMarkers(); // eğer diğer tipleri korumak istiyorsan bunu kullanma
-
-        Log.d(TAG, "loadVetNodes: Firestore'dan VetNodes çekiliyor...");
-        firestore.collection("VetNodes")
-                .get()
-                .addOnSuccessListener((QuerySnapshot queryDocumentSnapshots) -> {
-                    if (queryDocumentSnapshots == null || queryDocumentSnapshots.isEmpty()) {
-                        Log.d(TAG, "loadVetNodes: VetNodes koleksiyonu boş.");
-                        return;
-                    }
-
-                    for (DocumentSnapshot doc : queryDocumentSnapshots.getDocuments()) {
-                        try {
-                            // Evrensel alan isimleri: lat, lng, name, type, baksiId (isteğe bağlı), registered
-                            Double latD = doc.getDouble("lat");
-                            Double lngD = doc.getDouble("lng");
-                            String name = doc.getString("name");
-                            String type = doc.getString("type");
-                            String baksiId = doc.contains("baksiId") ? doc.getString("baksiId") : doc.getId();
-                            boolean registered = doc.contains("registered") && Boolean.TRUE.equals(doc.getBoolean("registered"));
-
-                            if (latD == null || lngD == null) {
-                                Log.w(TAG, "loadVetNodes: lat/lng eksik docId=" + doc.getId());
-                                continue;
-                            }
-
-                            LatLng pos = new LatLng(latD, lngD);
-
-                            // Basit MarkerOptions kullanarak NodeManager'ın mevcut addMarker akışını kullan
-                            MarkerOptions options = new MarkerOptions()
-                                    .position(pos)
-                                    .title(name != null ? name : "Veteriner Noktası")
-                                    .snippet(type != null ? type : "Veteriner")
-                                    .icon(getCustomIcon("Sağlık")); // Baksi tipi için ikon
-
-                            // UI-thread güvenli: addMarker zaten UI thread'e post ediyor
-                            addMarker(options, "Baksi", baksiId);
-
-                        } catch (Throwable t) {
-                            Log.e(TAG, "loadVetNodes: node işlenirken hata: " + t.getMessage(), t);
-                        }
-                    }
-                })
-                .addOnFailureListener(e -> Log.e(TAG, "loadVetNodes: Firestore hatası: " + e.getMessage(), e));
+        Log.w(TAG, "loadVetNodes: DEPRECATED - Firestore direkt erişimi artık desteklenmiyor. " +
+                "Cloud Function (findNearbyBaksi) kullanılmalı.");
+        // Firestore direkt erişimi kaldırıldı - güvenlik kuralları nedeniyle
+        // Tüm veri erişimi Cloud Function üzerinden yapılmalı
     }
 
 

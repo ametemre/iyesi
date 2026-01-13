@@ -241,7 +241,10 @@ public class MainActivity extends AppCompatActivity {
                 return;
             } else {
                 Log.w(TAG, "Integrity API erişilemedi veya engellendi (Play ortamı yok/uyumsuz).");
-                showPlayEnvAdvice(!playOk ? "Google Play Store kurulu değil / devre dışı" : "Uygulama resmi Play Store’dan yüklenmemiş.");
+                // ÖNCE: Hardcoded "Google Play Store kurulu değil / devre dışı" ve "Uygulama resmi Play Store'dan yüklenmemiş."
+                // ŞİMDİ: String resource kullanımı
+                String reason = !playOk ? getString(R.string.main_error_play_store_not_installed) : getString(R.string.main_error_not_installed_from_play);
+                showPlayEnvAdvice(reason);
                 setLoading(false);
                 return;
             }
@@ -263,16 +266,18 @@ public class MainActivity extends AppCompatActivity {
                         return;
                     }
 
+                    // ÖNCE: Hardcoded error mesajları
+                    // ŞİMDİ: String resource kullanımı
                     if (s == PreflightStatus.ENV_MISSING_OR_OUTDATED) {
                         Log.w(TAG, "Integrity API erişilemedi veya engellendi (ENV_MISSING_OR_OUTDATED).");
-                        showPlayEnvAdvice("Play ortamı eksik/eski. (Integrity env)");
+                        showPlayEnvAdvice(getString(R.string.main_error_play_env_missing));
                     } else if (s == PreflightStatus.TRANSIENT_ERROR) {
                         Log.w(TAG, "Integrity API geçici hata.");
-                        showPlayEnvAdvice("Geçici hata: Lütfen tekrar deneyin.");
+                        showPlayEnvAdvice(getString(R.string.main_error_transient));
                     } else if (s == PreflightStatus.RETRIABLE_INPUT_ERROR) {
-                        showPlayEnvAdvice("Nonce girdisi hatası tekrarlandı.");
+                        showPlayEnvAdvice(getString(R.string.main_error_nonce_input));
                     } else {
-                        showPlayEnvAdvice("Bilinmeyen Integrity hatası.");
+                        showPlayEnvAdvice(getString(R.string.main_error_unknown_integrity));
                     }
                     setLoading(false);
                 }
@@ -435,7 +440,9 @@ public class MainActivity extends AppCompatActivity {
                                     FirebaseUser u = mAuth.getCurrentUser();
                                     if (u == null) {
                                         Log.e(TAG, "Anon sign-in success but user == null");
-                                        showPlayEnvAdvice("Anon sign-in user null");
+                                        // ÖNCE: Hardcoded "Anon sign-in user null"
+                                        // ŞİMDİ: String resource kullanımı
+                                        showPlayEnvAdvice(getString(R.string.main_error_anon_signin_user_null));
                                         return;
                                     }
                                     u.getIdToken(true)
@@ -447,12 +454,16 @@ public class MainActivity extends AppCompatActivity {
                                             })
                                             .addOnFailureListener(e -> {
                                                 Log.e(TAG, "Anon getIdToken failed", e);
-                                                showPlayEnvAdvice("ID token alınamadı (anon).");
+                                                // ÖNCE: Hardcoded "ID token alınamadı (anon)."
+                                                // ŞİMDİ: String resource kullanımı
+                                                showPlayEnvAdvice(getString(R.string.main_error_id_token_anon));
                                             });
                                 })
                                 .addOnFailureListener(e -> {
                                     Log.e(TAG, "Anon sign-in fail", e);
-                                    showPlayEnvAdvice("Anon giriş başarısız.");
+                                    // ÖNCE: Hardcoded "Anon giriş başarısız."
+                                    // ŞİMDİ: String resource kullanımı
+                                    showPlayEnvAdvice(getString(R.string.main_error_anon_signin_failed));
                                 });
                     }
 
@@ -503,7 +514,10 @@ public class MainActivity extends AppCompatActivity {
                 })
                 .addOnFailureListener(e -> {
                     Log.e(TAG, "AppCheck warm-up FAILED", e);
-                    showPlayEnvAdvice("AppCheck warm-up başarısız: " + (e.getMessage() == null ? "unknown" : e.getMessage()));
+                    // ÖNCE: Hardcoded "AppCheck warm-up başarısız: " + error
+                    // ŞİMDİ: String resource kullanımı - format string ile error mesajı
+                    String errorMsg = e.getMessage() == null ? "unknown" : e.getMessage();
+                    showPlayEnvAdvice(getString(R.string.main_error_appcheck_warmup_failed, errorMsg));
                     setLoading(false);
                 });
     }
@@ -584,16 +598,14 @@ public class MainActivity extends AppCompatActivity {
 
     private void showPlayEnvAdvice(String reason) {
         if (isFinishing() || isDestroyed()) return;
+        // ÖNCE: Hardcoded "Güncelleme / Düzeltme Gerekli", dialog mesajı, buton metinleri
+        // ŞİMDİ: String resource kullanımı - format string ile reason parametresi
         new AlertDialog.Builder(this)
-                .setTitle("Güncelleme / Düzeltme Gerekli")
-                .setMessage(
-                        "Google Play ortamında eksik/uyumsuzluk algılandı.\n" +
-                                "Neden: " + reason +
-                                "\n\nLütfen Google Play Hizmetleri ve Play Store’u güncelleyin veya etkinleştirin."
-                )
-                .setPositiveButton("Play Hizmetleri", (d, w) -> openPlayServicesAndFinish())
-                .setNegativeButton("Play Store", (d, w) -> openPlayStoreAndFinish())
-                .setNeutralButton("Bu Uygulama (Store)", (d, w) -> openThisAppInPlayStoreAndFinish())
+                .setTitle(getString(R.string.main_dialog_title_update_required))
+                .setMessage(getString(R.string.main_dialog_message_play_env_issue, reason))
+                .setPositiveButton(getString(R.string.main_dialog_button_play_services), (d, w) -> openPlayServicesAndFinish())
+                .setNegativeButton(getString(R.string.main_dialog_button_play_store), (d, w) -> openPlayStoreAndFinish())
+                .setNeutralButton(getString(R.string.main_dialog_button_this_app_store), (d, w) -> openThisAppInPlayStoreAndFinish())
                 .setOnDismissListener(d -> safeFinishWithDelay())
                 .show();
     }
@@ -630,12 +642,17 @@ public class MainActivity extends AppCompatActivity {
                         } catch (Exception e) {
                             Log.w(TAG, "BT response send fail", e);
                         }
-                        Helpers.showToastSafe(this, "Registration completed on-chain");
+                        // ÖNCE: Hardcoded "Registration completed on-chain"
+                        // ŞİMDİ: String resource kullanımı
+                        Helpers.showToastSafe(this, getString(R.string.main_toast_registration_completed));
                         isRegistered = true;
                         navigateToWelcome();
                     })
                     .addOnFailureListener(e -> {
-                        Helpers.showToastSafe(this, "Registration failed: " + e.getMessage());
+                        // ÖNCE: Hardcoded "Registration failed: " + e.getMessage()
+                        // ŞİMDİ: String resource kullanımı - format string ile error mesajı
+                        String errorMsg = e.getMessage() == null ? "-" : e.getMessage();
+                        Helpers.showToastSafe(this, getString(R.string.main_toast_registration_failed, errorMsg));
                         Log.e(TAG, "completeRegistration fail", e);
                     });
         }
@@ -685,19 +702,25 @@ public class MainActivity extends AppCompatActivity {
             BarcodeEncoder barcodeEncoder = new BarcodeEncoder();
             qrBitmap = barcodeEncoder.encodeBitmap(deviceId, BarcodeFormat.QR_CODE, 400, 400);
         } catch (WriterException e) {
-            Toast.makeText(this, "Failed to generate QR code", Toast.LENGTH_SHORT).show();
+            // ÖNCE: Hardcoded "Failed to generate QR code"
+            // ŞİMDİ: String resource kullanımı
+            Toast.makeText(this, getString(R.string.main_toast_qr_generation_failed), Toast.LENGTH_SHORT).show();
             return;
         }
 
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
-        builder.setTitle("Device QR Code");
+        // ÖNCE: Hardcoded "Device QR Code"
+        // ŞİMDİ: String resource kullanımı
+        builder.setTitle(getString(R.string.main_dialog_title_device_qr_code));
 
         ImageButton qrImageButton = new ImageButton(this);
         qrImageButton.setImageBitmap(qrBitmap);
         qrImageButton.setBackgroundColor(ContextCompat.getColor(this, android.R.color.transparent));
 
         builder.setView(qrImageButton);
-        builder.setNegativeButton("Close", (dialog, which) -> dialog.dismiss());
+        // ÖNCE: Hardcoded "Close"
+        // ŞİMDİ: String resource kullanımı
+        builder.setNegativeButton(getString(R.string.main_dialog_button_close), (dialog, which) -> dialog.dismiss());
         builder.show();
     }
 

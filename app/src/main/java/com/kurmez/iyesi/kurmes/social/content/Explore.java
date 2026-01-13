@@ -100,7 +100,9 @@ public class Explore extends AppCompatActivity {
         auth = FirebaseAuth.getInstance();
         user = auth.getCurrentUser();
         if (user == null || user.isAnonymous()) {
-            Helpers.showToastSafe(this, "Lütfen önce giriş yapın.");
+            // ÖNCE: Hardcoded "Lütfen önce giriş yapın."
+            // ŞİMDİ: String resource kullanımı
+            Helpers.showToastSafe(this, getString(R.string.explore_toast_login_required));
             finish();
             return;
         }
@@ -150,13 +152,17 @@ headerHelper.refreshHeaderWithIye(null, new Iye());
 /*            Helpers.getRoleFunction()
                     .addOnSuccessListener(role -> {
                         if (role == null) {
-                            Helpers.showToastSafe(this, "Rol atanmadı!");
+                            // ÖNCE: Hardcoded "Rol atanmadı!"
+                            // ŞİMDİ: String resource kullanımı
+                            Helpers.showToastSafe(this, getString(R.string.explore_toast_role_not_assigned));
                             finish();
                             return;
                         }
                         userRole = role;
                         if (!allowedRoles.contains(role)) {
-                            Toast.makeText(this, "Bu sayfaya erişim yetkiniz yok: " + role, Toast.LENGTH_SHORT).show();
+                            // ÖNCE: Hardcoded "Bu sayfaya erişim yetkiniz yok: " + role
+                            // ŞİMDİ: String resource kullanımı - format string ile role parametresi
+                            Toast.makeText(this, getString(R.string.explore_toast_access_denied, role), Toast.LENGTH_SHORT).show();
                             finish();
                             return;
                         }
@@ -164,7 +170,10 @@ headerHelper.refreshHeaderWithIye(null, new Iye());
                         fetchSouls(); // ilk yükleme
                     })
                     .addOnFailureListener(e -> {
-                        Toast.makeText(this, "Rol sorgusu hatası: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                        // ÖNCE: Hardcoded "Rol sorgusu hatası: " + e.getMessage()
+                        // ŞİMDİ: String resource kullanımı - format string ile error mesajı
+                        String errorMsg = e.getMessage() == null ? "-" : e.getMessage();
+                        Toast.makeText(this, getString(R.string.explore_toast_role_query_error, errorMsg), Toast.LENGTH_SHORT).show();
                     });
 */
             // Header menü/refresh
@@ -211,7 +220,9 @@ headerHelper.refreshHeaderWithIye(null, new Iye());
             this.cf = new CFClient(BuildConfig.CF_BASE_URL);
             Log.i(TAG, "CF base=" + BuildConfig.CF_BASE_URL + " (GET listSoulsByFields, health=critical)");
         }
-        bindUser("KullanıcıAdı", null);
+        // ÖNCE: Hardcoded "KullanıcıAdı" placeholder
+        // ŞİMDİ: String resource kullanımı
+        bindUser(getString(R.string.explore_label_username_placeholder), null);
         refresh(false);
     }
 
@@ -265,7 +276,9 @@ headerHelper.refreshHeaderWithIye(null, new Iye());
                             org.json.JSONObject first = probe.optJSONObject(0);
                             Log.d(TAG, "first item probe=" + (first != null ? first.toString() : "null"));
                         }
-                        showToast("Boş liste döndü");
+                        // ÖNCE: Hardcoded "Boş liste döndü"
+                        // ŞİMDİ: String resource kullanımı
+                        showToast(getString(R.string.explore_toast_empty_list));
                     }
 
                     final List<Soul> finalParsed = parsed;
@@ -280,7 +293,9 @@ headerHelper.refreshHeaderWithIye(null, new Iye());
 
                 } catch (Throwable e) {
                     Log.e(TAG, "parse error", e);
-                    showToast("Veri çözümlenirken hata.");
+                    // ÖNCE: Hardcoded "Veri çözümlenirken hata."
+                    // ŞİMDİ: String resource kullanımı
+                    showToast(getString(R.string.explore_toast_parse_error));
                     runOnUiThread(() -> {
                         setLoading(false);
                         renderEmptyState();
@@ -291,7 +306,10 @@ headerHelper.refreshHeaderWithIye(null, new Iye());
             @Override
             public void onError(@NonNull Throwable t) {
                 Log.e(TAG, "listSoulsByFields", t);
-                showToast("Veri alınamadı: " + t.getMessage());
+                // ÖNCE: Hardcoded "Veri alınamadı: " + t.getMessage()
+                // ŞİMDİ: String resource kullanımı - format string ile error mesajı
+                String errorMsg = t.getMessage() == null ? "-" : t.getMessage();
+                showToast(getString(R.string.explore_toast_data_fetch_error, errorMsg));
                 runOnUiThread(() -> {
                     setLoading(false);
                     renderEmptyState();
@@ -352,7 +370,9 @@ headerHelper.refreshHeaderWithIye(null, new Iye());
                 .addOnCompleteListener(task -> {
                     if (!task.isSuccessful()) {
                         Log.e(TAG, "getPosts failed", task.getException());
-                        Toast.makeText(this, "Gönderiler yüklenemedi.", Toast.LENGTH_SHORT).show();
+                        // ÖNCE: Hardcoded "Gönderiler yüklenemedi."
+                        // ŞİMDİ: String resource kullanımı
+                        Toast.makeText(this, getString(R.string.explore_toast_posts_load_error), Toast.LENGTH_SHORT).show();
                         return;
                     }
                     HttpsCallableResult result = task.getResult();
@@ -375,7 +395,9 @@ headerHelper.refreshHeaderWithIye(null, new Iye());
                     String mediaUrl = post.get("mediaUrl") != null ? (String) post.get("mediaUrl") : "";
                     String contentText = post.get("content") != null ? (String) post.get("content") : "";
                     String ownerId = post.get("ownerId") != null ? (String) post.get("ownerId") : "";
-                    String displayText = contentText + "\nKayıt sahibi: " + ownerId;
+                    // ÖNCE: Hardcoded "\nKayıt sahibi: " + ownerId
+                    // ŞİMDİ: String resource kullanımı - format string ile ownerId parametresi
+                    String displayText = contentText + "\n" + getString(R.string.explore_label_record_owner, ownerId);
 
                     Content item = new Content(mediaUrl, displayText, 0, 0, false);
                     contentList.add(item);
@@ -409,7 +431,11 @@ headerHelper.refreshHeaderWithIye(null, new Iye());
     // Data flow
     // =============================================================================================
     private void refresh(boolean fromUser) {
-        if (fromUser) showToast("Yenileniyor…");
+        if (fromUser) {
+            // ÖNCE: Hardcoded "Yenileniyor…"
+            // ŞİMDİ: String resource kullanımı
+            showToast(getString(R.string.explore_toast_refreshing));
+        }
         companions.clear();
         contentList.clear();
         companionAdapter.notifyDataSetChanged();

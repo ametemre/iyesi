@@ -42,13 +42,15 @@ public class Login extends AppCompatActivity {
         String email = usernameField.getText().toString().trim();
         String password = passwordField.getText().toString().trim();
 
+        // ÖNCE: Hardcoded "Valid email is required" ve "Password is required"
+        // ŞİMDİ: String resource kullanımı
         if (TextUtils.isEmpty(email) || !Patterns.EMAIL_ADDRESS.matcher(email).matches()) {
-            usernameField.setError("Valid email is required");
+            usernameField.setError(getString(R.string.login_error_valid_email_required));
             usernameField.requestFocus();
             return;
         }
         if (TextUtils.isEmpty(password)) {
-            passwordField.setError("Password is required");
+            passwordField.setError(getString(R.string.login_error_password_required));
             passwordField.requestFocus();
             return;
         }
@@ -70,7 +72,9 @@ public class Login extends AppCompatActivity {
                             .addOnSuccessListener(t -> { Log.d(TAG, "AppCheck token (force) OK"); doSignIn(email, password); })
                             .addOnFailureListener(e2 -> {
                                 Log.e(TAG, "getToken(true) FAILED: " + e2.getMessage(), e2);
-                                Helpers.showToastSafe(Login.this, "App integrity doğrulaması başarısız. Tekrar deneyin.");
+                                // ÖNCE: Hardcoded "App integrity doğrulaması başarısız. Tekrar deneyin."
+                                // ŞİMDİ: String resource kullanımı
+                                Helpers.showToastSafe(Login.this, getString(R.string.login_toast_app_integrity_failed));
 // Integrity erişilemedi → kullanıcıyı yönlendir
 // Bir tık olayı içinde, görünür Activity bağlamında:
                                 Uri uri = Uri.parse("market://details?id=" + getPackageName());
@@ -89,14 +93,18 @@ public class Login extends AppCompatActivity {
                 .addOnCompleteListener(task -> {
                     submitButton.setEnabled(true);
                     if (task.isSuccessful()) {
-                        Helpers.showToastSafe(Login.this, "Login successful");
+                        // ÖNCE: Hardcoded "Login successful"
+                        // ŞİMDİ: String resource kullanımı
+                        Helpers.showToastSafe(Login.this, getString(R.string.login_toast_successful));
                         startActivity(new Intent(Login.this, MainActivity.class));
                         finish();
                     } else {
+                        // ÖNCE: Hardcoded "Unknown error" ve "Login failed: " + msg
+                        // ŞİMDİ: String resource kullanımı - format string ile error mesajı
                         String msg = task.getException() != null
                                 ? task.getException().getMessage()
-                                : "Unknown error";
-                        Helpers.showToastSafe(Login.this, "Login failed: " + msg);
+                                : getString(R.string.login_error_unknown);
+                        Helpers.showToastSafe(Login.this, getString(R.string.login_toast_failed, msg));
                     }
                 });
     }

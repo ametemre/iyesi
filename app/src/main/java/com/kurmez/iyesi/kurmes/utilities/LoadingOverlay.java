@@ -59,7 +59,9 @@ public final class LoadingOverlay {
                 TextView tv = overlayView.findViewById(R.id.loading_message);
                 if (tv != null) {
                     if (msg == null || msg.trim().isEmpty()) {
-                        tv.setText("Yükleniyor..."); // projeye uygun string yoksa direkt "Yükleniyor..."
+                        // ÖNCE: Hardcoded "Yükleniyor..."
+                        // ŞİMDİ: String resource kullanımı
+                        tv.setText(activity.getString(R.string.loading_overlay_default_text));
                     } else {
                         tv.setText(msg);
                     }

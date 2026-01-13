@@ -218,7 +218,9 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
         fabMain          = findViewById(R.id.fab_main);
         fabAction        = findViewById(R.id.fab_Sound);
         linearLayout     = findViewById(R.id.detected_sounds_list);
-        SetLabelText("init...");
+        // ÖNCE: Hardcoded "init..."
+        // ŞİMDİ: String resource kullanımı
+        SetLabelText(getString(R.string.kurmes_label_init));
         // 1) Ai ve pipeline başlat
         pipeline = new RTPipeline();
         //openCV = new OpenCV();
@@ -240,7 +242,9 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
             if (takePictureIntent.resolveActivity(getPackageManager()) != null) {
                 startActivityForResult(takePictureIntent, REQUEST_IMAGE_CAPTURE);
             } else {
-                Toast.makeText(this, "Camera not available", Toast.LENGTH_SHORT).show();
+                // ÖNCE: Hardcoded "Camera not available"
+                // ŞİMDİ: String resource kullanımı
+                Toast.makeText(this, getString(R.string.kurmes_toast_camera_not_available), Toast.LENGTH_SHORT).show();
             }
         }*/
         miniFabs.applyDefaultColors();
@@ -260,7 +264,9 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
 
 
         actions = new Actions(miniFabs, this, this);
-        SetLabelText("fabs...");
+        // ÖNCE: Hardcoded "fabs..."
+        // ŞİMDİ: String resource kullanımı
+        SetLabelText(getString(R.string.kurmes_label_fabs));
         // ----------------------------------------------------------------------------------------Instantiate MiniFabs helper and keep as field
 
         for (FloatingActionButton fab : miniFabs.getFabs()) {
@@ -269,16 +275,22 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
                 // Highlight selection
             });
         }
-        SetLabelText("ready...");
+        // ÖNCE: Hardcoded "ready..."
+        // ŞİMDİ: String resource kullanımı
+        SetLabelText(getString(R.string.kurmes_label_ready));
         // fabAction:
 
         fabAction.setOnClickListener(v -> {
-            SetLabelText("standby...");
+            // ÖNCE: Hardcoded "standby..."
+            // ŞİMDİ: String resource kullanımı
+            SetLabelText(getString(R.string.kurmes_label_standby));
 //            new Thread(() -> {
             if (!isRunning) {
                 // Kullanıcı model seçmeden başlatmak isterse
                 if (miniFabs.getSelectedFab() == null) {
-                    runOnUiThread(() -> Helpers.showToastSafe(this,"Önce bir seçenek seçin"));
+                    // ÖNCE: Hardcoded "Önce bir seçenek seçin"
+                    // ŞİMDİ: String resource kullanımı
+                    runOnUiThread(() -> Helpers.showToastSafe(this, getString(R.string.kurmes_toast_select_option_first)));
                     //runOnUiThread(() -> Toast.makeText(this, "Önce bir seçenek seçin", Toast.LENGTH_SHORT).show());
                 }
                 gpuExecutor.execute(() -> {
@@ -286,7 +298,9 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
                     try {
                         ai = actions.performSelectedAction(miniFabs.getSelectedFab(),this);
                         if (ai == null) {//-----------Dilkkat !
-                            runOnUiThread(() -> Helpers.showToastSafe(this,"Model yükleme başarısız"));
+                            // ÖNCE: Hardcoded "Model yükleme başarısız"
+                            // ŞİMDİ: String resource kullanımı
+                            runOnUiThread(() -> Helpers.showToastSafe(this, getString(R.string.kurmes_toast_model_load_failed)));
                             //runOnUiThread(() -> Toast.makeText(this, "Model yükleme başarısız", Toast.LENGTH_SHORT).show());
                             return;
                         }
@@ -311,7 +325,9 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
 
                         } catch (Exception e) {
                             Log.w("Detection Init Error", "Detection nesnesi oluşturulamadı", e);
-                            runOnUiThread(() -> Helpers.showToastSafe(this,"Algılama nesnesi başlatılamadı"));
+                            // ÖNCE: Hardcoded "Algılama nesnesi başlatılamadı"
+                            // ŞİMDİ: String resource kullanımı
+                            runOnUiThread(() -> Helpers.showToastSafe(this, getString(R.string.kurmes_toast_detection_init_failed)));
                             //runOnUiThread(() -> Toast.makeText(this, "Algılama nesnesi başlatılamadı", Toast.LENGTH_SHORT).show());
                             return;
                         }
@@ -320,14 +336,19 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
                         isPredicting = true;
                         currentState = State.TEST;
 
-                        runOnUiThread(() ->Helpers.showToastSafe(this,"AI Başlatıldı"));
-                        runOnUiThread(() -> SetLabelText("Processing..."));
+                        // ÖNCE: Hardcoded "AI Başlatıldı" ve "Processing..."
+                        // ŞİMDİ: String resource kullanımı
+                        runOnUiThread(() -> Helpers.showToastSafe(this, getString(R.string.kurmes_toast_ai_started)));
+                        runOnUiThread(() -> SetLabelText(getString(R.string.kurmes_label_processing)));
 
                         //runOnUiThread(() -> Toast.makeText(this, "AI Başlatıldı", Toast.LENGTH_SHORT).show());
 
                     } catch (Exception e) {
                         Log.e("AI Init Error", "Model başlatma hatası", e);
-                        runOnUiThread(() -> Helpers.showToastSafe(this,"Model başlatma hatası: "));
+                        // ÖNCE: Hardcoded "Model başlatma hatası: "
+                        // ŞİMDİ: String resource kullanımı - format string ile error mesajı
+                        String errorMsg = e.getMessage() == null ? "-" : e.getMessage();
+                        runOnUiThread(() -> Helpers.showToastSafe(this, getString(R.string.kurmes_toast_model_init_error, errorMsg)));
                         //runOnUiThread(() -> Toast.makeText(this, "Model başlatma hatası: " + e.getMessage(), Toast.LENGTH_LONG).show());
                     }
                 });
@@ -360,7 +381,9 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
                     ai = null;
                 }
                 isRunning = false;
-                Helpers.showToastSafe(this, "Durduruldu");
+                // ÖNCE: Hardcoded "Durduruldu"
+                // ŞİMDİ: String resource kullanımı
+                Helpers.showToastSafe(this, getString(R.string.kurmes_toast_stopped));
             }
 //            }).start();
         });
@@ -375,7 +398,9 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
         openCvUtil.onCameraViewStarted(width, height);
         //mRgba = new Mat(height, width, CvType.CV_8UC4);
         Log.i(TAG, "Camera view started: " + width + "x" + height);
-        updateCameraStatus("Camera Started.");
+        // ÖNCE: Hardcoded "Camera Started."
+        // ŞİMDİ: String resource kullanımı
+        updateCameraStatus(getString(R.string.kurmes_status_camera_started));
         if (mWidth != width || mHeight != height) {
             mWidth = width;
             mHeight = height;
@@ -398,7 +423,9 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
             rgb.release();
             gray.release();
             rects.release();
-            updateCameraStatus("Camera Stopped.");
+            // ÖNCE: Hardcoded "Camera Stopped."
+            // ŞİMDİ: String resource kullanımı
+            updateCameraStatus(getString(R.string.kurmes_status_camera_stopped));
         }
         //threadService.availableCPU();
         //threadService.availableGPU();
@@ -542,12 +569,16 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
         if (OpenCVLoader.initDebug()) {
             Log.d(TAG, "OpenCV loaded successfully.");
             if (mOpenCvCameraView != null) {
-                updateCameraStatus("Camera View Resumed.");
+                // ÖNCE: Hardcoded "Camera View Resumed."
+                // ŞİMDİ: String resource kullanımı
+                updateCameraStatus(getString(R.string.kurmes_status_camera_view_resumed));
                 cameraState(true);
             }
         } else {
             Log.e(TAG, "OpenCV loading failed on resume.");
-            updateCameraStatus("OpenCV Initialization Failed.");
+            // ÖNCE: Hardcoded "OpenCV Initialization Failed."
+            // ŞİMDİ: String resource kullanımı
+            updateCameraStatus(getString(R.string.kurmes_status_opencv_init_failed));
         }
     }
     @Override
@@ -558,7 +589,9 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
             cameraState(false);
         }
         Log.d(TAG, "OpenCV unLoaded successfully.");
-        updateCameraStatus("Camera View Paused.");
+        // ÖNCE: Hardcoded "Camera View Paused."
+        // ŞİMDİ: String resource kullanımı
+        updateCameraStatus(getString(R.string.kurmes_status_camera_view_paused));
     }
     @Override
     protected void onDestroy() {
@@ -625,7 +658,9 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
     private void updateCameraStatus(String status) {
         runOnUiThread(() -> {
             if (cameraStatusText != null) {
-                cameraStatusText.setText("Camera Status: " + status);
+                // ÖNCE: Hardcoded "Camera Status: " + status
+                // ŞİMDİ: String resource kullanımı - format string ile status parametresi
+                cameraStatusText.setText(getString(R.string.kurmes_label_camera_status, status));
             }
             Log.d(TAG, status);
         });
@@ -639,7 +674,9 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
                 mOpenCvCameraView.enableView();
                 mOpenCvCameraView.setVisibility(View.VISIBLE);
                 currentState = State.CAPTURE;
-                updateCameraStatus("Camera Enabled.");
+                // ÖNCE: Hardcoded "Camera Enabled."
+                // ŞİMDİ: String resource kullanımı
+                updateCameraStatus(getString(R.string.kurmes_status_camera_enabled));
             }
         }
         else {
@@ -648,7 +685,9 @@ public class Kurmes extends CameraActivity implements CvCameraViewListener2 {
                     mOpenCvCameraView.disableView();
                     mOpenCvCameraView.setVisibility(View.GONE);
                     currentState = State.IDLE;
-                    updateCameraStatus("Camera Paused.");
+                    // ÖNCE: Hardcoded "Camera Paused."
+                    // ŞİMDİ: String resource kullanımı
+                    updateCameraStatus(getString(R.string.kurmes_status_camera_paused));
                 }
             }
         }

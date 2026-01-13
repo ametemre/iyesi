@@ -16,6 +16,7 @@ import androidx.annotation.Nullable;
 import androidx.exifinterface.media.ExifInterface;
 
 import com.kurmez.iyesi.kurmes.utilities.clients.CFClient;
+import com.kurmez.iyesi.R;
 
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
@@ -89,7 +90,11 @@ public final class ImagePick {
             Bitmap bmp = decodeScaledBitmapFromUri(act, uri, maxDim);
             if (bmp == null) {
                 EditText t = findPendingTargetFor(act);
-                if (t != null) t.setError("Görsel açılamadı.");
+                if (t != null) {
+                    // ÖNCE: Hardcoded "Görsel açılamadı."
+                    // ŞİMDİ: String resource kullanımı
+                    t.setError(act.getString(R.string.imagepick_error_image_cannot_open));
+                }
                 return true;
             }
             if (bmp.getConfig() != Bitmap.Config.ARGB_8888) {
@@ -116,7 +121,10 @@ public final class ImagePick {
                     Log.e(TAG, "upload failed", e);
                     act.runOnUiThread(() -> {
                         if (target != null) {
-                            target.setError("Yükleme hatası: " + e.getMessage());
+                            // ÖNCE: Hardcoded "Yükleme hatası: " + e.getMessage()
+                            // ŞİMDİ: String resource kullanımı - format string ile error mesajı
+                            String errorMsg = e.getMessage() == null ? "-" : e.getMessage();
+                            target.setError(act.getString(R.string.imagepick_error_upload_failed, errorMsg));
                         }
                     });
                 }
@@ -125,7 +133,12 @@ public final class ImagePick {
         } catch (Throwable t) {
             Log.e(TAG, "handleActivityResult error", t);
             EditText target = findPendingTargetFor(act);
-            if (target != null) target.setError("İşleme hatası: " + t.getMessage());
+            if (target != null) {
+                // ÖNCE: Hardcoded "İşleme hatası: " + t.getMessage()
+                // ŞİMDİ: String resource kullanımı - format string ile error mesajı
+                String errorMsg = t.getMessage() == null ? "-" : t.getMessage();
+                target.setError(act.getString(R.string.imagepick_error_processing_failed, errorMsg));
+            }
         }
         return true;
     }

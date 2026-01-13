@@ -13,7 +13,7 @@
         android:layout_width="100dp"
         android:layout_height="100dp"
         android:src="@drawable/pati"
-        android:contentDescription="desc"
+        android:contentDescription="@string/qr_content_description_desc"
         android:layout_marginBottom="16dp" />
 
     <!-- Title Text -->
@@ -21,7 +21,7 @@
         android:id="@+id/qr_title"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Scan QR"
+        android:text="@string/qr_text_scan_qr"
         android:textSize="32sp"
         android:textStyle="bold"
         android:textColor="@android:color/black"
@@ -35,7 +35,7 @@
         android:layout_marginBottom="16dp"
         android:layout_marginHorizontal="32dp"
         android:background="@drawable/button_border_white"
-        android:text="Scan QR"
+        android:text="@string/qr_text_scan_qr"
         android:textColor="@android:color/black"
         android:elevation="0dp"
         android:stateListAnimator="@null" />
@@ -47,7 +47,7 @@
         android:layout_height="wrap_content"
         android:layout_marginHorizontal="32dp"
         android:background="@drawable/button_border_white"
-        android:text="Generate QR"
+        android:text="@string/qr_button_generate_qr"
         android:textColor="@android:color/black"
         android:elevation="0dp"
         android:stateListAnimator="@null" />
@@ -56,7 +56,7 @@
         android:id="@+id/qr_data_text_view"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="QR Data will appear here"
+        android:text="@string/qr_text_data_will_appear"
         android:textSize="18sp"
         android:textStyle="bold"
         android:layout_marginBottom="16dp"
@@ -69,7 +69,7 @@
         android:layout_height="wrap_content"
         android:layout_marginHorizontal="32dp"
         android:background="@drawable/button_border_white"
-        android:text="Process QR"
+        android:text="@string/qr_button_process_qr"
         android:textColor="@android:color/black"
         android:layout_marginTop="16dp" />
     <!-- Go To Button -->
@@ -79,13 +79,13 @@
         android:layout_height="wrap_content"
         android:layout_marginHorizontal="32dp"
         android:background="@drawable/button_border_white"
-        android:text="GoTo"
+        android:text="@string/qr_button_goto"
         android:textColor="@android:color/black"
         android:layout_marginTop="16dp" />
     <EditText
         android:id="@+id/go_to_textField"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:hint="GoTo"/>
+        android:hint="@string/qr_hint_goto"/>
 
 </LinearLayout>

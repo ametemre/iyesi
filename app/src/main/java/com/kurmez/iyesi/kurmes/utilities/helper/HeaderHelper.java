@@ -41,7 +41,9 @@ public class HeaderHelper {
             String avatarUrl = iye.getAvatarUrl();
 
             if (headerText != null) {
-                headerText.setText(username != null && !username.isEmpty() ? username : "Kullanıcı");
+                // ÖNCE: Hardcoded "Kullanıcı" fallback
+                // ŞİMDİ: String resource kullanımı
+                headerText.setText(username != null && !username.isEmpty() ? username : context.getString(R.string.header_helper_label_user_fallback));
             }
 
             if (headerImage != null) {

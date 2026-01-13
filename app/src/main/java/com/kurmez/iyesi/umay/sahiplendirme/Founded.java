@@ -22,6 +22,7 @@ import android.view.View;
 import android.widget.ArrayAdapter;
 import android.widget.AutoCompleteTextView;
 import android.widget.EditText;
+import android.widget.Spinner;
 import android.widget.Toast;
 
 import androidx.activity.result.ActivityResultLauncher;
@@ -29,6 +30,7 @@ import androidx.activity.result.contract.ActivityResultContracts.GetMultipleCont
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.annotation.RequiresPermission;
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.viewpager2.widget.ViewPager2;
@@ -39,15 +41,15 @@ import com.google.android.gms.location.Priority;
 import com.google.android.gms.tasks.CancellationTokenSource;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
-import com.google.firebase.storage.FirebaseStorage;
-import com.google.firebase.storage.StorageMetadata;
-import com.google.firebase.storage.StorageReference;
-import com.google.firebase.storage.UploadTask;
+// NOTE: Firebase Storage SDK ile direkt upload -> rules nedeniyle 403 alıyorduk.
+// Fotoğrafı Cloud Function (submitSoulInNeed) üzerinden "imageBase64" ile yolluyoruz.
 import com.kurmez.iyesi.R;
 import com.kurmez.iyesi.kayra.Classes.Souls.Soul;
 import com.kurmez.iyesi.kurmes.utilities.adapters.ImageSliderAdapter;
 import com.kurmez.iyesi.kurmes.utilities.helper.CFObligations;
 import com.kurmez.iyesi.kayra.AppCheckTokenProvider;
+import com.kurmez.iyesi.kurmes.utilities.clients.CFClient;
+import com.kurmez.iyesi.kurmes.utilities.helper.AdminPathKey;
 
 import org.json.JSONObject;
 
@@ -66,11 +68,14 @@ public class Founded extends AppCompatActivity {
 
     private JSONObject payload;
     private volatile boolean isSubmitting = false;
+    private boolean taskTagInitialized = false; // İlk yüklemede popup göstermemek için
 
     // UI
     private ViewPager2 photosSlider;
     private View saveBtn;
     private AutoCompleteTextView speciesInput;
+    private Spinner taskTagInput;
+    private Spinner taskSubtypeInput;
     private EditText dateView;
     private EditText placeView;
 
@@ -93,6 +98,15 @@ public class Founded extends AppCompatActivity {
     private static final int REQ_LOC_FOR_PLACE = 2013;
     @Nullable private String lastAdminPath = null;
     private Double lastLat, lastLng;
+    @Nullable private String lastCountry = null;
+    @Nullable private String lastCity = null;
+    private boolean pendingCheckRequested = false;
+    private boolean pendingCheckInFlight = false;
+    private boolean pendingCheckDone = false;
+
+    private interface CountryCityCb {
+        void onReady(@Nullable String country, @Nullable String city, @Nullable String adminPath);
+    }
 
     // Photos
     public static final int PICK_IMAGE_ACTIVITY_REQUEST_CODE = 1064;
@@ -120,6 +134,8 @@ public class Founded extends AppCompatActivity {
 
         // UI bind
         speciesInput = findViewById(R.id.companion_species);
+        taskTagInput = findViewById(R.id.companion_task_tag);
+        taskSubtypeInput = findViewById(R.id.companion_task_subtype);
         dateView     = findViewById(R.id.companion_found_date);
         placeView    = findViewById(R.id.companion_found_place);
         photosSlider = findViewById(R.id.founded_photos_slider);
@@ -148,7 +164,10 @@ public class Founded extends AppCompatActivity {
             user = fa.getCurrentUser();
             boolean ready = (user != null);
             Log.i(L, "Auth state → ready=" + ready);
-            if (ready) { checkPendingOnStart(); }
+            if (ready) {
+                pendingCheckRequested = true;
+                maybeCheckPendingCompanion("authReady");
+            }
         };
         mAuth.addAuthStateListener(authListener);
 
@@ -162,6 +181,39 @@ public class Founded extends AppCompatActivity {
         // Varsayılan tarih
         if (dateView.getText() == null || dateView.getText().toString().trim().isEmpty()) {
             dateView.setText(todayIsoDate());
+        }
+
+        // Görev dropdown (Yavru Hayvan / Evsiz Hayvan / Sahiplenme)
+        // ÖNCE: Hardcoded String[] taskOptions = new String[]{"Yavru Hayvan", "Evsiz Hayvan", "Sahiplenme"}
+        // ŞİMDİ: String array resource kullanımı - çeviri desteği için
+        if (taskTagInput != null) {
+            String[] taskOptions = getResources().getStringArray(R.array.founded_task_tag_options);
+            ArrayAdapter<String> tagAdapter = new ArrayAdapter<>(
+                    this, android.R.layout.simple_spinner_item, taskOptions);
+            tagAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+            taskTagInput.setAdapter(tagAdapter);
+            taskTagInput.setSelection(0); // Default: Yavru Hayvan
+            
+            // Seçenek değiştiğinde ikinci spinner'ı güncelle ve popup göster (ilk yüklemede değil)
+            taskTagInput.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener() {
+                @Override
+                public void onItemSelected(android.widget.AdapterView<?> parent, View view, int position, long id) {
+                    String selected = taskOptions[position];
+                    updateSubtypeSpinner(selected);
+                    
+                    if (!taskTagInitialized) {
+                        taskTagInitialized = true;
+                        return; // İlk yüklemede popup gösterme
+                    }
+                    showTaskInfoDialog(selected);
+                }
+                @Override
+                public void onNothingSelected(android.widget.AdapterView<?> parent) {}
+            });
+            taskTagInitialized = true; // İlk seçimi işaretle
+            
+            // İlk yüklemede ikinci spinner'ı başlat
+            updateSubtypeSpinner(taskOptions[0]);
         }
 
         // İzin / picker
@@ -209,7 +261,9 @@ public class Founded extends AppCompatActivity {
         FirebaseUser cur = FirebaseAuth.getInstance().getCurrentUser();
         if (isAnonSigningIn || cur == null) {
             if (userInitiated) {
-                Toast.makeText(this, "Bağlantı hazırlanıyor, lütfen tekrar deneyin…", Toast.LENGTH_SHORT).show();
+                // ÖNCE: Hardcoded "Bağlantı hazırlanıyor, lütfen tekrar deneyin…"
+                // ŞİMDİ: String resource kullanımı - Toast mesajı çeviriye hazır
+                Toast.makeText(this, getString(R.string.founded_toast_connection_preparing), Toast.LENGTH_SHORT).show();
             }
             Log.w(L, "[UI] not ready | isAnonSigningIn=" + isAnonSigningIn + " cur=" + (cur==null) + " @" + where);
             return;
@@ -250,7 +304,9 @@ public class Founded extends AppCompatActivity {
                                 lastAdminPath = ap;
                                 String pretty = (ap == null) ? formatLatLng(loc.getLatitude(), loc.getLongitude()) : ap;
                                 placeView.setText(pretty);
-                                Toast.makeText(this, "Bulunduğu yer güncellendi", Toast.LENGTH_SHORT).show();
+                                // ÖNCE: Hardcoded "Bulunduğu yer güncellendi"
+                                // ŞİMDİ: String resource kullanımı
+                                Toast.makeText(this, getString(R.string.founded_toast_location_updated), Toast.LENGTH_SHORT).show();
                             });
                         } else {
                             Log.w(L, "currentLocation null → fallback to lastLocation");
@@ -278,11 +334,15 @@ public class Founded extends AppCompatActivity {
                             lastAdminPath = ap;
                             String pretty = (ap == null) ? formatLatLng(l.getLatitude(), l.getLongitude()) : ap;
                             placeView.setText(pretty);
-                            Toast.makeText(this, "Bulunduğu yer güncellendi", Toast.LENGTH_SHORT).show();
+                            // ÖNCE: Hardcoded "Bulunduğu yer güncellendi"
+                            // ŞİMDİ: String resource kullanımı
+                            Toast.makeText(this, getString(R.string.founded_toast_location_updated), Toast.LENGTH_SHORT).show();
                         });
                     } else {
                         Log.w(L, "lastLocation still null");
-                        Toast.makeText(this, "Konum alınamadı. Lütfen GPS'i açın.", Toast.LENGTH_LONG).show();
+                        // ÖNCE: Hardcoded "Konum alınamadı. Lütfen GPS'i açın."
+                        // ŞİMDİ: String resource kullanımı
+                        Toast.makeText(this, getString(R.string.founded_toast_location_unavailable), Toast.LENGTH_LONG).show();
                     }
                 })
                 .addOnFailureListener(e ->
@@ -319,7 +379,9 @@ public class Founded extends AppCompatActivity {
         if (takePictureIntent.resolveActivity(getPackageManager()) != null) {
             startActivityForResult(takePictureIntent, REQUEST_IMAGE_CAPTURE);
         } else {
-            Toast.makeText(this, "Camera not available", Toast.LENGTH_SHORT).show();
+            // ÖNCE: Hardcoded "Camera not available"
+            // ŞİMDİ: String resource kullanımı
+            Toast.makeText(this, getString(R.string.founded_toast_camera_not_available), Toast.LENGTH_SHORT).show();
         }
     }
 
@@ -385,13 +447,15 @@ public class Founded extends AppCompatActivity {
         }
 
         if (photoList == null || photoList.isEmpty()) {
-            Toast.makeText(this, "Lütfen en az bir fotoğraf seçin.", Toast.LENGTH_SHORT).show();
+            // ÖNCE: Hardcoded "Lütfen en az bir fotoğraf seçin."
+            // ŞİMDİ: String resource kullanımı
+            Toast.makeText(this, getString(R.string.founded_toast_please_select_photo), Toast.LENGTH_SHORT).show();
             return;
         }
 
         // SADECE anonim giriş aktif şekilde sürerken blokla
         if (isAnonSigningIn) {
-            Toast.makeText(this, "Bağlantı hazırlanıyor, lütfen tekrar deneyin…", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, getString(R.string.founded_toast_connection_preparing), Toast.LENGTH_SHORT).show();
             Log.w(L, "[CLICK] ignored: isAnonSigningIn=true");
             return;
         }
@@ -515,7 +579,9 @@ public class Founded extends AppCompatActivity {
             return;
         }
 
-        Toast.makeText(this, "Foto bulunamadı. Lütfen seçin.", Toast.LENGTH_SHORT).show();
+        // ÖNCE: Hardcoded "Foto bulunamadı. Lütfen seçin."
+        // ŞİMDİ: String resource kullanımı
+        Toast.makeText(this, getString(R.string.founded_toast_photo_not_found), Toast.LENGTH_SHORT).show();
         if (pickMultiple != null) pickMultiple.launch("image/*");
         Log.i(L, "takePhotosFromIntentOrFinish() → ÇIKIŞ (picker launched)");
     }
@@ -602,30 +668,26 @@ public class Founded extends AppCompatActivity {
         Log.i(L, "[SAVE] saveCompanionAsync → GİRİŞ auth=" + authenticated + " isAnon=" + (authenticated && cur.isAnonymous()));
         logUiState("saveCompanionAsync/enter",false);
 
-        String id;
-        if (authenticated) {
-            id = cur.getUid();
-            Log.i(L, "[SAVE] Authenticated (uid=" + id + ") → performSubmit");
-            performSubmitCompanion(id);
-            Log.i(L, "[SAVE] ÇIKIŞ (direct submit) dt=" + (System.currentTimeMillis() - t0) + " ms");
+        if (!authenticated) {
+            // deviceId yerine: anon sign-in sonrası UID üret ve onunla devam et
+            ensureAnonymousAuthThen(this::saveCompanionAsync);
             return;
-        } else {
-            id = Settings.Secure.getString(getContentResolver(), Settings.Secure.ANDROID_ID);
         }
-        final String deviceIdForCb = id;
 
-        Log.i(L, "[SAVE] CF checkPendingCompanion START deviceId=" + id);
-        cfObl.checkPendingCompanion(id, new CFObligations.PendingListener() {
+        final String actorKey = cur.getUid();
+
+        Log.i(L, "[SAVE] CF checkPendingCompanion START key=" + actorKey);
+        cfObl.checkPendingCompanion(actorKey, lastCountry, lastCity, new CFObligations.PendingListener() {
             @Override
             public void onResult(@Nullable JSONObject companion) {
                 Log.i(L, "[SAVE] checkPendingCompanion OK has=" + (companion != null));
                 runOnUiThread(() -> {
                     if (companion == null) {
                         Log.d(L, "[SAVE] pending yok → performSubmit");
-                        performSubmitCompanion(deviceIdForCb);
+                        performSubmitCompanion(actorKey);
                     } else {
                         Log.d(L, "[SAVE] pending VAR → openCompanion");
-                        openCompanionFromJson(deviceIdForCb, companion);
+                        openCompanionFromJson(actorKey, companion);
                     }
                 });
             }
@@ -636,24 +698,29 @@ public class Founded extends AppCompatActivity {
 
                 if (msg != null && msg.toLowerCase(java.util.Locale.US).contains("not authenticated")) {
                     Log.i(L, "[SAVE] not authenticated → ensureAnonymousAuthThen → performSubmit");
-                    ensureAnonymousAuthThen(() -> performSubmitCompanion(deviceIdForCb));
+                    ensureAnonymousAuthThen(() -> performSubmitCompanion(actorKey));
                     return;
                 }
 
                 if (httpCode == 404) {
                     Log.i(L, "[SAVE] pending 404 → performSubmit");
-                    runOnUiThread(() -> performSubmitCompanion(deviceIdForCb));
+                    runOnUiThread(() -> performSubmitCompanion(actorKey));
                     return;
                 }
 
                 runOnUiThread(() -> {
                     if (httpCode == 401 || httpCode == 403) {
+                        // ÖNCE: Hardcoded "Doğrulama hatası (" + httpCode + "). Lütfen oturum açın ve uygulamayı doğrulayın."
+                        // ŞİMDİ: String resource kullanımı - format string ile httpCode parametresi
                         Toast.makeText(Founded.this,
-                                "Doğrulama hatası (" + httpCode + "). Lütfen oturum açın ve uygulamayı doğrulayın.",
+                                getString(R.string.founded_toast_auth_error, httpCode),
                                 Toast.LENGTH_LONG).show();
                     } else {
+                        // ÖNCE: Hardcoded "Sunucu hatası: " + error.getMessage()
+                        // ŞİMDİ: String resource kullanımı - format string ile error mesajı
+                        String errorMsg = error.getMessage() == null ? "-" : error.getMessage();
                         Toast.makeText(Founded.this,
-                                "Sunucu hatası: " + (error.getMessage() == null ? "-" : error.getMessage()),
+                                getString(R.string.founded_toast_server_error, errorMsg),
                                 Toast.LENGTH_LONG).show();
                     }
                 });
@@ -675,7 +742,10 @@ public class Founded extends AppCompatActivity {
             String species    = safeOrTodo(textOf(speciesInput));
             String breed      = "TODO";
             String age        = "TODO";
-            String health     = "TODO";
+            // Görev tipi (Yavru Hayvan / Evsiz Hayvan / Sahiplenme) health alanında taşıyalım
+            String health     = safeOrTodo(textOf(taskTagInput));
+            // Görev alt tipi (örn: Yavru Hayvan -> Annesiz Kalmış, Hasta, vb.)
+            String taskSubtype = safeOrTodo(textOf(taskSubtypeInput));
             String foundDateI = textOf(dateView);
             String foundPlace = textOf(placeView);
 
@@ -690,122 +760,157 @@ public class Founded extends AppCompatActivity {
             if (parsed != null) {
                 latNum = parsed[0]; lngNum = parsed[1];
                 Log.d(L, "[SUBMIT] parsed latLng from place: " + latNum + "," + lngNum);
-                ensureAdminPathAsync(latNum, lngNum, ap -> {
-                    lastAdminPath = ap;
-                    Log.d(L, "[SUBMIT] adminPath resolved: " + ap);
-                    String pretty = (ap == null ? formatLatLng(latNum, lngNum) : ap);
-                    placeView.setText(pretty);
-                });
                 foundPlace = formatLatLng(latNum, lngNum);
             } else if (lastLat != null && lastLng != null) {
                 latNum = lastLat; lngNum = lastLng;
                 Log.d(L, "[SUBMIT] using lastLatLng: " + latNum + "," + lngNum);
-                ensureAdminPathAsync(lastLat, lastLng, ap -> {
-                    lastAdminPath = ap;
-                    Log.d(L, "[SUBMIT] adminPath from lastLatLng: " + ap);
-                    if (ap != null) placeView.setText(ap);
-                });
             } else {
                 Log.e(L, "[SUBMIT] konum yok → abort");
-                Toast.makeText(this, "Konum alınamadı. 'lat, lng' girin veya konum izni verin.", Toast.LENGTH_LONG).show();
+                // ÖNCE: Hardcoded "Konum alınamadı. 'lat, lng' girin veya konum izni verin."
+                // ŞİMDİ: String resource kullanımı
+                Toast.makeText(this, getString(R.string.founded_toast_location_required), Toast.LENGTH_LONG).show();
                 setSubmitting(false);
                 return;
             }
 
             if (foundDate.isEmpty()) {
                 Log.e(L, "[SUBMIT] tarih boş → abort");
-                dateView.setError("Tarih gerekli (yyyy-MM-dd)");
+                // ÖNCE: Hardcoded "Tarih gerekli (yyyy-MM-dd)"
+                // ŞİMDİ: String resource kullanımı
+                dateView.setError(getString(R.string.founded_error_date_required));
                 setSubmitting(false);
                 return;
             }
             if (photoList.isEmpty()) {
                 Log.e(L, "[SUBMIT] foto yok → abort");
-                Toast.makeText(this, "Fotoğraf yok!", Toast.LENGTH_SHORT).show();
+                // ÖNCE: Hardcoded "Fotoğraf yok!"
+                // ŞİMDİ: String resource kullanımı
+                Toast.makeText(this, getString(R.string.founded_toast_no_photo), Toast.LENGTH_SHORT).show();
                 setSubmitting(false);
                 return;
             }
 
-            long timestamp = System.currentTimeMillis();
+            final double latF = latNum;
+            final double lngF = lngNum;
+            final String speciesF = species;
+            final String breedF = breed;
+            final String ageF = age;
+            final String healthF = health;
+            final String taskSubtypeF = taskSubtype;
+            final String foundDateF = foundDate;
+            final String foundPlaceF = foundPlace;
 
+            // country/city zorunlu: önce resolve et, sonra payload oluşturup submit et
+            resolveCountryCityForSubmit(latF, lngF, (country, city, adminPath) -> {
+                if (country == null || country.trim().isEmpty() || city == null || city.trim().isEmpty()) {
+                    Log.w(L, "[SUBMIT] country/city resolve edilemedi → abort. country=" + country + " city=" + city + " adminPath=" + adminPath);
+                    runOnUiThread(() -> {
+                        // ÖNCE: Hardcoded "Şehir/ülke tespit edilemedi. İnternet/GPS açık mı? (country/city zorunlu)"
+                        // ŞİMDİ: String resource kullanımı
+                        Toast.makeText(Founded.this,
+                                getString(R.string.founded_toast_city_country_undetected),
+                                Toast.LENGTH_LONG).show();
+                        setSubmitting(false);
+                    });
+                    return;
+                }
+
+                lastAdminPath = adminPath;
+                if (adminPath != null) {
+                    runOnUiThread(() -> placeView.setText(adminPath));
+                }
+
+                long timestamp = System.currentTimeMillis();
             Soul soul = new Soul.Builder()
-                    .species(species)
-                    .breed(breed)
-                    .age(age)
-                    .health(health)
-                    .foundDate(foundDate)
-                    .foundLocation( lastAdminPath != null ? lastAdminPath
-                            : (placeView.getText()==null ? foundPlace
-                            : placeView.getText().toString()) )
+                        .species(speciesF)
+                        .breed(breedF)
+                        .age(ageF)
+                        .health(healthF)
+                        .foundDate(foundDateF)
+                        .foundLocation(adminPath != null ? adminPath
+                                : (placeView.getText()==null ? foundPlaceF
+                                : placeView.getText().toString()))
                     .timestamp(timestamp)
                     .ts(timestamp)
                     .status("pending")
-                    .latLng(latNum, lngNum)
+                        .latLng(latF, lngF)
+                        .adminPath(adminPath)
                     .build();
 
-            // JSON (imageUrl sonradan eklenecek)
+                try {
             payload = soul.toJson();
+                    payload.put("tag", healthF);
+                    if (taskSubtypeF != null && !taskSubtypeF.isEmpty() && !taskSubtypeF.equals("TODO")) {
+                        payload.put("taskSubtype", taskSubtypeF);
+                    }
             FirebaseUser cur = FirebaseAuth.getInstance().getCurrentUser();
             payload.put("actorKind",  (cur != null) ? "uid" : "device");
-            payload.put("deviceId",   actorId);
+                    // deviceId kullanmıyoruz; backend tarafı için "key" (UID) gönderiyoruz
+                    payload.put("key",        actorId);
             payload.put("requestKind","soul_inneed");
+                    payload.put("country", country.trim().toUpperCase(Locale.ROOT));
+                    payload.put("city", city.trim().toUpperCase(Locale.ROOT));
+                    if (adminPath != null) payload.put("adminPath", adminPath);
+                } catch (Exception e) {
+                    Log.w(L, "[SUBMIT] payload build error: " + e.getMessage());
+                }
 
-            String ap = placeView.getText() == null ? null : placeView.getText().toString().trim();
-            if (ap != null && ap.contains("/")) payload.put("adminPath", ap);
-            if (lastAdminPath != null) payload.put("adminPath", lastAdminPath);
-
-            if (VERBOSE_JSON) logChunked("[SUBMIT] payload (pre-image)", payload.toString());
+                if (VERBOSE_JSON && payload != null) logChunked("[SUBMIT] payload (pre-image)", payload.toString());
 
             // FOTOĞRAFI ÖNCE STORAGE'A YÜKLE → URL ile submit
             uploadPhotoThenSubmit(payload, photoList.get(0));
+                Log.i(L, "[SUBMIT] performSubmitCompanion → ASYNC submit started dt=" + (System.currentTimeMillis() - t0) + " ms");
+            });
 
-            Log.i(L, "[SUBMIT] performSubmitCompanion → ÇIKIŞ prepare dt=" + (System.currentTimeMillis() - t0) + " ms");
+            return; // async akışa geçtik
         } catch (Throwable t) {
             Log.e(L, "[SUBMIT] fatal", t);
             setSubmitting(false);
-            Toast.makeText(this, "Beklenmeyen hata: " + t.getMessage(), Toast.LENGTH_LONG).show();
+            // ÖNCE: Hardcoded "Beklenmeyen hata: " + t.getMessage()
+            // ŞİMDİ: String resource kullanımı - format string ile error mesajı
+            String errorMsg = t.getMessage() == null ? "-" : t.getMessage();
+            Toast.makeText(this, getString(R.string.founded_toast_unexpected_error, errorMsg), Toast.LENGTH_LONG).show();
         }
     }
 
-    /** Fotoğrafı Firebase Storage'a yükler; başarılıysa imageUrl ekleyip submit eder.
-     *  Hata alırsa placeholder ile submit eder (retry edilen eski davranışla uyumlu). */
+    /**
+     * Fotoğrafı **Cloud Function saveBase64Image** endpoint'i üzerinden upload edip,
+     * dönen signed URL'yi payload'a `imageUrl` olarak ekler ve submit eder.
+     *
+     * Böylece backend'in Storage bucket hatası bypass edilir (client tarafında CF üzerinden upload).
+     */
     private void uploadPhotoThenSubmit(@NonNull JSONObject payload, @NonNull Bitmap bmp) {
-        try {
-            FirebaseUser cur = FirebaseAuth.getInstance().getCurrentUser();
-            String owner = (cur != null ? cur.getUid() : Settings.Secure.getString(getContentResolver(), Settings.Secure.ANDROID_ID));
+        byte[] jpeg = encodeJpegBytesSmart(bmp);
+        int kb = jpeg.length / 1024;
+        Log.d(L, "[UPLOAD] jpeg size=" + kb + "KB via saveBase64Image");
 
-            byte[] jpeg = encodeJpegBytesSmart(bmp);
-            int kb = jpeg.length / 1024;
-            Log.d(L, "[UPLOAD] jpeg size=" + kb + "KB");
+        // Background thread'de blocking upload (CFClient.uploadJpegBytesAndGetUrlBlocking blocking)
+        new Thread(() -> {
+            try {
+                String endpoint = "https://us-central1-iyesi-aef03.cloudfunctions.net/saveBase64Image";
+                String path = "images/soul/etc"; // Backend ALLOWED_PREFIXES'de var
+                String imageUrl = CFClient.uploadJpegBytesAndGetUrlBlocking(
+                        Founded.this, endpoint, jpeg, path);
+                Log.i(L, "[UPLOAD] SUCCESS → " + imageUrl);
 
-            String filename = "souls/" + owner + "/" + System.currentTimeMillis() + "/image.jpg";
-            StorageReference ref = FirebaseStorage.getInstance().getReference().child(filename);
+                // Başarılı: payload'a imageUrl ekle ve submit et
+                try {
+                    payload.put("imageUrl", imageUrl);
+                    // imageBase64 artık gereksiz (URL var), backend'e göndermeyelim
+                    payload.remove("imageBase64");
+                } catch (Exception ignore) {}
+                submitWithRetry(payload, false);
 
-            UploadTask task = ref.putBytes(jpeg, new StorageMetadata.Builder()
-                    .setContentType("image/jpeg").build());
-
-            task.addOnSuccessListener(snap ->
-                    ref.getDownloadUrl().addOnSuccessListener(uri -> {
-                        try {
-                            payload.put("imageUrl", uri.toString());
-                        } catch (Exception ignore) {}
-                        Log.i(L, "[UPLOAD] SUCCESS → " + uri);
-                        submitWithRetry(payload, false);
-                    }).addOnFailureListener(e -> {
-                        Log.w(L, "[UPLOAD] getDownloadUrl FAIL: " + e.getMessage());
-                        try { payload.put("imageUrl", "placeholder://holder"); } catch (Exception ignore) {}
-                        submitWithRetry(payload, true);
-                    })
-            ).addOnFailureListener(e -> {
-                Log.w(L, "[UPLOAD] putBytes FAIL: " + (e==null?"-":e.getMessage()));
-                try { payload.put("imageUrl", "placeholder://holder"); } catch (Exception ignore) {}
+            } catch (Throwable t) {
+                Log.w(L, "[UPLOAD] saveBase64Image FAIL: " + (t == null ? "-" : t.getMessage()));
+                // Hata: imagesiz submit (placeholder olmadan, UI local holder gösterir)
+                try {
+                    payload.remove("imageBase64");
+                    payload.remove("imageUrl");
+                } catch (Exception ignore) {}
                 submitWithRetry(payload, true);
-            });
-
-        } catch (Throwable t) {
-            Log.w(L, "[UPLOAD] unexpected: " + t.getMessage());
-            try { payload.put("imageUrl", "placeholder://holder"); } catch (Exception ignore) {}
-            submitWithRetry(payload, true);
-        }
+            }
+        }).start();
     }
 
     private void submitWithRetry(@NonNull JSONObject payload, boolean retried) {
@@ -825,7 +930,9 @@ public class Founded extends AppCompatActivity {
                     try {
                         String key = resp.optString("key", null);
                         if (key == null || key.isEmpty()) {
-                            Toast.makeText(Founded.this, "Yanıt anahtarı alınamadı", Toast.LENGTH_LONG).show();
+                            // ÖNCE: Hardcoded "Yanıt anahtarı alınamadı"
+                            // ŞİMDİ: String resource kullanımı
+                            Toast.makeText(Founded.this, getString(R.string.founded_toast_response_key_missing), Toast.LENGTH_LONG).show();
                             return;
                         }
 // Founded.java (onSuccess içinde)
@@ -839,17 +946,25 @@ public class Founded extends AppCompatActivity {
                         i.putExtra("foundDate",    payload.optString("foundDate"));
                         i.putExtra("foundPlace",   payload.optString("adminPath",
                                 payload.optString("foundLocation")));
-                        i.putExtra("photoUrl",     payload.optString("imageUrl",
-                                payload.optString("imageResId", "")));
+                        // Foto URL: payload'tan değil, öncelikle CF response'tan al (base64 upload sonrası gerçek URL burada).
+                        final String photoUrl = firstNonEmpty(
+                                resp.optString("imageUrl", ""),
+                                resp.optString("imageResId", ""),
+                                payload.optString("imageUrl", ""),
+                                payload.optString("imageResId", "")
+                        );
+                        i.putExtra("photoUrl", photoUrl);
                         i.putExtra("profileId",    FirebaseAuth.getInstance().getCurrentUser()!=null
                                 ? FirebaseAuth.getInstance().getCurrentUser().getUid() : "");
-                        i.putExtra("deviceId",     payload.optString("deviceId",""));
+                        // requestKey zaten var; Companion RTDB'den okuyacak. deviceId göndermiyoruz.
 
                         startActivity(i);
                         finish();
 
                     } catch (Exception je) {
-                        Toast.makeText(Founded.this, "Yanıt çözümlenemedi", Toast.LENGTH_LONG).show();
+                        // ÖNCE: Hardcoded "Yanıt çözümlenemedi"
+                        // ŞİMDİ: String resource kullanımı
+                        Toast.makeText(Founded.this, getString(R.string.founded_toast_response_parse_error), Toast.LENGTH_LONG).show();
                     }
                 });
             }
@@ -862,19 +977,27 @@ public class Founded extends AppCompatActivity {
 
                 runOnUiThread(() -> {
                     setSubmitting(false);
+                    // ÖNCE: Hardcoded "Sunucu hatası: " + msg
+                    // ŞİMDİ: String resource kullanımı - format string ile error mesajı
+                    String errorMsg = (msg == null || msg.isEmpty() ? "-" : msg);
                     Toast.makeText(Founded.this,
-                            "Sunucu hatası: " + (msg == null || msg.isEmpty() ? "-" : msg),
+                            getString(R.string.founded_toast_server_error, errorMsg),
                             Toast.LENGTH_LONG).show();
                 });
             }
         });
     }
 
-    private void openCompanionFromJson(@NonNull String deviceId, @NonNull JSONObject companion) {
-        Log.i(L, "openCompanionFromJson() → deviceId=" + deviceId);
+    private void openCompanionFromJson(@NonNull String key, @NonNull JSONObject companion) {
+        Log.i(L, "openCompanionFromJson() → key=" + key);
         if (VERBOSE_JSON) logChunked("pending.companion", companion.toString());
         Intent intent = new Intent(Founded.this, Companion.class);
-        intent.putExtra("deviceId", deviceId);
+        // Eğer pending response içinde requestKey/key varsa, Companion RTDB yolunu kullanır (deviceId fallback yok)
+        String requestKey = companion.optString("key",
+                companion.optString("requestKey", companion.optString("id", "")));
+        if (requestKey != null && !requestKey.trim().isEmpty()) {
+            intent.putExtra("requestKey", requestKey.trim());
+        }
         intent.putExtra("species", companion.optString("species"));
         intent.putExtra("foundDate", companion.optString("foundDate"));
         intent.putExtra("foundPlace", companion.optString("foundLocation"));
@@ -886,19 +1009,77 @@ public class Founded extends AppCompatActivity {
     }
 
     private void checkPendingOnStart() {
-        String deviceId = Settings.Secure.getString(getContentResolver(), Settings.Secure.ANDROID_ID);
-        Log.i(L, "CF checkPendingCompanion START (onStart) deviceId=" + deviceId);
-        cfObl.checkPendingCompanion(deviceId, new CFObligations.PendingListener() {
+        // legacy entrypoint: artık "konum gelmeden" çağırmıyoruz; sadece talep ediyoruz.
+        pendingCheckRequested = true;
+        maybeCheckPendingCompanion("legacyCheckPendingOnStart");
+    }
+
+    private void maybeCheckPendingCompanion(@NonNull String reason) {
+        if (!pendingCheckRequested) return;
+        if (pendingCheckDone || pendingCheckInFlight) return;
+        if (user == null) return;
+
+        if (lastLat == null || lastLng == null) {
+            Log.d(L, "maybeCheckPendingCompanion(" + reason + ") → waiting location");
+            return;
+        }
+
+        String[] ccFromAp = (lastAdminPath == null) ? null : parseCountryCityFromAdminPath(lastAdminPath);
+        if (ccFromAp != null) {
+            lastCountry = ccFromAp[0];
+            lastCity = ccFromAp[1];
+        }
+
+        final String key = user.getUid();
+        Log.i(L, "CF checkPendingCompanion START (maybe/" + reason + ") key=" + key
+                + " latlng=" + lastLat + "," + lastLng
+                + " adminPath=" + lastAdminPath
+                + " country=" + lastCountry + " city=" + lastCity);
+
+        pendingCheckInFlight = true;
+
+        // country/city yoksa: konumdan resolve edip devam et
+        if (lastCountry == null || lastCity == null) {
+            resolveCountryCityForSubmit(lastLat, lastLng, (country, city, ap) -> {
+                lastCountry = country;
+                lastCity = city;
+                if (ap != null) lastAdminPath = ap;
+                doCheckPendingCompanion(key, reason);
+            });
+            return;
+        }
+
+        doCheckPendingCompanion(key, reason);
+    }
+
+    private void doCheckPendingCompanion(@NonNull String key, @NonNull String reason) {
+        if (lastCountry == null || lastCity == null) {
+            pendingCheckInFlight = false;
+            Log.w(L, "CF checkPendingCompanion SKIP (maybe/" + reason + ") country/city still null");
+            return;
+        }
+
+        cfObl.checkPendingCompanion(key, lastCountry, lastCity, new CFObligations.PendingListener() {
             @Override public void onResult(@Nullable JSONObject companion) {
-                Log.i(L, "CF checkPendingCompanion END (onStart) OK has=" + (companion != null));
-                if (companion != null) runOnUiThread(() -> openCompanionFromJson(deviceId, companion));
+                pendingCheckInFlight = false;
+                pendingCheckDone = true;
+                Log.i(L, "CF checkPendingCompanion END (maybe/" + reason + ") OK has=" + (companion != null));
+                if (companion != null) runOnUiThread(() -> openCompanionFromJson(key, companion));
             }
             @Override public void onError(@NonNull Throwable error, int httpCode) {
-                Log.w(L, "CF checkPendingCompanion END (onStart) ERROR code=" + httpCode + " msg=" + (error.getMessage() == null ? "null" : error.getMessage()));
+                pendingCheckInFlight = false;
+                // backend 400 ise tekrar denemek anlamsız; konum/country/city düzelse bile burada artık var.
+                pendingCheckDone = true;
+                Log.w(L, "CF checkPendingCompanion END (maybe/" + reason + ") ERROR code=" + httpCode
+                        + " msg=" + (error.getMessage() == null ? "null" : error.getMessage()));
                 if (httpCode == 401 || httpCode == 403) {
-                    runOnUiThread(() -> Toast.makeText(Founded.this,
-                            "Doğrulama hatası (" + httpCode + "). Lütfen oturum açın ve uygulamayı doğrulayın.",
-                            Toast.LENGTH_LONG).show());
+                    runOnUiThread(() -> {
+                        // ÖNCE: Hardcoded "Doğrulama hatası (" + httpCode + "). Lütfen oturum açın ve uygulamayı doğrulayın."
+                        // ŞİMDİ: String resource kullanımı - format string ile httpCode parametresi
+                        Toast.makeText(Founded.this,
+                                getString(R.string.founded_toast_auth_error, httpCode),
+                                Toast.LENGTH_LONG).show();
+                    });
                 }
             }
         });
@@ -925,7 +1106,13 @@ public class Founded extends AppCompatActivity {
                         setCoordsToPlace(loc);
                         Log.d(L, "lastLocation ok lat=" + lastLat + " lng=" + lastLng);
                         ensureAdminPathAsync(lastLat, lastLng, adminPath -> {
-                            if (adminPath != null) placeView.setText(adminPath);
+                            if (adminPath != null) {
+                                lastAdminPath = adminPath;
+                                String[] cc = parseCountryCityFromAdminPath(adminPath);
+                                if (cc != null) { lastCountry = cc[0]; lastCity = cc[1]; }
+                                placeView.setText(adminPath);
+                            }
+                            maybeCheckPendingCompanion("tryFillLastLocation");
                         });
                     } else {
                         Log.d(L, "lastLocation is null");
@@ -944,6 +1131,18 @@ public class Founded extends AppCompatActivity {
         return String.format(Locale.US, "%f, %f", lat, lng);
     }
 
+    @NonNull
+    private static String firstNonEmpty(@Nullable String... xs) {
+        if (xs == null) return "";
+        for (String x : xs) {
+            if (x != null) {
+                String t = x.trim();
+                if (!t.isEmpty()) return t;
+            }
+        }
+        return "";
+    }
+
     /** Geocoder ile TR/İL metni üretir. Başarısız olursa callback'e null gönderir. */
     private interface AdminPathCb { void onReady(@Nullable String adminPath); }
 
@@ -955,7 +1154,7 @@ public class Founded extends AppCompatActivity {
         if (Build.VERSION.SDK_INT >= 33) {
             geocoder.getFromLocation(lat, lng, 1, new Geocoder.GeocodeListener() {
                 @Override public void onGeocode(@NonNull List<Address> results) {
-                    String ap = extractAdminPath(results);
+                    String ap = extractAdminPath(lat, lng, results);
                     Log.d(L, "ensureAdminPathAsync() API33 onGeocode → " + ap);
                     runOnUiThread(() -> cb.onReady(ap));
                 }
@@ -968,7 +1167,7 @@ public class Founded extends AppCompatActivity {
             new Thread(() -> {
                 try {
                     List<Address> res = geocoder.getFromLocation(lat, lng, 1);
-                    String ap = extractAdminPath(res);
+                    String ap = extractAdminPath(lat, lng, res);
                     Log.d(L, "ensureAdminPathAsync() legacy → " + ap);
                     runOnUiThread(() -> cb.onReady(ap));
                 } catch (Exception e) {
@@ -980,15 +1179,93 @@ public class Founded extends AppCompatActivity {
     }
 
     @Nullable
-    private String extractAdminPath(@Nullable List<Address> res) {
+    private String extractAdminPath(double lat, double lng, @Nullable List<Address> res) {
         if (res == null || res.isEmpty()) return null;
         Address a = res.get(0);
-        String admin = a.getAdminArea();            // örn: Ankara
-        String countryCode = a.getCountryCode();    // örn: TR
-        if (admin == null || countryCode == null) return null;
-        String ap = (countryCode + "/" + admin).toUpperCase(new Locale("tr", "TR")); // TR/ANKARA
-        Log.d(L, "extractAdminPath → " + ap + " (locality=" + a.getLocality() + ", subAdmin=" + a.getSubAdminArea() + ")");
+
+        // Debug: hangi alanlar geliyor?
+        Log.d(L, "extractAdminPath raw: countryCode=" + a.getCountryCode()
+                + " countryName=" + a.getCountryName()
+                + " adminArea=" + a.getAdminArea()
+                + " subAdminArea=" + a.getSubAdminArea()
+                + " locality=" + a.getLocality());
+
+        // Country: Cyprus detection fallback
+        boolean isCyprus = (lat >= 34.5 && lat <= 35.8 && lng >= 32.0 && lng <= 34.8);
+        String country = a.getCountryCode();
+        if (country == null || country.trim().isEmpty()) {
+            country = isCyprus ? "CY" : null;
+        }
+        if (country == null || country.trim().isEmpty()) return null;
+        country = country.trim().toUpperCase(Locale.ROOT);
+
+        // City: adminArea yoksa locality/subAdminArea
+        String cityRaw = firstNonEmpty(a.getAdminArea(), a.getSubAdminArea(), a.getLocality());
+        String city = normalizeCityKey(cityRaw);
+        if (city == null) return null;
+
+        String ap = country + "/" + city;
+        Log.d(L, "extractAdminPath → " + ap);
         return ap;
+    }
+
+    @Nullable
+    private static String normalizeCityKey(@Nullable String value) {
+        if (value == null) return null;
+        String out = AdminPathKey.normalizeKey(value);
+        return out.isEmpty() ? null : out;
+    }
+
+    @Nullable
+    private static String[] parseCountryCityFromAdminPath(@Nullable String adminPath) {
+        if (adminPath == null) return null;
+        String ap = adminPath.trim();
+        if (ap.isEmpty()) return null;
+        ap = ap.replaceAll("^/+", "").replaceAll("/+$", "");
+        String[] parts = ap.split("/");
+        if (parts.length < 2) return null;
+        // support "Baksi/{country}/Cities/{city}" style too
+        int idx = 0;
+        if ("Baksi".equalsIgnoreCase(parts[0])) idx = 1;
+        if (parts.length <= idx + 1) return null;
+        String country = parts[idx];
+        String city;
+        if (parts.length > idx + 2 && "Cities".equalsIgnoreCase(parts[idx + 1])) {
+            city = parts[idx + 2];
+        } else {
+            city = parts[idx + 1];
+        }
+        if (country == null || city == null) return null;
+        country = country.trim().toUpperCase(Locale.ROOT);
+        city = city.trim().toUpperCase(Locale.ROOT);
+        if (country.isEmpty() || city.isEmpty()) return null;
+        return new String[]{country, city};
+    }
+
+    private void resolveCountryCityForSubmit(double lat, double lng, @NonNull CountryCityCb cb) {
+        // 1) Kullanıcı place alanına manuel adminPath girmişse onu kullan
+        String placeText = placeView.getText() == null ? "" : placeView.getText().toString().trim();
+        if (placeText.contains("/")) {
+            String[] cc = parseCountryCityFromAdminPath(placeText);
+            if (cc != null) {
+                cb.onReady(cc[0], cc[1], (cc[0] + "/" + cc[1]));
+                return;
+            }
+        }
+
+        // 2) Geocoder ile country/city çöz
+        ensureAdminPathAsync(lat, lng, ap -> {
+            if (ap == null) {
+                cb.onReady(null, null, null);
+                return;
+            }
+            String[] cc = parseCountryCityFromAdminPath(ap);
+            if (cc == null) {
+                cb.onReady(null, null, ap);
+                return;
+            }
+            cb.onReady(cc[0], cc[1], ap);
+        });
     }
 
     /* ================================ UTILS ================================ */
@@ -999,10 +1276,107 @@ public class Founded extends AppCompatActivity {
     private String textOf(AutoCompleteTextView tv) {
         return tv.getText() == null ? "" : tv.getText().toString().trim();
     }
+    private String textOf(Spinner spinner) {
+        Object selected = spinner.getSelectedItem();
+        return selected == null ? "" : selected.toString().trim();
+    }
     private String safeOrTodo(String s) {
         if (s == null) return "TODO";
         String t = s.trim();
         return t.isEmpty() ? "TODO" : t;
+    }
+
+    /**
+     * İlk spinner seçimine göre ikinci spinner'ın seçeneklerini günceller.
+     */
+    private void updateSubtypeSpinner(@NonNull String taskType) {
+        if (taskSubtypeInput == null) return;
+
+        // ÖNCE: Hardcoded String[] subtypes = new String[]{"Annesiz Kalmış", "Hasta", ...}
+        // ŞİMDİ: String array resource kullanımı - çeviri desteği için
+        String[] subtypes;
+        // ÖNCE: Hardcoded "Yavru Hayvan", "Evsiz Hayvan", "Sahiplenme" switch case'lerinde
+        // ŞİMDİ: String resource ile karşılaştırma - çeviri desteği için
+        String youngAnimalStr = getString(R.string.founded_task_type_young_animal);
+        String strayAnimalStr = getString(R.string.founded_task_type_stray_animal);
+        String adoptionStr = getString(R.string.founded_task_type_adoption);
+        
+        if (taskType.equals(youngAnimalStr)) {
+            subtypes = getResources().getStringArray(R.array.founded_task_subtype_young_animal);
+        } else if (taskType.equals(strayAnimalStr)) {
+            subtypes = getResources().getStringArray(R.array.founded_task_subtype_stray_animal);
+        } else if (taskType.equals(adoptionStr)) {
+            subtypes = getResources().getStringArray(R.array.founded_task_subtype_adoption);
+        } else {
+            // Backward compatibility: Eski hardcoded değerlerle de karşılaştır
+            if (taskType.equals("Yavru Hayvan")) {
+                subtypes = getResources().getStringArray(R.array.founded_task_subtype_young_animal);
+            } else if (taskType.equals("Evsiz Hayvan")) {
+                subtypes = getResources().getStringArray(R.array.founded_task_subtype_stray_animal);
+            } else if (taskType.equals("Sahiplenme")) {
+                subtypes = getResources().getStringArray(R.array.founded_task_subtype_adoption);
+            } else {
+                subtypes = getResources().getStringArray(R.array.founded_task_subtype_default);
+            }
+        }
+
+        ArrayAdapter<String> subtypeAdapter = new ArrayAdapter<>(
+                this, android.R.layout.simple_spinner_item, subtypes);
+        subtypeAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        taskSubtypeInput.setAdapter(subtypeAdapter);
+        taskSubtypeInput.setSelection(0); // İlk seçeneği seç
+    }
+
+    /**
+     * Seçilen görev tipine göre bilgilendirme dialogu gösterir.
+     */
+    private void showTaskInfoDialog(@NonNull String taskType) {
+        if (isFinishing() || isDestroyed()) return;
+
+        String title;
+        String message;
+
+        // ÖNCE: Hardcoded title ve message string'leri
+        // ŞİMDİ: String resource kullanımı - çeviri desteği için
+        // ÖNCE: Hardcoded "Yavru Hayvan", "Evsiz Hayvan", "Sahiplenme" switch case'lerinde
+        // ŞİMDİ: String resource ile karşılaştırma - çeviri desteği için
+        String youngAnimalStr = getString(R.string.founded_task_type_young_animal);
+        String strayAnimalStr = getString(R.string.founded_task_type_stray_animal);
+        String adoptionStr = getString(R.string.founded_task_type_adoption);
+        
+        if (taskType.equals(youngAnimalStr)) {
+            title = getString(R.string.founded_dialog_task_type_young_animal_title);
+            message = getString(R.string.founded_dialog_task_type_young_animal_message);
+        } else if (taskType.equals(strayAnimalStr)) {
+            title = getString(R.string.founded_dialog_task_type_stray_animal_title);
+            message = getString(R.string.founded_dialog_task_type_stray_animal_message);
+        } else if (taskType.equals(adoptionStr)) {
+            title = getString(R.string.founded_dialog_task_type_adoption_title);
+            message = getString(R.string.founded_dialog_task_type_adoption_message);
+        } else {
+            // Backward compatibility: Eski hardcoded değerlerle de karşılaştır
+            if (taskType.equals("Yavru Hayvan")) {
+                title = getString(R.string.founded_dialog_task_type_young_animal_title);
+                message = getString(R.string.founded_dialog_task_type_young_animal_message);
+            } else if (taskType.equals("Evsiz Hayvan")) {
+                title = getString(R.string.founded_dialog_task_type_stray_animal_title);
+                message = getString(R.string.founded_dialog_task_type_stray_animal_message);
+            } else if (taskType.equals("Sahiplenme")) {
+                title = getString(R.string.founded_dialog_task_type_adoption_title);
+                message = getString(R.string.founded_dialog_task_type_adoption_message);
+            } else {
+                return; // Bilinmeyen tip için popup gösterme
+            }
+        }
+
+        new AlertDialog.Builder(this)
+                .setTitle(title)
+                .setMessage(message)
+                // ÖNCE: Hardcoded "Anladım"
+                // ŞİMDİ: String resource kullanımı
+                .setPositiveButton(getString(R.string.founded_dialog_button_understood), (dialog, which) -> dialog.dismiss())
+                .setCancelable(true)
+                .show();
     }
 
     private void requestGalleryPermissionIfNeeded() {

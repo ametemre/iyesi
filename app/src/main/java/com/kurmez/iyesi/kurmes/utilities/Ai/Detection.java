@@ -14,6 +14,7 @@ import androidx.annotation.Nullable;
 import com.kurmez.iyesi.kurmes.Kurmes;
 import com.kurmez.iyesi.kurmes.utilities.Ai.delegate.TFLiteInputMapper;
 import com.kurmez.iyesi.kurmes.utilities.Ai.delegate.TFLiteInputPreprocessor;
+import com.kurmez.iyesi.R;
 
 import org.opencv.android.Utils;
 import org.opencv.core.CvType;
@@ -491,7 +492,9 @@ public class Detection {
         // If no high-confidence results, show "No strong detection"
         if (detectedSoundsLayout.getChildCount() == 0) {
             TextView noResultView = new TextView(context);
-            noResultView.setText("No strong detections");
+            // ÖNCE: Hardcoded "No strong detections"
+            // ŞİMDİ: String resource kullanımı
+            noResultView.setText(context.getString(R.string.detection_label_no_strong_detections));
             noResultView.setTextSize(16);
             noResultView.setTextColor(Color.CYAN);
             noResultView.setPadding(10, 10, 10, 10);

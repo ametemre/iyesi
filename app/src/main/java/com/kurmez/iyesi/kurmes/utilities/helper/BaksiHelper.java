@@ -5,6 +5,7 @@ import android.content.SharedPreferences;
 import android.location.Location;
 import android.util.Log;
 
+import com.google.android.gms.maps.model.BitmapDescriptor;
 import com.google.android.gms.maps.model.BitmapDescriptorFactory;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.Marker;
@@ -14,8 +15,9 @@ import com.google.android.libraries.places.api.model.Place;
 import com.google.android.libraries.places.api.model.PlaceLikelihood;
 import com.google.android.libraries.places.api.net.FindCurrentPlaceRequest;
 import com.google.android.libraries.places.api.net.PlacesClient;
-import com.google.firebase.firestore.DocumentSnapshot;
-import com.google.firebase.firestore.FirebaseFirestore;
+// Firestore imports kaldırıldı - direkt erişim artık desteklenmiyor
+// import com.google.firebase.firestore.DocumentSnapshot;
+// import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 import com.kurmez.iyesi.kayra.Classes.Souls.Baksi;
@@ -136,8 +138,8 @@ public class BaksiHelper {
             if (listener != null) {
                 listener.onVetsLoadFailed("Places API başlatılmamış");
             }
-            // Firebase'den yükle
-            fetchNearbyVetsFromFirebase(userLocation, radiusMeters);
+            // Firebase direkt erişimi kaldırıldı - Cloud Function kullanılmalı
+            // fetchNearbyVetsFromFirebase(userLocation, radiusMeters);
             return;
         }
 
@@ -199,15 +201,16 @@ public class BaksiHelper {
                         }
                     }
 
-                    // Firebase'den de yükle (başarılı olsa da olmasa da)
-                    fetchNearbyVetsFromFirebase(userLocation, radiusMeters);
+                    // Firebase direkt erişimi kaldırıldı - Cloud Function kullanılmalı
+                    // fetchNearbyVetsFromFirebase(userLocation, radiusMeters);
                 })
                 .addOnFailureListener(e -> {
                     Log.e(TAG, "FindCurrentPlace hatası: ", e);
                     if (listener != null) {
                         listener.onVetsLoadFailed("Google Places hatası: " + e.getMessage());
                     }
-                    fetchNearbyVetsFromFirebase(userLocation, radiusMeters);
+                    // Firebase direkt erişimi kaldırıldı - Cloud Function kullanılmalı
+                    // fetchNearbyVetsFromFirebase(userLocation, radiusMeters);
                 });
     }
 
@@ -306,58 +309,20 @@ public class BaksiHelper {
 
     /**
      * FIREBASE'DEN YAKIN VETERİNERLERİ GETİR
+     * 
+     * DEPRECATED: Bu metot artık kullanılmıyor. Firestore security rules tüm kullanıcı erişimlerini engelliyor.
+     * Tüm veri erişimi Cloud Function üzerinden yapılmalı (findNearbyBaksi).
+     * 
+     * Bu metot çağrılırsa sadece log yazar, Firestore'a erişmez.
      */
+    @Deprecated
     private void fetchNearbyVetsFromFirebase(LatLng userLocation, double maxDistanceMeters) {
-        Log.d(TAG, "Firebase'den " + maxDistanceMeters + " metre içindeki veterinerler yükleniyor");
-        FirebaseFirestore db = FirebaseFirestore.getInstance();
-
-        db.collection("VetNodes").get()
-                .addOnSuccessListener(snapshot -> {
-                    Log.d(TAG, "Firebase'den VetNodes alındı, toplam: " + snapshot.size());
-                    List<Baksi> nearbyVets = new ArrayList<>();
-
-                    for (DocumentSnapshot doc : snapshot.getDocuments()) {
-                        try {
-                            Baksi baksi = doc.toObject(Baksi.class);
-                            if (baksi != null && baksi.getLocation() != null) {
-                                Double lat = baksi.getLocation().getLat();
-                                Double lng = baksi.getLocation().getLng();
-
-                                if (lat != null && lng != null) {
-                                    LatLng vetPos = new LatLng(lat, lng);
-                                    double distance = calculateDistanceInMeters(userLocation, vetPos);
-
-                                    if (distance <= maxDistanceMeters) {
-                                        nearbyVets.add(baksi);
-                                        Log.d(TAG, "Yakın veteriner: " + baksi.getClinicName() + " - " + distance + " metre");
-                                    }
-                                }
-                            }
-                        } catch (Exception e) {
-                            Log.e(TAG, "Vet parse hatası: " + doc.getId(), e);
-                        }
-                    }
-
-                    Log.d(TAG, maxDistanceMeters + " metre içindeki veteriner sayısı: " + nearbyVets.size());
-
-                    if (!nearbyVets.isEmpty()) {
-                        displayVetsOnMap(nearbyVets);
-                        cacheVets(nearbyVets);
-
-                        if (listener != null) {
-                            listener.onVetsLoaded(nearbyVets.size(), maxDistanceMeters);
-                        }
-                    } else {
-                        Log.w(TAG, "Firebase'de " + maxDistanceMeters + " metre içinde veteriner bulunamadı");
-                    }
-                })
-                .addOnFailureListener(e -> {
-                    Log.e(TAG, "Firebase hatası: ", e);
-                    // Firebase hatasını sadece logla, kullanıcıya gösterme (Google Places öncelikli)
-                    if (e.getMessage().contains("PERMISSION_DENIED")) {
-                        Log.w(TAG, "Firebase erişim izni yok. Google Places sonuçları kullanılıyor.");
-                    }
-                });
+        Log.w(TAG, "fetchNearbyVetsFromFirebase: DEPRECATED - Firestore direkt erişimi artık desteklenmiyor. " +
+                "Cloud Function (findNearbyBaksi) kullanılmalı. " +
+                "Parametreler: radius=" + maxDistanceMeters + "m, location=" + userLocation);
+        // Firestore direkt erişimi kaldırıldı - güvenlik kuralları nedeniyle
+        // Tüm veri erişimi Cloud Function üzerinden yapılmalı
+        // Bu metot çağrılırsa hiçbir şey yapmaz, sadece log yazar
     }
 
     /**
@@ -380,11 +345,14 @@ public class BaksiHelper {
             String title = place.getName() != null ? place.getName() : "Veteriner";
             String snippet = place.getAddress() != null ? place.getAddress() : "";
 
+            // NodeManager'dan özel Baksi ikonunu al
+            BitmapDescriptor icon = nodeManager.getCustomIcon("Baksi");
+            
             MarkerOptions options = new MarkerOptions()
                     .position(pos)
                     .title(title)
                     .snippet(snippet)
-                    .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_GREEN));
+                    .icon(icon);
 
             String markerId = "google_vet_" + (place.getId() != null ? place.getId() : System.nanoTime());
             Marker marker = nodeManager.addMarker(options, "Baksi", markerId);
@@ -429,11 +397,14 @@ public class BaksiHelper {
             String title = vet.getClinicName() != null ? vet.getClinicName() : "Veteriner";
             String snippet = vet.getClinicAddress() != null ? vet.getClinicAddress() : "";
 
+            // NodeManager'dan özel Baksi ikonunu al
+            BitmapDescriptor icon = nodeManager.getCustomIcon("Baksi");
+            
             MarkerOptions options = new MarkerOptions()
                     .position(pos)
                     .title(title)
                     .snippet(snippet)
-                    .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_BLUE)); // Firebase marker'ları mavi
+                    .icon(icon);
 
             String markerId = vet.getUid() != null ? vet.getUid() : "vet_" + System.nanoTime();
             Marker marker = nodeManager.addMarker(options, "Baksi", markerId);

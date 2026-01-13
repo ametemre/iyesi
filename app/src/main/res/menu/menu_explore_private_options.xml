@@ -1,8 +1,8 @@
 <menu xmlns:android="http://schemas.android.com/apk/res/android">
     <item
         android:id="@+id/action_refresh"
-        android:title="action_refresh" />
+        android:title="@string/menu_explore_private_action_refresh" />
     <item
         android:id="@+id/action_filter"
-        android:title="action_filter" />
+        android:title="@string/menu_explore_private_action_filter" />
 </menu>

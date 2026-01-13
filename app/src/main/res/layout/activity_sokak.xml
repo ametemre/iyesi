@@ -47,233 +47,384 @@
       android:layout_width="wrap_content"
       android:layout_height="wrap_content"
       android:layout_gravity="top|end"
-      android:weightSum="5"
-      android:layout_marginTop="36dp"
+      android:layout_marginTop="16dp"
+      android:layout_marginEnd="8dp"
       android:orientation="vertical"
-      android:padding="8dp">
+      android:background="@android:color/transparent"
+      android:padding="12dp"
+      android:minWidth="120dp"
+      android:gravity="start">
 
-    <!-- 1. Satır: Mevcut “Level” Spinner (ADM seviyeleri) -->
+    <!-- 1. Satır: Veterinerler -->
     <LinearLayout
         android:id="@+id/row_spinner_1"
-        android:layout_width="match_parent"
-        android:layout_height="16dp"
-        android:visibility="visible"
-        android:orientation="horizontal"
-        android:layout_weight="1"
-        android:gravity="center_vertical">
-
-      <!-- Sağdan haritayı temizleyecek silme ikonu -->
-      <ImageButton
-          android:id="@+id/btn_clear_1"
-          android:layout_width="18dp"
-          android:layout_height="18dp"
-          android:layout_marginRight="9dp"
-          android:layout_gravity="bottom"
-          android:scaleType="centerCrop"
-          android:background="?attr/selectableItemBackgroundBorderless"
-          android:src="@drawable/ic_delete_24dp"
-          android:contentDescription="Temizle" />
-
-      <!-- Görünür/Gizle toggler: başta ‘göz açık’ simgesi -->
-      <ImageButton
-          android:id="@+id/btn_toggle_1"
-          android:layout_width="18dp"
-          android:layout_height="18dp"
-          android:layout_marginRight="9dp"
-          android:layout_gravity="bottom"
-          android:scaleType="centerCrop"
-          android:layout_marginStart="8dp"
-          android:background="?attr/selectableItemBackgroundBorderless"
-          android:src="@drawable/ic_eye_open_24dp"
-          android:contentDescription="Görünür/Gizle" />
-
-      <!-- İlk Spinner: levelOptions (ADM5,…,OSM) -->
-      <Spinner
-          android:id="@+id/spinner_level_1"
-          android:layout_width="wrap_content"
-          android:layout_height="wrap_content"
-          android:spinnerMode="dropdown" android:layout_marginEnd="16dp"
-          android:layout_gravity="top|end"
-          android:backgroundTint="@android:color/white"
-          android:popupBackground="@android:color/white"  />
-    </LinearLayout>
-
-    <!-- 2. Satır: İleride içerik eklenecek ikinci Spinner -->
-    <LinearLayout
-        android:id="@+id/row_spinner_2"
-
-        android:layout_width="match_parent"
-        android:layout_height="16dp"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
         android:visibility="gone"
         android:orientation="horizontal"
-        android:layout_weight="1"
-        android:gravity="center_vertical">
+        android:gravity="center_vertical|end"
+        android:paddingHorizontal="4dp">
 
+      <!-- Görünür/Gizle toggle -->
       <ImageButton
-          android:id="@+id/btn_clear_2"
-          android:layout_width="18dp"
-          android:layout_height="18dp"
-          android:layout_marginRight="9dp"
-          android:layout_gravity="bottom"
+          android:id="@+id/btn_toggle_1"
+          android:layout_width="24dp"
+          android:layout_height="24dp"
+          android:layout_marginEnd="8dp"
+          android:scaleType="centerCrop"
+          android:background="?attr/selectableItemBackgroundBorderless"
+          android:src="@drawable/ic_eye_open_24dp"
+          android:contentDescription="@string/sokak_content_description_toggle_visibility" />
+
+      <!-- Layer adı -->
+      <TextView
+          android:id="@+id/layer_label_1"
+          android:layout_width="wrap_content"
+          android:layout_height="wrap_content"
+          android:text="@string/sokak_layer_label_veterinarians"
+          android:textSize="14sp"
+          android:textColor="@android:color/black"
+          android:gravity="center_vertical|end" />
+
+      <!-- Temizle butonu -->
+      <ImageButton
+          android:id="@+id/btn_clear_1"
+          android:layout_width="20dp"
+          android:layout_height="20dp"
+          android:layout_marginStart="4dp"
           android:scaleType="centerCrop"
           android:background="?attr/selectableItemBackgroundBorderless"
           android:src="@drawable/ic_delete_24dp"
-          android:contentDescription="Temizle" />
+          android:contentDescription="@string/sokak_content_description_clear"
+          android:visibility="gone" />
+    </LinearLayout>
+
+    <!-- 2. Satır: Acil Yardım Alanları -->
+    <LinearLayout
+        android:id="@+id/row_spinner_2"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:visibility="gone"
+        android:orientation="horizontal"
+        android:gravity="center_vertical|end"
+        android:paddingHorizontal="4dp">
 
       <ImageButton
           android:id="@+id/btn_toggle_2"
-          android:layout_width="18dp"
-          android:layout_height="18dp"
-          android:layout_marginRight="9dp"
-          android:layout_gravity="bottom"
+          android:layout_width="24dp"
+          android:layout_height="24dp"
+          android:layout_marginEnd="8dp"
           android:scaleType="centerCrop"
-          android:layout_marginStart="8dp"
           android:background="?attr/selectableItemBackgroundBorderless"
           android:src="@drawable/ic_eye_open_24dp"
-          android:contentDescription="Görünür/Gizle" />
+          android:contentDescription="@string/sokak_content_description_toggle_visibility" />
 
-      <Spinner
-          android:id="@+id/spinner_level_2"
+      <TextView
+          android:id="@+id/layer_label_2"
           android:layout_width="wrap_content"
           android:layout_height="wrap_content"
-          android:spinnerMode="dropdown"
-          android:layout_marginEnd="16dp"
-          android:layout_gravity="top|end"
-          android:backgroundTint="@android:color/white"
-          android:popupBackground="@android:color/white" />
-    </LinearLayout>
-
-    <!-- 3. Satır -->
-    <LinearLayout
-        android:id="@+id/row_spinner_3"
-        android:layout_width="match_parent"
-        android:layout_height="16dp"
-        android:visibility="gone"
-        android:orientation="horizontal"
-        android:layout_weight="1"
-        android:gravity="center_vertical">
+          android:text="@string/sokak_layer_label_emergency_help"
+          android:textSize="14sp"
+          android:textColor="@android:color/black"
+          android:gravity="center_vertical|end" />
 
       <ImageButton
-          android:id="@+id/btn_clear_3"
-          android:layout_width="18dp"
-          android:layout_height="18dp"
-          android:layout_marginRight="9dp"
-          android:layout_gravity="bottom"
+          android:id="@+id/btn_clear_2"
+          android:layout_width="20dp"
+          android:layout_height="20dp"
+          android:layout_marginStart="4dp"
           android:scaleType="centerCrop"
           android:background="?attr/selectableItemBackgroundBorderless"
           android:src="@drawable/ic_delete_24dp"
-          android:contentDescription="Temizle" />
+          android:contentDescription="@string/sokak_content_description_clear"
+          android:visibility="gone" />
+    </LinearLayout>
+
+    <!-- 3. Satır: Sorumlu Alanlar -->
+    <LinearLayout
+        android:id="@+id/row_spinner_3"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:visibility="gone"
+        android:orientation="horizontal"
+        android:gravity="center_vertical|end"
+        android:paddingHorizontal="4dp">
 
       <ImageButton
           android:id="@+id/btn_toggle_3"
-          android:layout_width="18dp"
-          android:layout_height="18dp"
-          android:layout_marginRight="9dp"
-          android:layout_gravity="bottom"
+          android:layout_width="24dp"
+          android:layout_height="24dp"
+          android:layout_marginEnd="8dp"
           android:scaleType="centerCrop"
-          android:layout_marginStart="8dp"
           android:background="?attr/selectableItemBackgroundBorderless"
           android:src="@drawable/ic_eye_open_24dp"
-          android:contentDescription="Görünür/Gizle" />
+          android:contentDescription="@string/sokak_content_description_toggle_visibility" />
 
-      <Spinner
-          android:id="@+id/spinner_level_3"
+      <TextView
+          android:id="@+id/layer_label_3"
           android:layout_width="wrap_content"
           android:layout_height="wrap_content"
-          android:spinnerMode="dropdown"
-          android:layout_marginEnd="16dp"
-          android:layout_gravity="top|end"
-          android:backgroundTint="@android:color/white"
-          android:popupBackground="@android:color/white" />
-    </LinearLayout>
-
-    <!-- 4. Satır -->
-    <LinearLayout
-        android:id="@+id/row_spinner_4"
-        android:layout_width="match_parent"
-        android:layout_height="16dp"
-        android:visibility="gone"
-        android:orientation="horizontal"
-        android:layout_weight="1"
-        android:gravity="center_vertical">
+          android:text="@string/sokak_layer_label_responsible_areas"
+          android:textSize="14sp"
+          android:textColor="@android:color/black"
+          android:gravity="center_vertical|end" />
 
       <ImageButton
-          android:id="@+id/btn_clear_4"
-          android:layout_width="18dp"
-          android:layout_height="18dp"
-          android:layout_marginRight="9dp"
-          android:layout_gravity="bottom"
+          android:id="@+id/btn_clear_3"
+          android:layout_width="20dp"
+          android:layout_height="20dp"
+          android:layout_marginStart="4dp"
           android:scaleType="centerCrop"
           android:background="?attr/selectableItemBackgroundBorderless"
           android:src="@drawable/ic_delete_24dp"
-          android:contentDescription="Temizle" />
+          android:contentDescription="@string/sokak_content_description_clear"
+          android:visibility="gone" />
+    </LinearLayout>
+
+    <!-- 4. Satır: Yeni Eklenenler -->
+    <LinearLayout
+        android:id="@+id/row_spinner_4"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:visibility="gone"
+        android:orientation="horizontal"
+        android:gravity="center_vertical|end"
+        android:paddingHorizontal="4dp">
 
       <ImageButton
           android:id="@+id/btn_toggle_4"
-          android:layout_width="18dp"
-          android:layout_height="18dp"
-          android:layout_marginRight="9dp"
-          android:layout_gravity="bottom"
+          android:layout_width="24dp"
+          android:layout_height="24dp"
+          android:layout_marginEnd="8dp"
           android:scaleType="centerCrop"
-          android:layout_marginStart="8dp"
           android:background="?attr/selectableItemBackgroundBorderless"
           android:src="@drawable/ic_eye_open_24dp"
-          android:contentDescription="Görünür/Gizle" />
+          android:contentDescription="@string/sokak_content_description_toggle_visibility" />
 
-      <Spinner
-          android:id="@+id/spinner_level_4"
+      <TextView
+          android:id="@+id/layer_label_4"
           android:layout_width="wrap_content"
           android:layout_height="wrap_content"
-          android:spinnerMode="dropdown"
-          android:layout_marginEnd="16dp"
-          android:layout_gravity="top|end"
-          android:backgroundTint="@android:color/white"
-          android:popupBackground="@android:color/white"  />
-    </LinearLayout>
-
-    <!-- 5. Satır -->
-    <LinearLayout
-        android:id="@+id/row_spinner_5"
-        android:layout_width="match_parent"
-        android:layout_height="16dp"
-        android:visibility="gone"
-        android:orientation="horizontal"
-        android:layout_weight="1"
-        android:layout_gravity="top|end"
-        android:gravity="center_vertical">
+          android:text="@string/sokak_layer_label_newly_added"
+          android:textSize="14sp"
+          android:textColor="@android:color/black"
+          android:gravity="center_vertical|end" />
 
       <ImageButton
-          android:id="@+id/btn_clear_5"
-          android:layout_width="18dp"
-          android:layout_height="18dp"
-          android:layout_marginRight="9dp"
-          android:layout_gravity="bottom"
+          android:id="@+id/btn_clear_4"
+          android:layout_width="20dp"
+          android:layout_height="20dp"
+          android:layout_marginStart="4dp"
           android:scaleType="centerCrop"
           android:background="?attr/selectableItemBackgroundBorderless"
           android:src="@drawable/ic_delete_24dp"
-          android:contentDescription="Temizle" />
+          android:contentDescription="@string/sokak_content_description_clear"
+          android:visibility="gone" />
+    </LinearLayout>
+
+    <!-- 5. Satır: Bakımı Gecikenler -->
+    <LinearLayout
+        android:id="@+id/row_spinner_5"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:visibility="gone"
+        android:orientation="horizontal"
+        android:gravity="center_vertical|end"
+        android:paddingHorizontal="4dp">
 
       <ImageButton
           android:id="@+id/btn_toggle_5"
-          android:layout_width="18dp"
-          android:layout_height="18dp"
-          android:layout_marginRight="9dp"
-          android:layout_gravity="bottom"
+          android:layout_width="24dp"
+          android:layout_height="24dp"
+          android:layout_marginEnd="8dp"
           android:scaleType="centerCrop"
-          android:layout_marginStart="8dp"
           android:background="?attr/selectableItemBackgroundBorderless"
           android:src="@drawable/ic_eye_open_24dp"
-          android:contentDescription="Görünür/Gizle" />
+          android:contentDescription="@string/sokak_content_description_toggle_visibility" />
 
-      <Spinner
-          android:id="@+id/spinner_level_5"
+      <TextView
+          android:id="@+id/layer_label_5"
           android:layout_width="wrap_content"
           android:layout_height="wrap_content"
-          android:spinnerMode="dropdown"
-          android:layout_marginEnd="16dp"
-          android:layout_gravity="top|end"
-          android:backgroundTint="@android:color/white"
-          android:popupBackground="@android:color/white" />
+          android:text="@string/sokak_layer_label_overdue_maintenance"
+          android:textSize="14sp"
+          android:textColor="@android:color/black"
+          android:gravity="center_vertical|end" />
+
+      <ImageButton
+          android:id="@+id/btn_clear_5"
+          android:layout_width="20dp"
+          android:layout_height="20dp"
+          android:layout_marginStart="4dp"
+          android:scaleType="centerCrop"
+          android:background="?attr/selectableItemBackgroundBorderless"
+          android:src="@drawable/ic_delete_24dp"
+          android:contentDescription="@string/sokak_content_description_clear"
+          android:visibility="gone" />
+    </LinearLayout>
+
+    <!-- 6. Satır: Barınaklar -->
+    <LinearLayout
+        android:id="@+id/row_spinner_6"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:visibility="gone"
+        android:orientation="horizontal"
+        android:gravity="center_vertical|end"
+        android:paddingHorizontal="4dp">
+
+      <ImageButton
+          android:id="@+id/btn_toggle_6"
+          android:layout_width="24dp"
+          android:layout_height="24dp"
+          android:layout_marginEnd="8dp"
+          android:scaleType="centerCrop"
+          android:background="?attr/selectableItemBackgroundBorderless"
+          android:src="@drawable/ic_eye_open_24dp"
+          android:contentDescription="@string/sokak_content_description_toggle_visibility" />
+
+      <TextView
+          android:id="@+id/layer_label_6"
+          android:layout_width="wrap_content"
+          android:layout_height="wrap_content"
+          android:text="@string/sokak_layer_label_shelters"
+          android:textSize="14sp"
+          android:textColor="@android:color/black"
+          android:gravity="center_vertical|end" />
+
+      <ImageButton
+          android:id="@+id/btn_clear_6"
+          android:layout_width="20dp"
+          android:layout_height="20dp"
+          android:layout_marginStart="4dp"
+          android:scaleType="centerCrop"
+          android:background="?attr/selectableItemBackgroundBorderless"
+          android:src="@drawable/ic_delete_24dp"
+          android:contentDescription="@string/sokak_content_description_clear"
+          android:visibility="gone" />
+    </LinearLayout>
+
+    <!-- 7. Satır: Besleme Alanları -->
+    <LinearLayout
+        android:id="@+id/row_spinner_7"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:visibility="gone"
+        android:orientation="horizontal"
+        android:gravity="center_vertical|end"
+        android:paddingHorizontal="4dp">
+
+      <ImageButton
+          android:id="@+id/btn_toggle_7"
+          android:layout_width="24dp"
+          android:layout_height="24dp"
+          android:layout_marginEnd="8dp"
+          android:scaleType="centerCrop"
+          android:background="?attr/selectableItemBackgroundBorderless"
+          android:src="@drawable/ic_eye_open_24dp"
+          android:contentDescription="@string/sokak_content_description_toggle_visibility" />
+
+      <TextView
+          android:id="@+id/layer_label_7"
+          android:layout_width="wrap_content"
+          android:layout_height="wrap_content"
+          android:text="@string/sokak_layer_label_feeding_areas"
+          android:textSize="14sp"
+          android:textColor="@android:color/black"
+          android:gravity="center_vertical|end" />
+
+      <ImageButton
+          android:id="@+id/btn_clear_7"
+          android:layout_width="20dp"
+          android:layout_height="20dp"
+          android:layout_marginStart="4dp"
+          android:scaleType="centerCrop"
+          android:background="?attr/selectableItemBackgroundBorderless"
+          android:src="@drawable/ic_delete_24dp"
+          android:contentDescription="@string/sokak_content_description_clear"
+          android:visibility="gone" />
+    </LinearLayout>
+
+    <!-- 8. Satır: Yuvalanma Alanları -->
+    <LinearLayout
+        android:id="@+id/row_spinner_8"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:visibility="gone"
+        android:orientation="horizontal"
+        android:gravity="center_vertical|end"
+        android:paddingHorizontal="4dp">
+
+      <ImageButton
+          android:id="@+id/btn_toggle_8"
+          android:layout_width="24dp"
+          android:layout_height="24dp"
+          android:layout_marginEnd="8dp"
+          android:scaleType="centerCrop"
+          android:background="?attr/selectableItemBackgroundBorderless"
+          android:src="@drawable/ic_eye_open_24dp"
+          android:contentDescription="@string/sokak_content_description_toggle_visibility" />
+
+      <TextView
+          android:id="@+id/layer_label_8"
+          android:layout_width="wrap_content"
+          android:layout_height="wrap_content"
+          android:text="@string/sokak_layer_label_nesting_areas"
+          android:textSize="14sp"
+          android:textColor="@android:color/black"
+          android:gravity="center_vertical|end" />
+
+      <ImageButton
+          android:id="@+id/btn_clear_8"
+          android:layout_width="20dp"
+          android:layout_height="20dp"
+          android:layout_marginStart="4dp"
+          android:scaleType="centerCrop"
+          android:background="?attr/selectableItemBackgroundBorderless"
+          android:src="@drawable/ic_delete_24dp"
+          android:contentDescription="@string/sokak_content_description_clear"
+          android:visibility="gone" />
+    </LinearLayout>
+
+    <!-- 9. Satır: Görevler -->
+    <LinearLayout
+        android:id="@+id/row_spinner_9"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:visibility="gone"
+        android:orientation="horizontal"
+        android:gravity="center_vertical|end"
+        android:paddingHorizontal="4dp">
+
+      <ImageButton
+          android:id="@+id/btn_toggle_9"
+          android:layout_width="24dp"
+          android:layout_height="24dp"
+          android:layout_marginEnd="8dp"
+          android:scaleType="centerCrop"
+          android:background="?attr/selectableItemBackgroundBorderless"
+          android:src="@drawable/ic_eye_open_24dp"
+          android:contentDescription="@string/sokak_content_description_toggle_visibility" />
+
+      <TextView
+          android:id="@+id/layer_label_9"
+          android:layout_width="wrap_content"
+          android:layout_height="wrap_content"
+          android:text="@string/sokak_layer_label_tasks"
+          android:textSize="14sp"
+          android:textColor="@android:color/black"
+          android:gravity="center_vertical|end" />
+
+      <ImageButton
+          android:id="@+id/btn_clear_9"
+          android:layout_width="20dp"
+          android:layout_height="20dp"
+          android:layout_marginStart="4dp"
+          android:scaleType="centerCrop"
+          android:background="?attr/selectableItemBackgroundBorderless"
+          android:src="@drawable/ic_delete_24dp"
+          android:contentDescription="@string/sokak_content_description_clear"
+          android:visibility="gone" />
     </LinearLayout>
 
   </LinearLayout>
@@ -299,14 +450,13 @@
         android:id="@+id/row_population"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:paddingVertical="6dp">
+        android:orientation="horizontal">
 
       <TextView
           android:id="@+id/tvPopulationLabel"
           android:layout_width="wrap_content"
           android:layout_height="wrap_content"
-          android:text="Popülasyon:"
+          android:text="@string/sokak_panel_label_population"
           android:textColor="@color/teal"
           android:textSize="16sp" />
 
@@ -326,14 +476,13 @@
         android:id="@+id/row_missing"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:paddingVertical="6dp">
+        android:orientation="horizontal">
 
       <TextView
           android:id="@+id/tvMissingLabel"
           android:layout_width="wrap_content"
           android:layout_height="wrap_content"
-          android:text="Kayıp:"
+          android:text="@string/sokak_panel_label_missing"
           android:textColor="@color/zxing_viewfinder_laser"
 
           android:textColorHint="@android:color/holo_red_dark"
@@ -354,7 +503,7 @@
         android:id="@+id/tvPanelTitle"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Barınak Bilgileri"
+        android:text="@string/sokak_panel_title_shelter_info"
         android:textSize="20sp"
         android:textStyle="bold"
         android:paddingBottom="12dp"
@@ -365,14 +514,13 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
-        android:paddingVertical="6dp"
         android:gravity="center_vertical">
 
       <TextView
           android:id="@+id/tvCatLabel"
           android:layout_width="wrap_content"
           android:layout_height="wrap_content"
-          android:text="Kedi:"
+          android:text="@string/sokak_panel_label_cat"
           android:textSize="16sp"
           android:textColor="@android:color/black" />
 
@@ -392,14 +540,13 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
-        android:paddingVertical="6dp"
         android:gravity="center_vertical">
 
       <TextView
           android:id="@+id/tvDogLabel"
           android:layout_width="wrap_content"
           android:layout_height="wrap_content"
-          android:text="Köpek:"
+          android:text="@string/sokak_panel_label_dog"
           android:textSize="16sp"
           android:textColor="@android:color/black" />
 
@@ -419,14 +566,13 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
-        android:paddingVertical="6dp"
         android:gravity="center_vertical">
 
       <TextView
           android:id="@+id/tvBlindLabel"
           android:layout_width="wrap_content"
           android:layout_height="wrap_content"
-          android:text="Körmez:"
+          android:text="@string/sokak_panel_label_blind"
           android:textSize="16sp"
           android:textColor="@android:color/black" />
 
@@ -453,11 +599,11 @@
       android:layout_margin="24dp"
       android:src="@drawable/pati"
       android:visibility="visible"
-      android:contentDescription="Ana Menü" />
+      android:contentDescription="@string/sokak_content_description_main_menu"/>
 
   <com.google.android.material.floatingactionbutton.FloatingActionButton
       android:id="@+id/ülgen_fab"
-      android:contentDescription="ulgen"
+      android:contentDescription="@string/sokak_content_description_ulgen"
       android:layout_width="wrap_content"
       android:layout_height="wrap_content"
       android:src="@drawable/coban"
@@ -468,7 +614,7 @@
 
   <com.google.android.material.floatingactionbutton.FloatingActionButton
       android:id="@+id/coban_fab"
-      android:contentDescription="coban"
+      android:contentDescription="@string/sokak_content_description_coban"
       android:layout_width="wrap_content"
       android:layout_height="wrap_content"
       android:src="@drawable/ulgen"
@@ -493,7 +639,7 @@
       android:layout_centerVertical="true"
       android:visibility="gone"
       android:backgroundTint="@color/black_overlay"
-      android:contentDescription="Sound"
+      android:contentDescription="@string/sokak_content_description_sound"
       android:rotation="90"
       android:scaleType="fitCenter"
       android:src="@drawable/hush"

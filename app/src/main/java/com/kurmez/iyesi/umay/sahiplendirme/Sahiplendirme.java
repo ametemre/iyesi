@@ -46,8 +46,10 @@ public class Sahiplendirme extends AppCompatActivity {
 
     private void submitAdoption() {
         String name       = etName.getText().toString().trim();
+        // ÖNCE: Hardcoded "İsim boş olamaz"
+        // ŞİMDİ: String resource kullanımı
         if (TextUtils.isEmpty(name)) {
-            etName.setError("İsim boş olamaz");
+            etName.setError(getString(R.string.sahiplendirme_error_name_required));
             return;
         }
 
@@ -68,11 +70,16 @@ public class Sahiplendirme extends AppCompatActivity {
         db.collection("adoptions")
                 .add(pet)
                 .addOnSuccessListener(doc -> {
-                    Toast.makeText(this, "Kayıt başarıyla oluşturuldu", Toast.LENGTH_SHORT).show();
+                    // ÖNCE: Hardcoded "Kayıt başarıyla oluşturuldu"
+                    // ŞİMDİ: String resource kullanımı
+                    Toast.makeText(this, getString(R.string.sahiplendirme_toast_record_created), Toast.LENGTH_SHORT).show();
                     finish();
                 })
-                .addOnFailureListener(e ->
-                        Toast.makeText(this, "Hata: " + e.getMessage(), Toast.LENGTH_LONG).show()
-                );
+                .addOnFailureListener(e -> {
+                    // ÖNCE: Hardcoded "Hata: " + e.getMessage()
+                    // ŞİMDİ: String resource kullanımı - format string ile error mesajı
+                    String errorMsg = e.getMessage() == null ? "-" : e.getMessage();
+                    Toast.makeText(this, getString(R.string.sahiplendirme_toast_error, errorMsg), Toast.LENGTH_LONG).show();
+                });
     }
 }

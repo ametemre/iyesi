@@ -58,7 +58,7 @@
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:gravity="center_vertical"
-            android:hint="Mesajınızı yazın..."
+            android:hint="@string/messaging_hint_type_message"
             android:inputType="textMultiLine"
             android:maxLines="4"
             android:minHeight="48dp"
@@ -72,7 +72,7 @@
             android:layout_width="48dp"
             android:layout_height="48dp"
             android:background="@android:color/transparent"
-            android:contentDescription="gönderButonu"
+            android:contentDescription="@string/messaging_content_description_send_button"
             android:scaleType="centerInside"
             android:src="@drawable/pati" />
     </LinearLayout>
